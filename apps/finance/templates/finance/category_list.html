@@ -1,0 +1,36 @@
+{% extends 'finance/base.html' %}
+
+{% block title %}Categorias{% endblock %}
+
+{% block content %}
+<h1>Categorias</h1>
+<a href="{% url 'finance:category_create' %}"><button>Criar Nova Categoria</button></a>
+{% if categories %}
+    <table>
+        <thead>
+            <tr>
+                <th>Categoria</th>
+                <th>Subcategoria</th>
+                <th>Tipo de Transação Padrão</th>
+                <th>Ações</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for category in categories %}
+            <tr>
+                <td>{{ category.category }}</td>
+                <td>{{ category.subcategory }}</td>
+                <td>{{ category.get_default_transaction_type_display }}</td>
+                <td>
+                    <a href="{% url 'finance:category_update' category.pk %}"><button>Editar</button></a>
+                    <a href="{% url 'finance:category_delete' category.pk %}"><button>Deletar</button></a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+{% else %}
+    <p>Nenhuma categoria cadastrada.</p>
+{% endif %}
+{% endblock %}
+

@@ -1,0 +1,32 @@
+{% extends 'finance/base.html' %}
+
+{% block title %}Beneficiários{% endblock %}
+
+{% block content %}
+<h1>Beneficiários</h1>
+<a href="{% url 'finance:beneficiary_create' %}"><button>Criar Novo Beneficiário</button></a>
+{% if beneficiaries %}
+    <table>
+        <thead>
+            <tr>
+                <th>Nome Completo</th>
+                <th>Ações</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for beneficiary in beneficiaries %}
+            <tr>
+                <td>{{ beneficiary.full_name }}</td>
+                <td>
+                    <a href="{% url 'finance:beneficiary_update' beneficiary.pk %}"><button>Editar</button></a>
+                    <a href="{% url 'finance:beneficiary_delete' beneficiary.pk %}"><button>Deletar</button></a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+{% else %}
+    <p>Nenhum beneficiário cadastrado.</p>
+{% endif %}
+{% endblock %}
+

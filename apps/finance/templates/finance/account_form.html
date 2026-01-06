@@ -1,0 +1,44 @@
+{% extends 'finance/base.html' %}
+
+{% block title %}{% if form.instance.pk %}Editar Conta{% else %}Criar Conta{% endif %}{% endblock %}
+
+{% block content %}
+<h1>{% if form.instance.pk %}Editar Conta{% else %}Criar Nova Conta{% endif %}</h1>
+
+<form method="post">
+    {% csrf_token %}
+    <table>
+        <tr>
+            <td><label for="{{ form.name.id_for_label }}">Nome da conta:</label></td>
+            <td>{{ form.name }}</td>
+            {% if form.name.errors %}
+            <td>{{ form.name.errors }}</td>
+            {% endif %}
+        </tr>
+        <tr>
+            <td><label for="{{ form.account_type.id_for_label }}">Tipo:</label></td>
+            <td>{{ form.account_type }}</td>
+            {% if form.account_type.errors %}
+            <td>{{ form.account_type.errors }}</td>
+            {% endif %}
+        </tr>
+        <tr>
+            <td><label for="{{ form.currency.id_for_label }}">Unidade monetária:</label></td>
+            <td>{{ form.currency }}</td>
+            {% if form.currency.errors %}
+            <td>{{ form.currency.errors }}</td>
+            {% endif %}
+        </tr>
+        <tr>
+            <td><label for="{{ form.opening_balance.id_for_label }}">Saldo de abertura:</label></td>
+            <td>{{ form.opening_balance }}</td>
+            {% if form.opening_balance.errors %}
+            <td>{{ form.opening_balance.errors }}</td>
+            {% endif %}
+        </tr>
+    </table>
+    <button type="submit">Salvar</button>
+    <a href="{% url 'finance:account_list' %}">Cancelar</a>
+</form>
+{% endblock %}
+

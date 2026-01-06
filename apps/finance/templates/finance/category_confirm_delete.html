@@ -1,0 +1,14 @@
+{% extends 'finance/base.html' %}
+
+{% block title %}Deletar Categoria{% endblock %}
+
+{% block content %}
+<h1>Deletar Categoria</h1>
+<p>Tem certeza que deseja deletar a categoria "{{ category.category }} - {{ category.subcategory }}"?</p>
+<form method="post">
+    {% csrf_token %}
+    <button type="submit">Confirmar Exclusão</button>
+    <a href="{% url 'finance:category_list' %}">Cancelar</a>
+</form>
+{% endblock %}
+

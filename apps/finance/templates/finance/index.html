@@ -1,0 +1,14 @@
+{% extends 'finance/base.html' %}
+
+{% block title %}Finanças - Início{% endblock %}
+
+{% block content %}
+<h1>Finanças</h1>
+<p>Bem-vindo à aplicação de Finanças.</p>
+<ul>
+    <li><a href="{% url 'finance:account_list' %}">Contas</a></li>
+    <li><a href="{% url 'finance:beneficiary_list' %}">Beneficiários</a></li>
+    <li><a href="{% url 'finance:category_list' %}">Categorias</a></li>
+</ul>
+{% endblock %}
+

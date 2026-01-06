@@ -1,0 +1,14 @@
+{% extends 'finance/base.html' %}
+
+{% block title %}Deletar Beneficiário{% endblock %}
+
+{% block content %}
+<h1>Deletar Beneficiário</h1>
+<p>Tem certeza que deseja deletar o beneficiário "{{ beneficiary.full_name }}"?</p>
+<form method="post">
+    {% csrf_token %}
+    <button type="submit">Confirmar Exclusão</button>
+    <a href="{% url 'finance:beneficiary_list' %}">Cancelar</a>
+</form>
+{% endblock %}
+

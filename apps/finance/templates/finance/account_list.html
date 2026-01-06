@@ -1,0 +1,38 @@
+{% extends 'finance/base.html' %}
+
+{% block title %}Contas{% endblock %}
+
+{% block content %}
+<h1>Contas</h1>
+<a href="{% url 'finance:account_create' %}"><button>Criar Nova Conta</button></a>
+{% if accounts %}
+    <table>
+        <thead>
+            <tr>
+                <th>Nome</th>
+                <th>Tipo</th>
+                <th>Moeda</th>
+                <th>Saldo de Abertura</th>
+                <th>Ações</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for account in accounts %}
+            <tr>
+                <td>{{ account.name }}</td>
+                <td>{{ account.get_account_type_display }}</td>
+                <td>{{ account.currency }}</td>
+                <td>{{ account.opening_balance }}</td>
+                <td>
+                    <a href="{% url 'finance:account_update' account.pk %}"><button>Editar</button></a>
+                    <a href="{% url 'finance:account_delete' account.pk %}"><button>Deletar</button></a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+{% else %}
+    <p>Nenhuma conta cadastrada.</p>
+{% endif %}
+{% endblock %}
+

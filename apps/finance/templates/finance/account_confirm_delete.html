@@ -1,0 +1,14 @@
+{% extends 'finance/base.html' %}
+
+{% block title %}Deletar Conta{% endblock %}
+
+{% block content %}
+<h1>Deletar Conta</h1>
+<p>Tem certeza que deseja deletar a conta "{{ account.name }}"?</p>
+<form method="post">
+    {% csrf_token %}
+    <button type="submit">Confirmar Exclusão</button>
+    <a href="{% url 'finance:account_list' %}">Cancelar</a>
+</form>
+{% endblock %}
+
