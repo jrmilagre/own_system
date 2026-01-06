@@ -1,0 +1,37 @@
+from django.contrib import admin
+from .models import *
+
+@admin.register(Account)
+class AccountAdmin(admin.ModelAdmin):
+    list_display = (
+        'name',
+        'account_type',
+        'currency',
+        'opening_balance',
+        'created_at',
+        'updated_at',
+    )
+    search_fields = ('name',)
+    list_filter = ('account_type', 'currency', 'created_at')
+    ordering = ('name',)
+
+
+@admin.register(Beneficiary)
+class BeneficiaryAdmin(admin.ModelAdmin):
+    list_display = ('full_name', 'created_at', 'updated_at')
+    search_fields = ('full_name',)
+    ordering = ('full_name',)
+
+
+@admin.register(Category)
+class CategoryAdmin(admin.ModelAdmin):
+    list_display = (
+        'category',
+        'subcategory',
+        'default_transaction_type',
+        'created_at',
+        'updated_at',
+    )
+    search_fields = ('category', 'subcategory')
+    list_filter = ('default_transaction_type', 'created_at')
+    ordering = ('category', 'subcategory')
