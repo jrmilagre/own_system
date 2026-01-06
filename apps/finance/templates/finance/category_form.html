@@ -15,20 +15,6 @@
             <td>{{ form.category.errors }}</td>
             {% endif %}
         </tr>
-        <tr>
-            <td><label for="{{ form.subcategory.id_for_label }}">Subcategoria:</label></td>
-            <td>{{ form.subcategory }}</td>
-            {% if form.subcategory.errors %}
-            <td>{{ form.subcategory.errors }}</td>
-            {% endif %}
-        </tr>
-        <tr>
-            <td><label for="{{ form.default_transaction_type.id_for_label }}">Tipo de transação padrão:</label></td>
-            <td>{{ form.default_transaction_type }}</td>
-            {% if form.default_transaction_type.errors %}
-            <td>{{ form.default_transaction_type.errors }}</td>
-            {% endif %}
-        </tr>
     </table>
     <button type="submit">Salvar</button>
     <a href="{% url 'finance:category_list' %}">Cancelar</a>

@@ -23,10 +23,17 @@
             {% endif %}
         </tr>
         <tr>
-            <td><label for="{{ form.category.id_for_label }}">Categoria:</label></td>
-            <td>{{ form.category }}</td>
-            {% if form.category.errors %}
-            <td>{{ form.category.errors }}</td>
+            <td><label for="{{ form.subcategory.id_for_label }}">Subcategoria:</label></td>
+            <td>{{ form.subcategory }}</td>
+            {% if form.subcategory.errors %}
+            <td>{{ form.subcategory.errors }}</td>
+            {% endif %}
+        </tr>
+        <tr>
+            <td><label for="{{ form.transaction_type.id_for_label }}">Tipo de transação:</label></td>
+            <td>{{ form.transaction_type }}</td>
+            {% if form.transaction_type.errors %}
+            <td>{{ form.transaction_type.errors }}</td>
             {% endif %}
         </tr>
         <tr>
@@ -103,6 +110,27 @@
     <button type="submit">Salvar</button>
     <a href="{% url 'finance:scheduler_list' %}">Cancelar</a>
 </form>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const subcategorySelect = document.getElementById('id_subcategory');
+    const transactionTypeSelect = document.getElementById('id_transaction_type');
+    
+    if (subcategorySelect && transactionTypeSelect) {
+        subcategorySelect.addEventListener('change', function() {
+            const subcategoryId = this.value;
+            if (subcategoryId) {
+                fetch('/finance/api/subcategory/' + subcategoryId + '/default-transaction-type/')
+                    .then(response => response.json())
+                    .then(data => {
+                        transactionTypeSelect.value = data.default_transaction_type;
+                    })
+                    .catch(error => console.error('Erro ao buscar tipo de transação padrão:', error));
+            }
+        });
+    }
+});
+</script>
 {% endblock %}
 
 

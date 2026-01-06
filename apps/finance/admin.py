@@ -27,13 +27,25 @@ class BeneficiaryAdmin(admin.ModelAdmin):
 class CategoryAdmin(admin.ModelAdmin):
     list_display = (
         'category',
+        'created_at',
+        'updated_at',
+    )
+    search_fields = ('category',)
+    list_filter = ('created_at',)
+    ordering = ('category',)
+
+
+@admin.register(Subcategory)
+class SubcategoryAdmin(admin.ModelAdmin):
+    list_display = (
+        'category',
         'subcategory',
         'default_transaction_type',
         'created_at',
         'updated_at',
     )
-    search_fields = ('category', 'subcategory')
-    list_filter = ('default_transaction_type', 'created_at')
+    search_fields = ('category__category', 'subcategory')
+    list_filter = ('default_transaction_type', 'category', 'created_at')
     ordering = ('category', 'subcategory')
 
 
@@ -42,7 +54,8 @@ class TransactionAdmin(admin.ModelAdmin):
     list_display = (
         'account',
         'beneficiary',
-        'category',
+        'subcategory',
+        'transaction_type',
         'value',
         'due_date',
         'registration_date',
@@ -50,8 +63,8 @@ class TransactionAdmin(admin.ModelAdmin):
         'created_at',
         'updated_at',
     )
-    search_fields = ('account__name', 'beneficiary__full_name', 'category__category', 'notes')
-    list_filter = ('account', 'category', 'due_date', 'created_at')
+    search_fields = ('account__name', 'beneficiary__full_name', 'subcategory__subcategory', 'subcategory__category__category', 'notes')
+    list_filter = ('account', 'subcategory', 'transaction_type', 'due_date', 'created_at')
     ordering = ('-created_at',)
 
 
@@ -60,7 +73,8 @@ class SchedulerAdmin(admin.ModelAdmin):
     list_display = (
         'account',
         'beneficiary',
-        'category',
+        'subcategory',
+        'transaction_type',
         'value',
         'due_date',
         'recurrence_type',
@@ -71,6 +85,6 @@ class SchedulerAdmin(admin.ModelAdmin):
         'created_at',
         'updated_at',
     )
-    search_fields = ('account__name', 'beneficiary__full_name', 'category__category', 'notes')
-    list_filter = ('status', 'recurrence_type', 'termination_type', 'account', 'category', 'created_at')
+    search_fields = ('account__name', 'beneficiary__full_name', 'subcategory__subcategory', 'subcategory__category__category', 'notes')
+    list_filter = ('status', 'recurrence_type', 'termination_type', 'account', 'subcategory', 'transaction_type', 'created_at')
     ordering = ('-created_at',)

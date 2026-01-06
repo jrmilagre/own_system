@@ -1,12 +1,21 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
-from .models import Account, Beneficiary, Category, Transaction, Scheduler
-from .forms import AccountForm, BeneficiaryForm, CategoryForm, TransactionForm, SchedulerForm
+from django.http import JsonResponse
+from .models import Account, Beneficiary, Category, Subcategory, Transaction, Scheduler
+from .forms import AccountForm, BeneficiaryForm, CategoryForm, SubcategoryForm, TransactionForm, SchedulerForm
 
 
 def index(request):
     """Página inicial da aplicação finance"""
     return render(request, 'finance/index.html')
+
+
+def get_subcategory_default_transaction_type(request, subcategory_id):
+    """Retorna o default_transaction_type de uma subcategoria (para JavaScript)"""
+    subcategory = get_object_or_404(Subcategory, pk=subcategory_id)
+    return JsonResponse({
+        'default_transaction_type': subcategory.default_transaction_type
+    })
 
 
 # Account Views
@@ -95,6 +104,9 @@ def beneficiary_delete(request, pk):
 def category_list(request):
     """Lista de categorias"""
     categories = Category.objects.all()
+    # Adicionar contagem de subcategorias para cada categoria
+    for category in categories:
+        category.subcategory_count = Subcategory.objects.filter(category=category).count()
     return render(request, 'finance/category_list.html', {'categories': categories})
 
 
@@ -130,6 +142,66 @@ def category_delete(request, pk):
         category.delete()
         return redirect('finance:category_list')
     return render(request, 'finance/category_confirm_delete.html', {'category': category})
+
+
+# Subcategory Views
+def subcategory_list(request, category_pk):
+    """Lista de subcategorias de uma categoria"""
+    category = get_object_or_404(Category, pk=category_pk)
+    subcategories = Subcategory.objects.filter(category=category)
+    return render(request, 'finance/subcategory_list.html', {
+        'category': category,
+        'subcategories': subcategories
+    })
+
+
+def subcategory_create(request, category_pk):
+    """Criar nova subcategoria"""
+    category = get_object_or_404(Category, pk=category_pk)
+    if request.method == 'POST':
+        form = SubcategoryForm(request.POST)
+        if form.is_valid():
+            subcategory = form.save(commit=False)
+            subcategory.category = category
+            subcategory.save()
+            return redirect('finance:subcategory_list', category_pk=category_pk)
+    else:
+        form = SubcategoryForm(initial={'category': category})
+    return render(request, 'finance/subcategory_form.html', {
+        'form': form,
+        'category': category
+    })
+
+
+def subcategory_update(request, category_pk, pk):
+    """Editar subcategoria existente"""
+    category = get_object_or_404(Category, pk=category_pk)
+    subcategory = get_object_or_404(Subcategory, pk=pk, category=category)
+    if request.method == 'POST':
+        form = SubcategoryForm(request.POST, instance=subcategory)
+        if form.is_valid():
+            form.save()
+            return redirect('finance:subcategory_list', category_pk=category_pk)
+    else:
+        form = SubcategoryForm(instance=subcategory)
+    return render(request, 'finance/subcategory_form.html', {
+        'form': form,
+        'category': category,
+        'subcategory': subcategory
+    })
+
+
+def subcategory_delete(request, category_pk, pk):
+    """Deletar subcategoria"""
+    category = get_object_or_404(Category, pk=category_pk)
+    subcategory = get_object_or_404(Subcategory, pk=pk, category=category)
+    if request.method == 'POST':
+        subcategory.delete()
+        return redirect('finance:subcategory_list', category_pk=category_pk)
+    return render(request, 'finance/subcategory_confirm_delete.html', {
+        'category': category,
+        'subcategory': subcategory
+    })
 
 
 # Transaction Views
@@ -238,7 +310,8 @@ def scheduler_register(request, pk):
                 transaction_data = {
                     'account': form.cleaned_data['account'],
                     'beneficiary': form.cleaned_data['beneficiary'],
-                    'category': form.cleaned_data['category'],
+                    'subcategory': form.cleaned_data['subcategory'],
+                    'transaction_type': form.cleaned_data.get('transaction_type', scheduler.transaction_type),
                     'value': form.cleaned_data['value'],
                     'due_date': form.cleaned_data['due_date'],
                     'registration_date': form.cleaned_data.get('registration_date') or scheduler.due_date,
@@ -263,7 +336,8 @@ def scheduler_register(request, pk):
         initial_data = {
             'account': scheduler.account,
             'beneficiary': scheduler.beneficiary,
-            'category': scheduler.category,
+            'subcategory': scheduler.subcategory,
+            'transaction_type': scheduler.transaction_type,
             'value': scheduler.value,
             'due_date': scheduler.due_date,
             'registration_date': scheduler.due_date,  # Padrão é due_date

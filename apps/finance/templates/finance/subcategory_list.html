@@ -1,0 +1,35 @@
+{% extends 'finance/base.html' %}
+
+{% block title %}Subcategorias - {{ category.category }}{% endblock %}
+
+{% block content %}
+<h1>Subcategorias de "{{ category.category }}"</h1>
+<a href="{% url 'finance:subcategory_create' category.pk %}"><button>Criar Nova Subcategoria</button></a>
+<a href="{% url 'finance:category_list' %}"><button>Voltar para Categorias</button></a>
+{% if subcategories %}
+    <table>
+        <thead>
+            <tr>
+                <th>Subcategoria</th>
+                <th>Tipo de Transação Padrão</th>
+                <th>Ações</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for subcategory in subcategories %}
+            <tr>
+                <td>{{ subcategory.subcategory }}</td>
+                <td>{{ subcategory.get_default_transaction_type_display }}</td>
+                <td>
+                    <a href="{% url 'finance:subcategory_update' category.pk subcategory.pk %}"><button>Editar</button></a>
+                    <a href="{% url 'finance:subcategory_delete' category.pk subcategory.pk %}"><button>Deletar</button></a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+{% else %}
+    <p>Nenhuma subcategoria cadastrada para esta categoria.</p>
+{% endif %}
+{% endblock %}
+

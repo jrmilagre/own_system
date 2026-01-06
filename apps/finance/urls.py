@@ -20,6 +20,11 @@ urlpatterns = [
     path('categories/create/', views.category_create, name='category_create'),
     path('categories/<int:pk>/update/', views.category_update, name='category_update'),
     path('categories/<int:pk>/delete/', views.category_delete, name='category_delete'),
+    # Subcategory URLs (nested under categories)
+    path('categories/<int:category_pk>/subcategories/', views.subcategory_list, name='subcategory_list'),
+    path('categories/<int:category_pk>/subcategories/create/', views.subcategory_create, name='subcategory_create'),
+    path('categories/<int:category_pk>/subcategories/<int:pk>/update/', views.subcategory_update, name='subcategory_update'),
+    path('categories/<int:category_pk>/subcategories/<int:pk>/delete/', views.subcategory_delete, name='subcategory_delete'),
     # Transaction URLs
     path('transactions/', views.transaction_list, name='transaction_list'),
     path('transactions/create/', views.transaction_create, name='transaction_create'),
@@ -31,5 +36,7 @@ urlpatterns = [
     path('schedulers/<int:pk>/update/', views.scheduler_update, name='scheduler_update'),
     path('schedulers/<int:pk>/delete/', views.scheduler_delete, name='scheduler_delete'),
     path('schedulers/<int:pk>/register/', views.scheduler_register, name='scheduler_register'),
+    # API endpoint for JavaScript
+    path('api/subcategory/<int:subcategory_id>/default-transaction-type/', views.get_subcategory_default_transaction_type, name='subcategory_default_transaction_type'),
 ]
 

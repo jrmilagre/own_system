@@ -1,5 +1,5 @@
 from django import forms
-from .models import Account, Beneficiary, Category, Transaction, Scheduler
+from .models import Account, Beneficiary, Category, Subcategory, Transaction, Scheduler
 
 
 class AccountForm(forms.ModelForm):
@@ -26,9 +26,18 @@ class BeneficiaryForm(forms.ModelForm):
 class CategoryForm(forms.ModelForm):
     class Meta:
         model = Category
-        fields = ['category', 'subcategory', 'default_transaction_type']
+        fields = ['category']
         widgets = {
             'category': forms.TextInput(attrs={'required': True}),
+        }
+
+
+class SubcategoryForm(forms.ModelForm):
+    class Meta:
+        model = Subcategory
+        fields = ['category', 'subcategory', 'default_transaction_type']
+        widgets = {
+            'category': forms.Select(attrs={'required': True}),
             'subcategory': forms.TextInput(attrs={'required': True}),
             'default_transaction_type': forms.Select(attrs={'required': True}),
         }
@@ -37,11 +46,12 @@ class CategoryForm(forms.ModelForm):
 class TransactionForm(forms.ModelForm):
     class Meta:
         model = Transaction
-        fields = ['account', 'beneficiary', 'category', 'value', 'due_date', 'registration_date', 'purchase_date', 'notes']
+        fields = ['account', 'beneficiary', 'subcategory', 'transaction_type', 'value', 'due_date', 'registration_date', 'purchase_date', 'notes']
         widgets = {
             'account': forms.Select(attrs={'required': True}),
             'beneficiary': forms.Select(attrs={'required': True}),
-            'category': forms.Select(attrs={'required': True}),
+            'subcategory': forms.Select(attrs={'required': True}),
+            'transaction_type': forms.Select(attrs={'required': True}),
             'value': forms.NumberInput(attrs={'step': '0.01', 'required': True}),
             'due_date': forms.DateInput(attrs={'type': 'date'}),
             'registration_date': forms.DateInput(attrs={'type': 'date'}),
@@ -54,7 +64,7 @@ class SchedulerForm(forms.ModelForm):
     class Meta:
         model = Scheduler
         fields = [
-            'account', 'beneficiary', 'category', 'value', 'due_date', 'purchase_date', 'notes',
+            'account', 'beneficiary', 'subcategory', 'transaction_type', 'value', 'due_date', 'purchase_date', 'notes',
             'recurrence_type', 'recurrence_interval',
             'termination_type', 'remaining_installments', 'final_date',
             'status'
@@ -62,7 +72,8 @@ class SchedulerForm(forms.ModelForm):
         widgets = {
             'account': forms.Select(attrs={'required': True}),
             'beneficiary': forms.Select(attrs={'required': True}),
-            'category': forms.Select(attrs={'required': True}),
+            'subcategory': forms.Select(attrs={'required': True}),
+            'transaction_type': forms.Select(attrs={'required': True}),
             'value': forms.NumberInput(attrs={'step': '0.01', 'required': True}),
             'due_date': forms.DateInput(attrs={'type': 'date', 'required': True}),
             'purchase_date': forms.DateInput(attrs={'type': 'date'}),

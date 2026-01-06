@@ -1,0 +1,15 @@
+{% extends 'finance/base.html' %}
+
+{% block title %}Deletar Subcategoria{% endblock %}
+
+{% block content %}
+<h1>Deletar Subcategoria</h1>
+<p>Tem certeza que deseja deletar a subcategoria "{{ subcategory.subcategory }}" da categoria "{{ category.category }}"?</p>
+<p><strong>Atenção:</strong> Todas as transações e agendamentos associados a esta subcategoria também serão afetados.</p>
+<form method="post">
+    {% csrf_token %}
+    <button type="submit">Confirmar Exclusão</button>
+    <a href="{% url 'finance:subcategory_list' category.pk %}">Cancelar</a>
+</form>
+{% endblock %}
+

@@ -10,8 +10,7 @@
         <thead>
             <tr>
                 <th>Categoria</th>
-                <th>Subcategoria</th>
-                <th>Tipo de Transação Padrão</th>
+                <th>Subcategorias</th>
                 <th>Ações</th>
             </tr>
         </thead>
@@ -19,8 +18,11 @@
             {% for category in categories %}
             <tr>
                 <td>{{ category.category }}</td>
-                <td>{{ category.subcategory }}</td>
-                <td>{{ category.get_default_transaction_type_display }}</td>
+                <td>
+                    <a href="{% url 'finance:subcategory_list' category.pk %}">
+                        Ver Subcategorias ({{ category.subcategory_count }})
+                    </a>
+                </td>
                 <td>
                     <a href="{% url 'finance:category_update' category.pk %}"><button>Editar</button></a>
                     <a href="{% url 'finance:category_delete' category.pk %}"><button>Deletar</button></a>

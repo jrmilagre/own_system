@@ -49,12 +49,28 @@ class Beneficiary(BaseModel):
 
 
 class Category(BaseModel):
+    category = models.CharField('Categoria', max_length=200)
+
+    class Meta:
+        verbose_name = 'Categoria'
+        verbose_name_plural = 'Categorias'
+        ordering = ('category',)
+
+    def __str__(self):
+        return self.category
+
+
+class Subcategory(BaseModel):
     TRANSACTION_TYPE_CHOICES = [
         ('CR', 'Crédito'),
         ('DB', 'Débito'),
     ]
 
-    category = models.CharField('Categoria', max_length=200)
+    category = models.ForeignKey(
+        Category,
+        on_delete=models.CASCADE,
+        verbose_name='Categoria'
+    )
     subcategory = models.CharField('Subcategoria', max_length=200)
     default_transaction_type = models.CharField(
         'Tipo de transação padrão',
@@ -64,12 +80,12 @@ class Category(BaseModel):
     )
 
     class Meta:
-        verbose_name = 'Categoria'
-        verbose_name_plural = 'Categorias'
+        verbose_name = 'Subcategoria'
+        verbose_name_plural = 'Subcategorias'
         ordering = ('category', 'subcategory')
 
     def __str__(self):
-        return f"{self.category} - {self.subcategory}"
+        return f"{self.category.category} - {self.subcategory}"
 
 
 class Transaction(BaseModel):
@@ -83,10 +99,16 @@ class Transaction(BaseModel):
         on_delete=models.CASCADE,
         verbose_name='Beneficiário'
     )
-    category = models.ForeignKey(
-        Category,
+    subcategory = models.ForeignKey(
+        Subcategory,
         on_delete=models.CASCADE,
-        verbose_name='Categoria'
+        verbose_name='Subcategoria'
+    )
+    transaction_type = models.CharField(
+        'Tipo de transação',
+        max_length=2,
+        choices=[('CR', 'Crédito'), ('DB', 'Débito')],
+        default='DB',
     )
     value = models.DecimalField(
         'Valor',
@@ -153,10 +175,16 @@ class Scheduler(BaseModel):
         on_delete=models.CASCADE,
         verbose_name='Beneficiário'
     )
-    category = models.ForeignKey(
-        Category,
+    subcategory = models.ForeignKey(
+        'Subcategory',
         on_delete=models.CASCADE,
-        verbose_name='Categoria'
+        verbose_name='Subcategoria'
+    )
+    transaction_type = models.CharField(
+        'Tipo de transação',
+        max_length=2,
+        choices=[('CR', 'Crédito'), ('DB', 'Débito')],
+        default='DB',
     )
     value = models.DecimalField(
         'Valor',
@@ -289,7 +317,7 @@ class Scheduler(BaseModel):
         count = Transaction.objects.filter(
             account=self.account,
             beneficiary=self.beneficiary,
-            category=self.category,
+            subcategory=self.subcategory,
             value=self.value,
             due_date__gte=self.original_due_date if self.original_due_date else date.min
         ).count()
@@ -356,7 +384,8 @@ class Scheduler(BaseModel):
         # Usar dados do agendamento como padrão, sobrescrever com transaction_data
         account = transaction_data.get('account', self.account)
         beneficiary = transaction_data.get('beneficiary', self.beneficiary)
-        category = transaction_data.get('category', self.category)
+        subcategory = transaction_data.get('subcategory', self.subcategory)
+        transaction_type = transaction_data.get('transaction_type', self.transaction_type)
         value = transaction_data.get('value', self.value)
         due_date = transaction_data.get('due_date', self.due_date)
         registration_date = transaction_data.get('registration_date', self.due_date)
@@ -367,7 +396,8 @@ class Scheduler(BaseModel):
         transaction = Transaction.objects.create(
             account=account,
             beneficiary=beneficiary,
-            category=category,
+            subcategory=subcategory,
+            transaction_type=transaction_type,
             value=value,
             due_date=due_date,
             registration_date=registration_date,

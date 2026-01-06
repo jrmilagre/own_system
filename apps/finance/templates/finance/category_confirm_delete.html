@@ -4,7 +4,8 @@
 
 {% block content %}
 <h1>Deletar Categoria</h1>
-<p>Tem certeza que deseja deletar a categoria "{{ category.category }} - {{ category.subcategory }}"?</p>
+<p>Tem certeza que deseja deletar a categoria "{{ category.category }}"?</p>
+<p><strong>Atenção:</strong> Todas as subcategorias associadas também serão deletadas.</p>
 <form method="post">
     {% csrf_token %}
     <button type="submit">Confirmar Exclusão</button>
