@@ -1,6 +1,6 @@
 from django.shortcuts import render, redirect, get_object_or_404
-from .models import Account, Beneficiary, Category
-from .forms import AccountForm, BeneficiaryForm, CategoryForm
+from .models import Account, Beneficiary, Category, Transaction
+from .forms import AccountForm, BeneficiaryForm, CategoryForm, TransactionForm
 
 
 def index(request):
@@ -129,3 +129,44 @@ def category_delete(request, pk):
         category.delete()
         return redirect('finance:category_list')
     return render(request, 'finance/category_confirm_delete.html', {'category': category})
+
+
+# Transaction Views
+def transaction_list(request):
+    """Lista de transações"""
+    transactions = Transaction.objects.all()
+    return render(request, 'finance/transaction_list.html', {'transactions': transactions})
+
+
+def transaction_create(request):
+    """Criar nova transação"""
+    if request.method == 'POST':
+        form = TransactionForm(request.POST)
+        if form.is_valid():
+            form.save()
+            return redirect('finance:transaction_list')
+    else:
+        form = TransactionForm()
+    return render(request, 'finance/transaction_form.html', {'form': form})
+
+
+def transaction_update(request, pk):
+    """Editar transação existente"""
+    transaction = get_object_or_404(Transaction, pk=pk)
+    if request.method == 'POST':
+        form = TransactionForm(request.POST, instance=transaction)
+        if form.is_valid():
+            form.save()
+            return redirect('finance:transaction_list')
+    else:
+        form = TransactionForm(instance=transaction)
+    return render(request, 'finance/transaction_form.html', {'form': form, 'transaction': transaction})
+
+
+def transaction_delete(request, pk):
+    """Deletar transação"""
+    transaction = get_object_or_404(Transaction, pk=pk)
+    if request.method == 'POST':
+        transaction.delete()
+        return redirect('finance:transaction_list')
+    return render(request, 'finance/transaction_confirm_delete.html', {'transaction': transaction})

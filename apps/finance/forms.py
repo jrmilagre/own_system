@@ -1,5 +1,5 @@
 from django import forms
-from .models import Account, Beneficiary, Category
+from .models import Account, Beneficiary, Category, Transaction
 
 
 class AccountForm(forms.ModelForm):
@@ -31,5 +31,21 @@ class CategoryForm(forms.ModelForm):
             'category': forms.TextInput(attrs={'required': True}),
             'subcategory': forms.TextInput(attrs={'required': True}),
             'default_transaction_type': forms.Select(attrs={'required': True}),
+        }
+
+
+class TransactionForm(forms.ModelForm):
+    class Meta:
+        model = Transaction
+        fields = ['account', 'beneficiary', 'category', 'value', 'due_date', 'registration_date', 'purchase_date', 'notes']
+        widgets = {
+            'account': forms.Select(attrs={'required': True}),
+            'beneficiary': forms.Select(attrs={'required': True}),
+            'category': forms.Select(attrs={'required': True}),
+            'value': forms.NumberInput(attrs={'step': '0.01', 'required': True}),
+            'due_date': forms.DateInput(attrs={'type': 'date'}),
+            'registration_date': forms.DateInput(attrs={'type': 'date'}),
+            'purchase_date': forms.DateInput(attrs={'type': 'date'}),
+            'notes': forms.Textarea(attrs={'rows': 4}),
         }
 

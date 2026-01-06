@@ -1,0 +1,14 @@
+{% extends 'finance/base.html' %}
+
+{% block title %}Deletar Transação{% endblock %}
+
+{% block content %}
+<h1>Deletar Transação</h1>
+<p>Tem certeza que deseja deletar a transação "{{ transaction.account }} - {{ transaction.beneficiary }} - {{ transaction.value }}"?</p>
+<form method="post">
+    {% csrf_token %}
+    <button type="submit">Confirmar Exclusão</button>
+    <a href="{% url 'finance:transaction_list' %}">Cancelar</a>
+</form>
+{% endblock %}
+

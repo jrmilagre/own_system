@@ -68,3 +68,53 @@ class Category(BaseModel):
 
     def __str__(self):
         return f"{self.category} - {self.subcategory}"
+
+
+class Transaction(BaseModel):
+    account = models.ForeignKey(
+        Account,
+        on_delete=models.CASCADE,
+        verbose_name='Conta'
+    )
+    beneficiary = models.ForeignKey(
+        Beneficiary,
+        on_delete=models.CASCADE,
+        verbose_name='Beneficiário'
+    )
+    category = models.ForeignKey(
+        Category,
+        on_delete=models.CASCADE,
+        verbose_name='Categoria'
+    )
+    value = models.DecimalField(
+        'Valor',
+        max_digits=12,
+        decimal_places=2
+    )
+    due_date = models.DateField(
+        'Data do vencimento',
+        null=True,
+        blank=True
+    )
+    registration_date = models.DateField(
+        'Data do registro',
+        null=True,
+        blank=True
+    )
+    purchase_date = models.DateField(
+        'Data da compra',
+        null=True,
+        blank=True
+    )
+    notes = models.TextField(
+        'Anotações',
+        blank=True
+    )
+
+    class Meta:
+        verbose_name = 'Transação'
+        verbose_name_plural = 'Transações'
+        ordering = ('-created_at',)
+
+    def __str__(self):
+        return f"{self.account} - {self.beneficiary} - {self.value}"

@@ -35,3 +35,21 @@ class CategoryAdmin(admin.ModelAdmin):
     search_fields = ('category', 'subcategory')
     list_filter = ('default_transaction_type', 'created_at')
     ordering = ('category', 'subcategory')
+
+
+@admin.register(Transaction)
+class TransactionAdmin(admin.ModelAdmin):
+    list_display = (
+        'account',
+        'beneficiary',
+        'category',
+        'value',
+        'due_date',
+        'registration_date',
+        'purchase_date',
+        'created_at',
+        'updated_at',
+    )
+    search_fields = ('account__name', 'beneficiary__full_name', 'category__category', 'notes')
+    list_filter = ('account', 'category', 'due_date', 'created_at')
+    ordering = ('-created_at',)

@@ -1,0 +1,44 @@
+{% extends 'finance/base.html' %}
+
+{% block title %}Transações{% endblock %}
+
+{% block content %}
+<h1>Transações</h1>
+<a href="{% url 'finance:transaction_create' %}"><button>Criar Nova Transação</button></a>
+{% if transactions %}
+    <table>
+        <thead>
+            <tr>
+                <th>Conta</th>
+                <th>Beneficiário</th>
+                <th>Categoria</th>
+                <th>Valor</th>
+                <th>Data do Vencimento</th>
+                <th>Data do Registro</th>
+                <th>Data da Compra</th>
+                <th>Ações</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for transaction in transactions %}
+            <tr>
+                <td>{{ transaction.account }}</td>
+                <td>{{ transaction.beneficiary }}</td>
+                <td>{{ transaction.category }}</td>
+                <td>{{ transaction.value }}</td>
+                <td>{{ transaction.due_date|default:"-" }}</td>
+                <td>{{ transaction.registration_date|default:"-" }}</td>
+                <td>{{ transaction.purchase_date|default:"-" }}</td>
+                <td>
+                    <a href="{% url 'finance:transaction_update' transaction.pk %}"><button>Editar</button></a>
+                    <a href="{% url 'finance:transaction_delete' transaction.pk %}"><button>Deletar</button></a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+{% else %}
+    <p>Nenhuma transação cadastrada.</p>
+{% endif %}
+{% endblock %}
+
