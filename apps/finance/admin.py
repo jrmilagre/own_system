@@ -53,3 +53,24 @@ class TransactionAdmin(admin.ModelAdmin):
     search_fields = ('account__name', 'beneficiary__full_name', 'category__category', 'notes')
     list_filter = ('account', 'category', 'due_date', 'created_at')
     ordering = ('-created_at',)
+
+
+@admin.register(Scheduler)
+class SchedulerAdmin(admin.ModelAdmin):
+    list_display = (
+        'account',
+        'beneficiary',
+        'category',
+        'value',
+        'due_date',
+        'recurrence_type',
+        'recurrence_interval',
+        'termination_type',
+        'status',
+        'registered_count',
+        'created_at',
+        'updated_at',
+    )
+    search_fields = ('account__name', 'beneficiary__full_name', 'category__category', 'notes')
+    list_filter = ('status', 'recurrence_type', 'termination_type', 'account', 'category', 'created_at')
+    ordering = ('-created_at',)

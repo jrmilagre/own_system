@@ -25,5 +25,11 @@ urlpatterns = [
     path('transactions/create/', views.transaction_create, name='transaction_create'),
     path('transactions/<int:pk>/update/', views.transaction_update, name='transaction_update'),
     path('transactions/<int:pk>/delete/', views.transaction_delete, name='transaction_delete'),
+    # Scheduler URLs
+    path('schedulers/', views.scheduler_list, name='scheduler_list'),
+    path('schedulers/create/', views.scheduler_create, name='scheduler_create'),
+    path('schedulers/<int:pk>/update/', views.scheduler_update, name='scheduler_update'),
+    path('schedulers/<int:pk>/delete/', views.scheduler_delete, name='scheduler_delete'),
+    path('schedulers/<int:pk>/register/', views.scheduler_register, name='scheduler_register'),
 ]
 

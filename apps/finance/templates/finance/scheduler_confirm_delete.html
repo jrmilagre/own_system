@@ -1,0 +1,15 @@
+{% extends 'finance/base.html' %}
+
+{% block title %}Deletar Agendamento{% endblock %}
+
+{% block content %}
+<h1>Deletar Agendamento</h1>
+<p>Tem certeza que deseja deletar o agendamento "{{ scheduler }}"?</p>
+<form method="post">
+    {% csrf_token %}
+    <button type="submit">Confirmar Exclusão</button>
+    <a href="{% url 'finance:scheduler_list' %}">Cancelar</a>
+</form>
+{% endblock %}
+
+

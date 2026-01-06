@@ -1,0 +1,58 @@
+{% extends 'finance/base.html' %}
+
+{% block title %}Agendamentos{% endblock %}
+
+{% block content %}
+<h1>Agendamentos</h1>
+<a href="{% url 'finance:scheduler_create' %}"><button>Criar Novo Agendamento</button></a>
+{% if schedulers %}
+    <table>
+        <thead>
+            <tr>
+                <th>Conta</th>
+                <th>Beneficiário</th>
+                <th>Categoria</th>
+                <th>Valor</th>
+                <th>Próxima Data</th>
+                <th>Recorrência</th>
+                <th>Status</th>
+                <th>Parcelas Restantes</th>
+                <th>Ações</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for scheduler in schedulers %}
+            <tr>
+                <td>{{ scheduler.account }}</td>
+                <td>{{ scheduler.beneficiary }}</td>
+                <td>{{ scheduler.category }}</td>
+                <td>{{ scheduler.value }}</td>
+                <td>{{ scheduler.due_date|default:"-" }}</td>
+                <td>{{ scheduler.get_recurrence_type_display }} ({{ scheduler.recurrence_interval }})</td>
+                <td>{{ scheduler.get_status_display }}</td>
+                <td>
+                    {% if scheduler.termination_type == 'INSTALLMENTS' %}
+                        {{ scheduler.remaining_installments|default:"-" }}
+                    {% elif scheduler.termination_type == 'FINAL_DATE' %}
+                        Até {{ scheduler.final_date|default:"-" }}
+                    {% else %}
+                        Infinito
+                    {% endif %}
+                </td>
+                <td>
+                    <a href="{% url 'finance:scheduler_update' scheduler.pk %}"><button>Editar</button></a>
+                    <a href="{% url 'finance:scheduler_delete' scheduler.pk %}"><button>Deletar</button></a>
+                    {% if scheduler.status == 'ACTIVE' %}
+                        <a href="{% url 'finance:scheduler_register' scheduler.pk %}"><button>Registrar</button></a>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+{% else %}
+    <p>Nenhum agendamento cadastrado.</p>
+{% endif %}
+{% endblock %}
+
+

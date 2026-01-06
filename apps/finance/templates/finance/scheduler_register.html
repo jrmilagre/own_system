@@ -1,9 +1,14 @@
 {% extends 'finance/base.html' %}
 
-{% block title %}{% if form.instance.pk %}Editar Transação{% else %}Criar Transação{% endif %}{% endblock %}
+{% block title %}Registrar Transação{% endblock %}
 
 {% block content %}
-<h1>{% if form.instance.pk %}Editar Transação{% else %}Criar Nova Transação{% endif %}</h1>
+<h1>Registrar Transação do Agendamento</h1>
+<p>Edite os campos abaixo antes de registrar a transação:</p>
+
+{% if next_due_date %}
+<p><strong>Próxima data (após registro):</strong> {{ next_due_date|date:"d/m/Y" }}</p>
+{% endif %}
 
 <form method="post">
     {% csrf_token %}
@@ -44,7 +49,7 @@
             {% endif %}
         </tr>
         <tr>
-            <td><label for="{{ form.registration_date.id_for_label }}">Data do registro:</label></td>
+            <td><label for="{{ form.registration_date.id_for_label }}">Data do registro (pagamento/recebimento):</label></td>
             <td>{{ form.registration_date }}</td>
             {% if form.registration_date.errors %}
             <td>{{ form.registration_date.errors }}</td>
@@ -65,9 +70,8 @@
             {% endif %}
         </tr>
     </table>
-    <button type="submit">Salvar</button>
-    <a href="{% url 'finance:transaction_list' %}">Cancelar</a>
+    <button type="submit">Registrar Transação</button>
+    <a href="{% url 'finance:scheduler_list' %}">Cancelar</a>
 </form>
 {% endblock %}
-
 

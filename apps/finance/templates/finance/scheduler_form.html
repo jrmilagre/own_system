@@ -1,9 +1,9 @@
 {% extends 'finance/base.html' %}
 
-{% block title %}{% if form.instance.pk %}Editar Transação{% else %}Criar Transação{% endif %}{% endblock %}
+{% block title %}{% if form.instance.pk %}Editar Agendamento{% else %}Criar Agendamento{% endif %}{% endblock %}
 
 {% block content %}
-<h1>{% if form.instance.pk %}Editar Transação{% else %}Criar Nova Transação{% endif %}</h1>
+<h1>{% if form.instance.pk %}Editar Agendamento{% else %}Criar Novo Agendamento{% endif %}</h1>
 
 <form method="post">
     {% csrf_token %}
@@ -44,13 +44,6 @@
             {% endif %}
         </tr>
         <tr>
-            <td><label for="{{ form.registration_date.id_for_label }}">Data do registro:</label></td>
-            <td>{{ form.registration_date }}</td>
-            {% if form.registration_date.errors %}
-            <td>{{ form.registration_date.errors }}</td>
-            {% endif %}
-        </tr>
-        <tr>
             <td><label for="{{ form.purchase_date.id_for_label }}">Data da compra:</label></td>
             <td>{{ form.purchase_date }}</td>
             {% if form.purchase_date.errors %}
@@ -64,9 +57,51 @@
             <td>{{ form.notes.errors }}</td>
             {% endif %}
         </tr>
+        <tr>
+            <td><label for="{{ form.recurrence_type.id_for_label }}">Tipo de recorrência:</label></td>
+            <td>{{ form.recurrence_type }}</td>
+            {% if form.recurrence_type.errors %}
+            <td>{{ form.recurrence_type.errors }}</td>
+            {% endif %}
+        </tr>
+        <tr>
+            <td><label for="{{ form.recurrence_interval.id_for_label }}">Intervalo da recorrência:</label></td>
+            <td>{{ form.recurrence_interval }}</td>
+            {% if form.recurrence_interval.errors %}
+            <td>{{ form.recurrence_interval.errors }}</td>
+            {% endif %}
+        </tr>
+        <tr>
+            <td><label for="{{ form.termination_type.id_for_label }}">Tipo de término:</label></td>
+            <td>{{ form.termination_type }}</td>
+            {% if form.termination_type.errors %}
+            <td>{{ form.termination_type.errors }}</td>
+            {% endif %}
+        </tr>
+        <tr>
+            <td><label for="{{ form.remaining_installments.id_for_label }}">Parcelas restantes:</label></td>
+            <td>{{ form.remaining_installments }}</td>
+            {% if form.remaining_installments.errors %}
+            <td>{{ form.remaining_installments.errors }}</td>
+            {% endif %}
+        </tr>
+        <tr>
+            <td><label for="{{ form.final_date.id_for_label }}">Data final:</label></td>
+            <td>{{ form.final_date }}</td>
+            {% if form.final_date.errors %}
+            <td>{{ form.final_date.errors }}</td>
+            {% endif %}
+        </tr>
+        <tr>
+            <td><label for="{{ form.status.id_for_label }}">Status:</label></td>
+            <td>{{ form.status }}</td>
+            {% if form.status.errors %}
+            <td>{{ form.status.errors }}</td>
+            {% endif %}
+        </tr>
     </table>
     <button type="submit">Salvar</button>
-    <a href="{% url 'finance:transaction_list' %}">Cancelar</a>
+    <a href="{% url 'finance:scheduler_list' %}">Cancelar</a>
 </form>
 {% endblock %}
 

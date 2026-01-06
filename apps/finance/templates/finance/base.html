@@ -12,10 +12,18 @@
         <a href="{% url 'finance:account_list' %}">Contas</a> |
         <a href="{% url 'finance:beneficiary_list' %}">Beneficiários</a> |
         <a href="{% url 'finance:category_list' %}">Categorias</a> |
-        <a href="{% url 'finance:transaction_list' %}">Transações</a>
+        <a href="{% url 'finance:transaction_list' %}">Transações</a> |
+        <a href="{% url 'finance:scheduler_list' %}">Agendamentos</a>
     </nav>
     
     <main>
+        {% if messages %}
+            <ul class="messages">
+                {% for message in messages %}
+                    <li{% if message.tags %} class="{{ message.tags }}"{% endif %}>{{ message }}</li>
+                {% endfor %}
+            </ul>
+        {% endif %}
         {% block content %}
         {% endblock %}
     </main>
