@@ -52,6 +52,7 @@ class SubcategoryAdmin(admin.ModelAdmin):
 @admin.register(Transaction)
 class TransactionAdmin(admin.ModelAdmin):
     list_display = (
+        'id',
         'account',
         'beneficiary',
         'subcategory',

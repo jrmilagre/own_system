@@ -1,0 +1,142 @@
+{% extends 'finance/base.html' %}
+
+{% block title %}Registrar Transações do Agendamento Múltiplo{% endblock %}
+
+{% block content %}
+<h1>Registrar Transações do Agendamento Múltiplo</h1>
+<p>Edite os campos abaixo antes de registrar as transações:</p>
+
+{% if next_due_date %}
+<p><strong>Próxima data (após registro):</strong> {{ next_due_date|date:"d/m/Y" }}</p>
+{% endif %}
+
+<form method="post">
+    {% csrf_token %}
+    {{ formset.management_form }}
+    
+    <h2>Itens do Agendamento</h2>
+    <div id="items-container">
+        {% for item_form in formset %}
+        <div class="item-form">
+            <h3>Item {{ forloop.counter }}</h3>
+            <table>
+                <tr>
+                    <td><label for="{{ item_form.is_transfer.id_for_label }}">É transferência:</label></td>
+                    <td>{{ item_form.is_transfer }}</td>
+                    {% if item_form.is_transfer.errors %}
+                    <td>{{ item_form.is_transfer.errors }}</td>
+                    {% endif %}
+                </tr>
+                <tr class="normal-fields">
+                    <td><label for="{{ item_form.subcategory.id_for_label }}">Subcategoria:</label></td>
+                    <td>{{ item_form.subcategory }}</td>
+                    {% if item_form.subcategory.errors %}
+                    <td>{{ item_form.subcategory.errors }}</td>
+                    {% endif %}
+                </tr>
+                <tr class="normal-fields">
+                    <td><label for="{{ item_form.transaction_type.id_for_label }}">Tipo:</label></td>
+                    <td>{{ item_form.transaction_type }}</td>
+                    {% if item_form.transaction_type.errors %}
+                    <td>{{ item_form.transaction_type.errors }}</td>
+                    {% endif %}
+                </tr>
+                <tr class="transfer-fields" style="display: none;">
+                    <td><label for="{{ item_form.destination_account.id_for_label }}">Conta de destino:</label></td>
+                    <td>{{ item_form.destination_account }}</td>
+                    {% if item_form.destination_account.errors %}
+                    <td>{{ item_form.destination_account.errors }}</td>
+                    {% endif %}
+                </tr>
+                <tr>
+                    <td><label for="{{ item_form.value.id_for_label }}">Valor:</label></td>
+                    <td>{{ item_form.value }}</td>
+                    {% if item_form.value.errors %}
+                    <td>{{ item_form.value.errors }}</td>
+                    {% endif %}
+                </tr>
+            </table>
+            {% for hidden in item_form.hidden_fields %}
+                {{ hidden }}
+            {% endfor %}
+        </div>
+        {% endfor %}
+    </div>
+    
+    <button type="submit">Registrar Transações</button>
+    <a href="{% url 'finance:scheduler_list' %}">Cancelar</a>
+</form>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.item-form').forEach(item => {
+        const isTransferCheckbox = item.querySelector('input[type="checkbox"][name*="is_transfer"]');
+        const normalFields = item.querySelectorAll('.normal-fields');
+        const transferFields = item.querySelectorAll('.transfer-fields');
+        
+        // Configurar listener para subcategoria (buscar tipo padrão)
+        const subcategorySelect = item.querySelector('select[name*="subcategory"]');
+        const transactionTypeSelect = item.querySelector('select[name*="transaction_type"]');
+        
+        if (subcategorySelect && transactionTypeSelect) {
+            subcategorySelect.addEventListener('change', function() {
+                const subcategoryId = this.value;
+                if (subcategoryId && (!isTransferCheckbox || !isTransferCheckbox.checked)) {
+                    fetch('/finance/api/subcategory/' + subcategoryId + '/default-transaction-type/')
+                        .then(response => response.json())
+                        .then(data => {
+                            transactionTypeSelect.value = data.default_transaction_type;
+                        })
+                        .catch(error => console.error('Erro ao buscar tipo de transação padrão:', error));
+                }
+            });
+        }
+        
+        if (isTransferCheckbox) {
+            // Verificar estado inicial
+            if (isTransferCheckbox.checked) {
+                normalFields.forEach(field => field.style.display = 'none');
+                transferFields.forEach(field => field.style.display = '');
+            }
+            
+            isTransferCheckbox.addEventListener('change', function() {
+                const isTransfer = this.checked;
+                
+                if (isTransfer) {
+                    normalFields.forEach(field => {
+                        field.style.display = 'none';
+                        const inputs = field.querySelectorAll('input, select');
+                        inputs.forEach(input => input.removeAttribute('required'));
+                    });
+                    transferFields.forEach(field => {
+                        field.style.display = '';
+                        const inputs = field.querySelectorAll('input, select');
+                        inputs.forEach(input => {
+                            if (input.id && input.id.includes('destination_account')) {
+                                input.setAttribute('required', 'required');
+                            }
+                        });
+                    });
+                } else {
+                    normalFields.forEach(field => {
+                        field.style.display = '';
+                        const inputs = field.querySelectorAll('input, select');
+                        inputs.forEach(input => {
+                            if (input.id && input.id.includes('subcategory')) {
+                                input.setAttribute('required', 'required');
+                            }
+                        });
+                    });
+                    transferFields.forEach(field => {
+                        field.style.display = 'none';
+                        const inputs = field.querySelectorAll('input, select');
+                        inputs.forEach(input => input.removeAttribute('required'));
+                    });
+                }
+            });
+        }
+    });
+});
+</script>
+{% endblock %}
+

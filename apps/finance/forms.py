@@ -1,4 +1,5 @@
 from django import forms
+from django.forms import formset_factory, inlineformset_factory, BaseFormSet
 from .models import Account, Beneficiary, Category, Subcategory, Transaction, Scheduler
 
 
@@ -236,4 +237,343 @@ class SchedulerForm(forms.ModelForm):
                 })
 
         return cleaned_data
+
+
+class MultipleTransactionItemForm(forms.Form):
+    """Formulário para cada item de uma transação múltipla"""
+    transaction_type = forms.ChoiceField(
+        choices=[('CR', 'Crédito'), ('DB', 'Débito')],
+        label='Tipo',
+        required=True
+    )
+    subcategory = forms.ModelChoiceField(
+        queryset=Subcategory.objects.all(),
+        label='Subcategoria',
+        required=False
+    )
+    value = forms.DecimalField(
+        label='Valor',
+        max_digits=12,
+        decimal_places=2,
+        required=True,
+        widget=forms.NumberInput(attrs={'step': '0.01'})
+    )
+    is_transfer = forms.BooleanField(
+        label='É transferência',
+        required=False,
+        widget=forms.CheckboxInput()
+    )
+    destination_account = forms.ModelChoiceField(
+        queryset=Account.objects.all(),
+        label='Conta de destino',
+        required=False
+    )
+
+    def clean(self):
+        cleaned_data = super().clean()
+        is_transfer = cleaned_data.get('is_transfer', False)
+        
+        if is_transfer:
+            destination_account = cleaned_data.get('destination_account')
+            
+            if not destination_account:
+                raise forms.ValidationError({
+                    'destination_account': 'Conta de destino é obrigatória para transferências.'
+                })
+        else:
+            # Para transações normais, validar campos obrigatórios
+            subcategory = cleaned_data.get('subcategory')
+            
+            if not subcategory:
+                raise forms.ValidationError({
+                    'subcategory': 'Subcategoria é obrigatória para transações normais.'
+                })
+        
+        return cleaned_data
+
+
+MultipleTransactionItemFormSet = formset_factory(
+    MultipleTransactionItemForm,
+    extra=1,
+    can_delete=True,
+    min_num=1,
+    validate_min=True
+)
+
+
+class MultipleTransactionForm(forms.Form):
+    """Formulário base para transação múltipla com campos compartilhados"""
+    account = forms.ModelChoiceField(
+        queryset=Account.objects.all(),
+        label='Conta',
+        required=True
+    )
+    beneficiary = forms.ModelChoiceField(
+        queryset=Beneficiary.objects.all(),
+        label='Beneficiário',
+        required=True
+    )
+    due_date = forms.DateField(
+        label='Data do vencimento',
+        required=False,
+        widget=forms.DateInput(attrs={'type': 'date'})
+    )
+    transaction_date = forms.DateField(
+        label='Data da transação',
+        required=False,
+        widget=forms.DateInput(attrs={'type': 'date'})
+    )
+    purchase_date = forms.DateField(
+        label='Data da compra',
+        required=False,
+        widget=forms.DateInput(attrs={'type': 'date'})
+    )
+    notes = forms.CharField(
+        label='Anotações',
+        required=False,
+        widget=forms.Textarea(attrs={'rows': 4})
+    )
+
+
+class MultipleSchedulerItemForm(forms.Form):
+    """Formulário para cada item de um agendamento múltiplo"""
+    transaction_type = forms.ChoiceField(
+        choices=[('CR', 'Crédito'), ('DB', 'Débito')],
+        label='Tipo',
+        required=False  # Será validado no clean() baseado em is_transfer
+    )
+    subcategory = forms.ModelChoiceField(
+        queryset=Subcategory.objects.all(),
+        label='Subcategoria',
+        required=False
+    )
+    value = forms.DecimalField(
+        label='Valor',
+        max_digits=12,
+        decimal_places=2,
+        required=True,
+        widget=forms.NumberInput(attrs={'step': '0.01'})
+    )
+    is_transfer = forms.BooleanField(
+        label='É transferência',
+        required=False,
+        widget=forms.CheckboxInput()
+    )
+    destination_account = forms.ModelChoiceField(
+        queryset=Account.objects.all(),
+        label='Conta de destino',
+        required=False
+    )
+
+    def clean(self):
+        cleaned_data = super().clean()
+        is_transfer = cleaned_data.get('is_transfer', False)
+        
+        if is_transfer:
+            destination_account = cleaned_data.get('destination_account')
+            
+            if not destination_account:
+                raise forms.ValidationError({
+                    'destination_account': 'Conta de destino é obrigatória para transferências.'
+                })
+        else:
+            # Para transações normais, validar campos obrigatórios
+            subcategory = cleaned_data.get('subcategory')
+            transaction_type = cleaned_data.get('transaction_type')
+            
+            if not subcategory:
+                raise forms.ValidationError({
+                    'subcategory': 'Subcategoria é obrigatória para transações normais.'
+                })
+            
+            if not transaction_type:
+                raise forms.ValidationError({
+                    'transaction_type': 'Tipo de transação é obrigatório para transações normais.'
+                })
+        
+        return cleaned_data
+
+
+class MultipleSchedulerItemFormSetBase(BaseFormSet):
+    """Formset customizado que ignora formulários completamente vazios"""
+    
+    def clean(self):
+        """Valida o formset, ignorando formulários completamente vazios"""
+        if any(self.errors):
+            return
+        
+        # Contar apenas formulários não vazios e não deletados
+        non_empty_forms = 0
+        for form in self.forms:
+            if form.cleaned_data and not form.cleaned_data.get('DELETE', False):
+                # Verificar se o formulário tem pelo menos um campo preenchido
+                has_value = form.cleaned_data.get('value')
+                if has_value:
+                    non_empty_forms += 1
+        
+        if non_empty_forms < 1:
+            raise forms.ValidationError('É necessário pelo menos um item válido.')
+
+
+MultipleSchedulerItemFormSet = formset_factory(
+    MultipleSchedulerItemForm,
+    formset=MultipleSchedulerItemFormSetBase,
+    extra=1,
+    can_delete=True,
+    min_num=1,
+    validate_min=True
+)
+
+
+class MultipleSchedulerForm(forms.Form):
+    """Formulário base para agendamento múltiplo com campos compartilhados"""
+    account = forms.ModelChoiceField(
+        queryset=Account.objects.all(),
+        label='Conta',
+        required=True
+    )
+    beneficiary = forms.ModelChoiceField(
+        queryset=Beneficiary.objects.all(),
+        label='Beneficiário',
+        required=True
+    )
+    due_date = forms.DateField(
+        label='Data do vencimento',
+        required=False,
+        widget=forms.DateInput(attrs={'type': 'date'})
+    )
+    purchase_date = forms.DateField(
+        label='Data da compra',
+        required=False,
+        widget=forms.DateInput(attrs={'type': 'date'})
+    )
+    notes = forms.CharField(
+        label='Anotações',
+        required=False,
+        widget=forms.Textarea(attrs={'rows': 4})
+    )
+    recurrence_type = forms.ChoiceField(
+        choices=Scheduler.RECURRENCE_TYPE_CHOICES,
+        label='Tipo de recorrência',
+        required=True,
+        initial='MONTHLY'
+    )
+    recurrence_interval = forms.IntegerField(
+        label='Intervalo da recorrência',
+        required=True,
+        initial=1,
+        min_value=1,
+        widget=forms.NumberInput(attrs={'min': 1})
+    )
+    termination_type = forms.ChoiceField(
+        choices=Scheduler.TERMINATION_TYPE_CHOICES,
+        label='Tipo de término',
+        required=True,
+        initial='INFINITE'
+    )
+    remaining_installments = forms.IntegerField(
+        label='Parcelas restantes',
+        required=False,
+        min_value=1,
+        widget=forms.NumberInput(attrs={'min': 1})
+    )
+    final_date = forms.DateField(
+        label='Data final',
+        required=False,
+        widget=forms.DateInput(attrs={'type': 'date'})
+    )
+    status = forms.ChoiceField(
+        choices=Scheduler.STATUS_CHOICES,
+        label='Status',
+        required=True,
+        initial='ACTIVE'
+    )
+
+    def clean(self):
+        cleaned_data = super().clean()
+        termination_type = cleaned_data.get('termination_type')
+        remaining_installments = cleaned_data.get('remaining_installments')
+        final_date = cleaned_data.get('final_date')
+
+        if termination_type == 'INSTALLMENTS':
+            if not remaining_installments or remaining_installments <= 0:
+                raise forms.ValidationError({
+                    'remaining_installments': 'Número de parcelas é obrigatório quando o tipo de término é "Número de parcelas".'
+                })
+
+        if termination_type == 'FINAL_DATE':
+            if not final_date:
+                raise forms.ValidationError({
+                    'final_date': 'Data final é obrigatória quando o tipo de término é "Data final".'
+                })
+
+        return cleaned_data
+
+
+class MultipleSchedulerRegisterItemForm(forms.Form):
+    """Formulário para editar item antes do registro"""
+    subcategory = forms.ModelChoiceField(
+        queryset=Subcategory.objects.all(),
+        label='Subcategoria',
+        required=False
+    )
+    transaction_type = forms.ChoiceField(
+        choices=[('CR', 'Crédito'), ('DB', 'Débito')],
+        label='Tipo',
+        required=False  # Será validado no clean() baseado em is_transfer
+    )
+    value = forms.DecimalField(
+        label='Valor',
+        max_digits=12,
+        decimal_places=2,
+        required=True,
+        widget=forms.NumberInput(attrs={'step': '0.01'})
+    )
+    is_transfer = forms.BooleanField(
+        label='É transferência',
+        required=False,
+        widget=forms.CheckboxInput()
+    )
+    destination_account = forms.ModelChoiceField(
+        queryset=Account.objects.all(),
+        label='Conta de destino',
+        required=False
+    )
+
+    def clean(self):
+        cleaned_data = super().clean()
+        is_transfer = cleaned_data.get('is_transfer', False)
+        
+        if is_transfer:
+            destination_account = cleaned_data.get('destination_account')
+            
+            if not destination_account:
+                raise forms.ValidationError({
+                    'destination_account': 'Conta de destino é obrigatória para transferências.'
+                })
+        else:
+            # Para transações normais, validar campos obrigatórios
+            subcategory = cleaned_data.get('subcategory')
+            transaction_type = cleaned_data.get('transaction_type')
+            
+            if not subcategory:
+                raise forms.ValidationError({
+                    'subcategory': 'Subcategoria é obrigatória para transações normais.'
+                })
+            
+            if not transaction_type:
+                raise forms.ValidationError({
+                    'transaction_type': 'Tipo de transação é obrigatório para transações normais.'
+                })
+        
+        return cleaned_data
+
+
+MultipleSchedulerRegisterItemFormSet = formset_factory(
+    MultipleSchedulerRegisterItemForm,
+    extra=0,
+    can_delete=False,
+    min_num=1,
+    validate_min=True
+)
 

@@ -1,0 +1,22 @@
+{% extends 'finance/base.html' %}
+
+{% block title %}Deletar Agendamento Múltiplo{% endblock %}
+
+{% block content %}
+<h1>Deletar Agendamento Múltiplo</h1>
+
+<p>Tem certeza que deseja deletar este agendamento múltiplo?</p>
+
+<p><strong>Itens:</strong> {{ schedulers.count }}</p>
+{% if first_scheduler %}
+<p><strong>Recorrência:</strong> {{ first_scheduler.get_recurrence_type_display }}</p>
+<p><strong>Registros realizados:</strong> {{ first_scheduler.registered_count }}</p>
+{% endif %}
+
+<form method="post">
+    {% csrf_token %}
+    <button type="submit">Confirmar Deletar</button>
+    <a href="{% url 'finance:scheduler_list' %}">Cancelar</a>
+</form>
+{% endblock %}
+

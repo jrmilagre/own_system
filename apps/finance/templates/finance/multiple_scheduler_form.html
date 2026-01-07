@@ -1,0 +1,382 @@
+{% extends 'finance/base.html' %}
+
+{% block title %}{% if group_id %}Editar Agendamento Múltiplo{% else %}Criar Agendamento Múltiplo{% endif %}{% endblock %}
+
+{% block content %}
+<h1>{% if group_id %}Editar Agendamento Múltiplo{% else %}Criar Novo Agendamento Múltiplo{% endif %}</h1>
+
+{% if messages %}
+<ul class="messages">
+    {% for message in messages %}
+    <li{% if message.tags %} class="{{ message.tags }}"{% endif %}>{{ message }}</li>
+    {% endfor %}
+</ul>
+{% endif %}
+
+{% if form.errors %}
+<div class="form-errors">
+    <strong>Erros no formulário:</strong>
+    {{ form.errors }}
+</div>
+{% endif %}
+
+{% if formset.non_form_errors %}
+<div class="formset-errors">
+    <strong>Erros no formset:</strong>
+    {{ formset.non_form_errors }}
+</div>
+{% endif %}
+
+<form method="post">
+    {% csrf_token %}
+    
+    <h2>Campos Compartilhados</h2>
+    <table>
+        <tr>
+            <td><label for="{{ form.account.id_for_label }}">Conta:</label></td>
+            <td>{{ form.account }}</td>
+            {% if form.account.errors %}
+            <td>{{ form.account.errors }}</td>
+            {% endif %}
+        </tr>
+        <tr>
+            <td><label for="{{ form.beneficiary.id_for_label }}">Beneficiário:</label></td>
+            <td>{{ form.beneficiary }}</td>
+            {% if form.beneficiary.errors %}
+            <td>{{ form.beneficiary.errors }}</td>
+            {% endif %}
+        </tr>
+        <tr>
+            <td><label for="{{ form.due_date.id_for_label }}">Data do vencimento:</label></td>
+            <td>{{ form.due_date }}</td>
+            {% if form.due_date.errors %}
+            <td>{{ form.due_date.errors }}</td>
+            {% endif %}
+        </tr>
+        <tr>
+            <td><label for="{{ form.purchase_date.id_for_label }}">Data da compra:</label></td>
+            <td>{{ form.purchase_date }}</td>
+            {% if form.purchase_date.errors %}
+            <td>{{ form.purchase_date.errors }}</td>
+            {% endif %}
+        </tr>
+        <tr>
+            <td><label for="{{ form.notes.id_for_label }}">Anotações:</label></td>
+            <td>{{ form.notes }}</td>
+            {% if form.notes.errors %}
+            <td>{{ form.notes.errors }}</td>
+            {% endif %}
+        </tr>
+        <tr>
+            <td><label for="{{ form.recurrence_type.id_for_label }}">Tipo de recorrência:</label></td>
+            <td>{{ form.recurrence_type }}</td>
+            {% if form.recurrence_type.errors %}
+            <td>{{ form.recurrence_type.errors }}</td>
+            {% endif %}
+        </tr>
+        <tr>
+            <td><label for="{{ form.recurrence_interval.id_for_label }}">Intervalo da recorrência:</label></td>
+            <td>{{ form.recurrence_interval }}</td>
+            {% if form.recurrence_interval.errors %}
+            <td>{{ form.recurrence_interval.errors }}</td>
+            {% endif %}
+        </tr>
+        <tr>
+            <td><label for="{{ form.termination_type.id_for_label }}">Tipo de término:</label></td>
+            <td>{{ form.termination_type }}</td>
+            {% if form.termination_type.errors %}
+            <td>{{ form.termination_type.errors }}</td>
+            {% endif %}
+        </tr>
+        <tr>
+            <td><label for="{{ form.remaining_installments.id_for_label }}">Parcelas restantes:</label></td>
+            <td>{{ form.remaining_installments }}</td>
+            {% if form.remaining_installments.errors %}
+            <td>{{ form.remaining_installments.errors }}</td>
+            {% endif %}
+        </tr>
+        <tr>
+            <td><label for="{{ form.final_date.id_for_label }}">Data final:</label></td>
+            <td>{{ form.final_date }}</td>
+            {% if form.final_date.errors %}
+            <td>{{ form.final_date.errors }}</td>
+            {% endif %}
+        </tr>
+        <tr>
+            <td><label for="{{ form.status.id_for_label }}">Status:</label></td>
+            <td>{{ form.status }}</td>
+            {% if form.status.errors %}
+            <td>{{ form.status.errors }}</td>
+            {% endif %}
+        </tr>
+    </table>
+    
+    <h2>Itens do Agendamento</h2>
+    {{ formset.management_form }}
+    <div id="items-container">
+        {% for item_form in formset %}
+        <div class="item-form" data-form-index="{{ forloop.counter0 }}">
+            <h3>Item {{ forloop.counter }} <button type="button" class="remove-item" data-form-index="{{ forloop.counter0 }}">Remover</button></h3>
+            {% if item_form.non_field_errors %}
+            <div class="item-errors">
+                {{ item_form.non_field_errors }}
+            </div>
+            {% endif %}
+            {% if item_form.DELETE %}
+            <div class="delete-checkbox" style="display: none;">
+                {{ item_form.DELETE }} <label for="{{ item_form.DELETE.id_for_label }}">Deletar este item</label>
+            </div>
+            {% endif %}
+            <table>
+                <tr>
+                    <td><label for="{{ item_form.is_transfer.id_for_label }}">É transferência:</label></td>
+                    <td>{{ item_form.is_transfer }}</td>
+                    {% if item_form.is_transfer.errors %}
+                    <td>{{ item_form.is_transfer.errors }}</td>
+                    {% endif %}
+                </tr>
+                <tr class="normal-fields">
+                    <td><label for="{{ item_form.subcategory.id_for_label }}">Subcategoria:</label></td>
+                    <td>{{ item_form.subcategory }}</td>
+                    {% if item_form.subcategory.errors %}
+                    <td>{{ item_form.subcategory.errors }}</td>
+                    {% endif %}
+                </tr>
+                <tr class="normal-fields">
+                    <td><label for="{{ item_form.transaction_type.id_for_label }}">Tipo:</label></td>
+                    <td>{{ item_form.transaction_type }}</td>
+                    {% if item_form.transaction_type.errors %}
+                    <td>{{ item_form.transaction_type.errors }}</td>
+                    {% endif %}
+                </tr>
+                <tr class="transfer-fields" style="display: none;">
+                    <td><label for="{{ item_form.destination_account.id_for_label }}">Conta de destino:</label></td>
+                    <td>{{ item_form.destination_account }}</td>
+                    {% if item_form.destination_account.errors %}
+                    <td>{{ item_form.destination_account.errors }}</td>
+                    {% endif %}
+                </tr>
+                <tr>
+                    <td><label for="{{ item_form.value.id_for_label }}">Valor:</label></td>
+                    <td>{{ item_form.value }}</td>
+                    {% if item_form.value.errors %}
+                    <td>{{ item_form.value.errors }}</td>
+                    {% endif %}
+                </tr>
+            </table>
+            {% for hidden in item_form.hidden_fields %}
+                {{ hidden }}
+            {% endfor %}
+        </div>
+        {% endfor %}
+    </div>
+    
+    <button type="button" id="add-item">Adicionar Item</button>
+    <button type="submit">Salvar</button>
+    <a href="{% url 'finance:scheduler_list' %}">Cancelar</a>
+</form>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const formset = document.getElementById('items-container');
+    const addButton = document.getElementById('add-item');
+    const totalForms = document.getElementById('id_form-TOTAL_FORMS');
+    let formCount = parseInt(totalForms.value);
+    
+    // Adicionar novo item (clonar o último formulário vazio)
+    addButton.addEventListener('click', function() {
+        const existingForms = formset.querySelectorAll('.item-form');
+        if (existingForms.length === 0) return;
+        
+        // Clonar o último formulário
+        const lastForm = existingForms[existingForms.length - 1];
+        const newForm = lastForm.cloneNode(true);
+        
+        // Atualizar índices
+        const newIndex = formCount;
+        newForm.querySelectorAll('input, select, textarea, label').forEach(element => {
+            if (element.id) {
+                element.id = element.id.replace(/-\d+-/, '-' + newIndex + '-');
+            }
+            if (element.name) {
+                element.name = element.name.replace(/-\d+-/, '-' + newIndex + '-');
+            }
+            if (element.htmlFor) {
+                element.htmlFor = element.htmlFor.replace(/-\d+-/, '-' + newIndex + '-');
+            }
+        });
+        
+        // Limpar valores
+        newForm.querySelectorAll('input[type="text"], input[type="number"], select').forEach(element => {
+            if (element.type !== 'checkbox' && element.type !== 'hidden') {
+                element.value = '';
+            } else if (element.type === 'checkbox') {
+                element.checked = false;
+            }
+        });
+        
+        // Remover checkbox DELETE se existir
+        const deleteCheckbox = newForm.querySelector('input[type="checkbox"][name*="DELETE"]');
+        if (deleteCheckbox) {
+            const deleteDiv = deleteCheckbox.closest('.delete-checkbox');
+            if (deleteDiv) {
+                deleteDiv.remove();
+            }
+        }
+        
+        // Atualizar título e adicionar botão remover
+        const title = newForm.querySelector('h3');
+        if (title) {
+            title.innerHTML = 'Item ' + (newIndex + 1) + ' <button type="button" class="remove-item" data-form-index="' + newIndex + '">Remover</button>';
+        }
+        
+        formset.appendChild(newForm);
+        formCount++;
+        totalForms.value = formCount;
+        
+        // Adicionar listeners ao novo item
+        setupItemListeners(newForm);
+        setupRemoveButton(newForm);
+    });
+    
+    // Função para configurar botão de remover
+    function setupRemoveButton(itemElement) {
+        const removeButton = itemElement.querySelector('.remove-item');
+        if (removeButton) {
+            removeButton.addEventListener('click', function() {
+                const itemForm = itemElement;
+                
+                // Verificar se é um item existente (tem campo id com valor ou checkbox DELETE)
+                const deleteCheckbox = itemForm.querySelector('input[name*="-DELETE"]');
+                const idField = itemForm.querySelector('input[type="hidden"][name*="-id"]');
+                
+                // Verificar se tem pelo menos um campo preenchido (não é um formulário completamente vazio)
+                const hasValue = itemForm.querySelector('input[name*="-value"]') && 
+                                 itemForm.querySelector('input[name*="-value"]').value;
+                
+                if (deleteCheckbox && idField && idField.value) {
+                    // Item existente no banco: marcar para deletar e ocultar
+                    deleteCheckbox.checked = true;
+                    itemForm.style.display = 'none';
+                } else if (hasValue) {
+                    // Item novo com dados: marcar DELETE se existir, senão apenas ocultar
+                    if (deleteCheckbox) {
+                        deleteCheckbox.checked = true;
+                    }
+                    itemForm.style.display = 'none';
+                } else {
+                    // Item completamente vazio: remover do DOM
+                    itemForm.remove();
+                    formCount--;
+                    totalForms.value = formCount;
+                    
+                    // Renumerar itens restantes
+                    renumberItems();
+                }
+            });
+        }
+    }
+    
+    // Função para renumerar itens após remoção
+    function renumberItems() {
+        const items = formset.querySelectorAll('.item-form:not([style*="display: none"])');
+        items.forEach((item, index) => {
+            const title = item.querySelector('h3');
+            if (title) {
+                const removeButton = title.querySelector('.remove-item');
+                const buttonHtml = removeButton ? removeButton.outerHTML : '';
+                title.innerHTML = 'Item ' + (index + 1) + ' ' + buttonHtml;
+                if (removeButton) {
+                    setupRemoveButton(item);
+                }
+            }
+        });
+    }
+    
+    // Configurar listeners para cada item
+    function setupItemListeners(itemElement) {
+        const isTransferCheckbox = itemElement.querySelector('input[type="checkbox"][name*="is_transfer"]');
+        const normalFields = itemElement.querySelectorAll('.normal-fields');
+        const transferFields = itemElement.querySelectorAll('.transfer-fields');
+        
+        // Configurar listener para subcategoria (buscar tipo padrão)
+        const subcategorySelect = itemElement.querySelector('select[name*="subcategory"]');
+        const transactionTypeSelect = itemElement.querySelector('select[name*="transaction_type"]');
+        
+        if (subcategorySelect && transactionTypeSelect) {
+            subcategorySelect.addEventListener('change', function() {
+                const subcategoryId = this.value;
+                if (subcategoryId && (!isTransferCheckbox || !isTransferCheckbox.checked)) {
+                    fetch('/finance/api/subcategory/' + subcategoryId + '/default-transaction-type/')
+                        .then(response => response.json())
+                        .then(data => {
+                            transactionTypeSelect.value = data.default_transaction_type;
+                        })
+                        .catch(error => console.error('Erro ao buscar tipo de transação padrão:', error));
+                }
+            });
+        }
+        
+        if (isTransferCheckbox) {
+            // Função para atualizar visibilidade dos campos
+            function updateFieldsVisibility(isTransfer) {
+                if (isTransfer) {
+                    normalFields.forEach(field => {
+                        field.style.display = 'none';
+                        const inputs = field.querySelectorAll('input, select');
+                        inputs.forEach(input => {
+                            input.removeAttribute('required');
+                        });
+                    });
+                    transferFields.forEach(field => {
+                        field.style.display = '';
+                        const inputs = field.querySelectorAll('input, select');
+                        inputs.forEach(input => {
+                            // Verificar se é o campo de conta de destino pelo name ou id
+                            if (input.name && input.name.includes('destination_account') || 
+                                input.id && input.id.includes('destination_account')) {
+                                input.setAttribute('required', 'required');
+                            }
+                        });
+                    });
+                } else {
+                    normalFields.forEach(field => {
+                        field.style.display = '';
+                        const inputs = field.querySelectorAll('input, select');
+                        inputs.forEach(input => {
+                            // Verificar se é o campo de subcategoria pelo name ou id
+                            if (input.name && input.name.includes('subcategory') || 
+                                input.id && input.id.includes('subcategory')) {
+                                input.setAttribute('required', 'required');
+                            }
+                        });
+                    });
+                    transferFields.forEach(field => {
+                        field.style.display = 'none';
+                        const inputs = field.querySelectorAll('input, select');
+                        inputs.forEach(input => {
+                            input.removeAttribute('required');
+                        });
+                    });
+                }
+            }
+            
+            // Verificar estado inicial do checkbox
+            updateFieldsVisibility(isTransferCheckbox.checked);
+            
+            // Adicionar listener para mudanças
+            isTransferCheckbox.addEventListener('change', function() {
+                updateFieldsVisibility(this.checked);
+            });
+        }
+    }
+    
+    // Configurar listeners para itens existentes
+    document.querySelectorAll('.item-form').forEach(item => {
+        setupItemListeners(item);
+        setupRemoveButton(item);
+    });
+});
+</script>
+{% endblock %}
+

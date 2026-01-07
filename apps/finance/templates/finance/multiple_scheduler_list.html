@@ -1,0 +1,68 @@
+{% extends 'finance/base.html' %}
+
+{% block title %}Agendamentos Múltiplos{% endblock %}
+
+{% block content %}
+<h1>Agendamentos Múltiplos</h1>
+<a href="{% url 'finance:multiple_scheduler_create' %}"><button>Criar Novo Agendamento Múltiplo</button></a>
+{% if schedulers %}
+    <table>
+        <thead>
+            <tr>
+                <th>Itens</th>
+                <th>Próxima Data</th>
+                <th>Recorrência</th>
+                <th>Status</th>
+                <th>Parcelas Restantes</th>
+                <th>Registros</th>
+                <th>Ações</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for scheduler in schedulers %}
+            <tr>
+                <td>
+                    <strong>Conta:</strong> {{ scheduler.account }}<br>
+                    <strong>Beneficiário:</strong> {{ scheduler.beneficiary }}<br>
+                    <strong>{{ scheduler.items.count }} item(ns)</strong>
+                    <ul style="margin: 5px 0; padding-left: 20px;">
+                        {% for item in scheduler.items.all %}
+                        <li>
+                            {% if item.is_transfer %}
+                                Transferência: {{ scheduler.account }} → {{ item.destination_account }} - R$ {{ item.value }}
+                            {% else %}
+                                {{ item.get_transaction_type_display }} - {{ item.subcategory }} - R$ {{ item.value }}
+                            {% endif %}
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </td>
+                <td>{{ scheduler.due_date|default:"-"|date:"d/m/Y" }}</td>
+                <td>{{ scheduler.get_recurrence_type_display }} ({{ scheduler.recurrence_interval }})</td>
+                <td>{{ scheduler.get_status_display }}</td>
+                <td>
+                    {% if scheduler.termination_type == 'INSTALLMENTS' %}
+                        {{ scheduler.remaining_installments|default:"-" }}
+                    {% elif scheduler.termination_type == 'FINAL_DATE' %}
+                        Até {{ scheduler.final_date|default:"-"|date:"d/m/Y" }}
+                    {% else %}
+                        Infinito
+                    {% endif %}
+                </td>
+                <td>{{ scheduler.registered_count }}</td>
+                <td>
+                    <a href="{% url 'finance:multiple_scheduler_update' scheduler.pk %}"><button>Editar</button></a>
+                    <a href="{% url 'finance:multiple_scheduler_delete' scheduler.pk %}"><button>Deletar</button></a>
+                    {% if scheduler.status == 'ACTIVE' %}
+                        <a href="{% url 'finance:multiple_scheduler_register' scheduler.pk %}"><button>Registrar</button></a>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+{% else %}
+    <p>Nenhum agendamento múltiplo cadastrado.</p>
+{% endif %}
+{% endblock %}
+

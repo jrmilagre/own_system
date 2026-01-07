@@ -1,4 +1,5 @@
 from django.db import models
+from django.db import transaction as db_transaction
 from datetime import date
 from dateutil.relativedelta import relativedelta
 import uuid
@@ -150,6 +151,17 @@ class Transaction(BaseModel):
         default=False,
         help_text='Indica se esta transação faz parte de uma transferência entre contas'
     )
+    multiple_transaction_group_id = models.UUIDField(
+        'ID do grupo de transação múltipla',
+        null=True,
+        blank=True,
+        help_text='UUID que vincula as transações de uma transação múltipla'
+    )
+    is_multiple = models.BooleanField(
+        'É transação múltipla',
+        default=False,
+        help_text='Indica se esta transação faz parte de uma transação múltipla'
+    )
 
     class Meta:
         verbose_name = 'Transação'
@@ -159,6 +171,8 @@ class Transaction(BaseModel):
     def __str__(self):
         if self.is_transfer:
             return f"Transferência: {self.account} - {self.value}"
+        if self.is_multiple:
+            return f"Transação Múltipla: {self.account} - {self.value}"
         beneficiary_str = self.beneficiary if self.beneficiary else "N/A"
         return f"{self.account} - {beneficiary_str} - {self.value}"
 
@@ -169,6 +183,14 @@ class Transaction(BaseModel):
         return Transaction.objects.filter(
             transfer_group_id=self.transfer_group_id
         ).exclude(pk=self.pk).first()
+
+    def get_multiple_transaction_group(self):
+        """Retorna todas as transações do mesmo grupo de transação múltipla"""
+        if not self.is_multiple or not self.multiple_transaction_group_id:
+            return Transaction.objects.none()
+        return Transaction.objects.filter(
+            multiple_transaction_group_id=self.multiple_transaction_group_id
+        ).order_by('id')
 
 
 class Scheduler(BaseModel):
@@ -205,7 +227,9 @@ class Scheduler(BaseModel):
     subcategory = models.ForeignKey(
         'Subcategory',
         on_delete=models.CASCADE,
-        verbose_name='Subcategoria'
+        verbose_name='Subcategoria',
+        null=True,
+        blank=True
     )
     transaction_type = models.CharField(
         'Tipo de transação',
@@ -280,13 +304,50 @@ class Scheduler(BaseModel):
         default=0
     )
 
+    # Campos para Agendamento Múltiplo
+    multiple_scheduler_group_id = models.UUIDField(
+        'ID do grupo de agendamento múltiplo',
+        null=True,
+        blank=True,
+        help_text='UUID que vincula os agendamentos de um agendamento múltiplo'
+    )
+    is_multiple = models.BooleanField(
+        'É agendamento múltiplo',
+        default=False,
+        help_text='Indica se este agendamento faz parte de um agendamento múltiplo'
+    )
+    is_transfer = models.BooleanField(
+        'É transferência',
+        default=False,
+        help_text='Indica se este agendamento é uma transferência entre contas (apenas para múltiplos)'
+    )
+    destination_account = models.ForeignKey(
+        Account,
+        on_delete=models.CASCADE,
+        verbose_name='Conta de destino',
+        null=True,
+        blank=True,
+        related_name='scheduler_destination_items',
+        help_text='Conta de destino (apenas para transferências em agendamentos múltiplos)'
+    )
+
     class Meta:
         verbose_name = 'Agendamento'
         verbose_name_plural = 'Agendamentos'
         ordering = ('-created_at',)
 
     def __str__(self):
+        if self.is_multiple:
+            return f"Agendamento Múltiplo: {self.account} - {self.value} - {self.get_recurrence_type_display()}"
         return f"{self.account} - {self.beneficiary} - {self.value} - {self.get_recurrence_type_display()}"
+    
+    def get_multiple_scheduler_group(self):
+        """Retorna todos os agendamentos do mesmo grupo de agendamento múltiplo"""
+        if not self.is_multiple or not self.multiple_scheduler_group_id:
+            return Scheduler.objects.none()
+        return Scheduler.objects.filter(
+            multiple_scheduler_group_id=self.multiple_scheduler_group_id
+        ).order_by('id')
 
     def save(self, *args, **kwargs):
         # Ao criar, definir original_due_date se não estiver definido
@@ -402,6 +463,7 @@ class Scheduler(BaseModel):
             transaction_data: Dicionário opcional com dados para sobrescrever valores padrão do agendamento.
                              Se não fornecido, usa os valores do agendamento.
                              transaction_date padrão é self.due_date (não date.today()).
+                             Pode incluir: is_multiple, multiple_transaction_group_id, is_transfer, transfer_group_id
         """
         if not self.is_valid():
             raise ValueError("Agendamento não está válido para registro")
@@ -418,6 +480,12 @@ class Scheduler(BaseModel):
         transaction_date = transaction_data.get('transaction_date', self.due_date)
         purchase_date = transaction_data.get('purchase_date', self.purchase_date)
         notes = transaction_data.get('notes', self.notes)
+        
+        # Campos para transações múltiplas
+        is_multiple = transaction_data.get('is_multiple', False)
+        multiple_transaction_group_id = transaction_data.get('multiple_transaction_group_id', None)
+        is_transfer = transaction_data.get('is_transfer', False)
+        transfer_group_id = transaction_data.get('transfer_group_id', None)
 
         # Criar a Transaction
         transaction = Transaction.objects.create(
@@ -429,7 +497,11 @@ class Scheduler(BaseModel):
             due_date=due_date,
             transaction_date=transaction_date,
             purchase_date=purchase_date,
-            notes=notes
+            notes=notes,
+            is_multiple=is_multiple,
+            multiple_transaction_group_id=multiple_transaction_group_id,
+            is_transfer=is_transfer,
+            transfer_group_id=transfer_group_id
         )
 
         # Incrementar contador
@@ -459,3 +531,8 @@ class Scheduler(BaseModel):
             self.save()
 
         return transaction
+
+
+
+# REMOVIDO: MultipleScheduler e MultipleSchedulerItem unificados em Scheduler
+# Os modelos foram removidos apÃ³s migraÃ§Ã£o de dados

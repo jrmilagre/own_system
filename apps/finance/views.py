@@ -4,7 +4,12 @@ from django.http import JsonResponse
 from django.db import transaction as db_transaction
 import uuid
 from .models import Account, Beneficiary, Category, Subcategory, Transaction, Scheduler
-from .forms import AccountForm, BeneficiaryForm, CategoryForm, SubcategoryForm, TransactionForm, SchedulerForm
+from .forms import (
+    AccountForm, BeneficiaryForm, CategoryForm, SubcategoryForm, TransactionForm, SchedulerForm,
+    MultipleTransactionForm, MultipleTransactionItemForm, MultipleTransactionItemFormSet,
+    MultipleSchedulerForm, MultipleSchedulerItemForm, MultipleSchedulerItemFormSet,
+    MultipleSchedulerRegisterItemFormSet
+)
 
 
 def index(request):
@@ -210,8 +215,26 @@ def subcategory_delete(request, category_pk, pk):
 def transaction_list(request):
     """Lista de transações"""
     transactions = Transaction.objects.all().select_related('account', 'beneficiary', 'subcategory')
-    # Adicionar informação sobre transferências para cada transação
+    
+    # Agrupar transações múltiplas
+    multiple_groups = {}
+    single_transactions = []
+    
     for transaction in transactions:
+        if transaction.is_multiple and transaction.multiple_transaction_group_id:
+            group_id = str(transaction.multiple_transaction_group_id)
+            if group_id not in multiple_groups:
+                multiple_groups[group_id] = {
+                    'group_id': transaction.multiple_transaction_group_id,
+                    'transactions': [],
+                    'representative': transaction  # Primeira transação do grupo
+                }
+            multiple_groups[group_id]['transactions'].append(transaction)
+        else:
+            single_transactions.append(transaction)
+    
+    # Adicionar informação sobre transferências para cada transação
+    for transaction in single_transactions:
         if transaction.is_transfer:
             transfer_pair = transaction.get_transfer_pair()
             if transfer_pair:
@@ -221,7 +244,23 @@ def transaction_list(request):
                     transaction.transfer_info = f"De: {transfer_pair.account} → Para: {transaction.account}"
             else:
                 transaction.transfer_info = "Transferência (parceiro não encontrado)"
-    return render(request, 'finance/transaction_list.html', {'transactions': transactions})
+    
+    # Adicionar informações para grupos múltiplos
+    for group_data in multiple_groups.values():
+        # Calcular total: somar créditos e subtrair débitos
+        total_value = 0
+        for transaction in group_data['transactions']:
+            if transaction.transaction_type == 'CR':
+                total_value += transaction.value
+            elif transaction.transaction_type == 'DB':
+                total_value -= transaction.value
+        group_data['total_value'] = total_value
+        group_data['count'] = len(group_data['transactions'])
+    
+    return render(request, 'finance/transaction_list.html', {
+        'transactions': single_transactions,
+        'multiple_groups': list(multiple_groups.values())
+    })
 
 
 def transaction_create(request):
@@ -294,6 +333,10 @@ def transaction_create(request):
 def transaction_update(request, pk):
     """Editar transação existente"""
     transaction = get_object_or_404(Transaction, pk=pk)
+    
+    # Se a transação faz parte de uma transação múltipla, redirecionar para o formulário de transação múltipla
+    if transaction.is_multiple and transaction.multiple_transaction_group_id:
+        return redirect('finance:multiple_transaction_update', group_id=transaction.multiple_transaction_group_id)
     
     if request.method == 'POST':
         # Para transferências, não usar instance para evitar validação do campo account
@@ -414,9 +457,44 @@ def transaction_delete(request, pk):
 
 # Scheduler Views
 def scheduler_list(request):
-    """Lista de agendamentos"""
-    schedulers = Scheduler.objects.all()
-    return render(request, 'finance/scheduler_list.html', {'schedulers': schedulers})
+    """Lista de agendamentos (normais e múltiplos)"""
+    schedulers = Scheduler.objects.all().select_related('account', 'beneficiary', 'subcategory', 'destination_account')
+    
+    # Agrupar agendamentos múltiplos
+    multiple_groups = {}
+    single_schedulers = []
+    
+    for scheduler in schedulers:
+        if scheduler.is_multiple and scheduler.multiple_scheduler_group_id:
+            group_id = str(scheduler.multiple_scheduler_group_id)
+            if group_id not in multiple_groups:
+                multiple_groups[group_id] = {
+                    'group_id': scheduler.multiple_scheduler_group_id,
+                    'schedulers': [],
+                    'representative': scheduler  # Primeiro agendamento do grupo
+                }
+            multiple_groups[group_id]['schedulers'].append(scheduler)
+        else:
+            single_schedulers.append(scheduler)
+    
+    # Adicionar informações para grupos múltiplos
+    for group_data in multiple_groups.values():
+        # Calcular total: somar créditos e subtrair débitos
+        total_value = 0
+        for scheduler in group_data['schedulers']:
+            if scheduler.transaction_type == 'CR':
+                total_value += scheduler.value
+            elif scheduler.transaction_type == 'DB':
+                total_value -= scheduler.value
+        group_data['total_value'] = total_value
+        group_data['count'] = len(group_data['schedulers'])
+        # Ordenar por ID para manter ordem
+        group_data['schedulers'].sort(key=lambda x: x.id)
+    
+    return render(request, 'finance/scheduler_list.html', {
+        'schedulers': single_schedulers,
+        'multiple_groups': list(multiple_groups.values())
+    })
 
 
 def scheduler_create(request):
@@ -518,3 +596,1102 @@ def scheduler_register(request, pk):
             'form': form,
             'next_due_date': next_due_date
         })
+
+
+# Multiple Transaction Views
+def multiple_transaction_create(request):
+    """Criar nova transação múltipla"""
+    if request.method == 'POST':
+        form = MultipleTransactionForm(request.POST)
+        formset = MultipleTransactionItemFormSet(request.POST)
+        
+        if form.is_valid() and formset.is_valid():
+            # Gerar UUID para vincular todas as transações
+            multiple_group_id = uuid.uuid4()
+            
+            # Campos compartilhados do cabeçalho
+            account = form.cleaned_data['account']
+            beneficiary = form.cleaned_data['beneficiary']
+            due_date = form.cleaned_data.get('due_date')
+            transaction_date = form.cleaned_data.get('transaction_date')
+            purchase_date = form.cleaned_data.get('purchase_date')
+            notes = form.cleaned_data.get('notes', '')
+            
+            created_transactions = []
+            
+            with db_transaction.atomic():
+                for item_form in formset:
+                    # Verificar se o form tem dados
+                    if not item_form.cleaned_data:
+                        continue  # Pular forms sem dados
+                    
+                    # Verificar se está marcado para deletar
+                    # O campo DELETE pode estar como True, 'on', ou presente no POST
+                    if item_form.cleaned_data.get('DELETE', False):
+                        continue  # Pular este item marcado para deletar
+                    
+                    item_data = item_form.cleaned_data
+                    is_transfer = item_data.get('is_transfer', False)
+                    value = item_data.get('value')
+                    
+                    # Verificar se tem valor (form não está vazio)
+                    if not value:
+                        continue  # Pular forms vazios
+                    
+                    if is_transfer:
+                        # Criar transferência (2 transações)
+                        # Conta de origem vem do cabeçalho
+                        source_account = account
+                        destination_account = item_data['destination_account']
+                        
+                        # Validar que destino é diferente da origem
+                        if source_account == destination_account:
+                            messages.error(request, 'A conta de destino deve ser diferente da conta de origem.')
+                            return render(request, 'finance/multiple_transaction_form.html', {
+                                'form': form,
+                                'formset': formset
+                            })
+                        
+                        transfer_group_id = uuid.uuid4()
+                        
+                        # Transação de débito (conta origem)
+                        debit_transaction = Transaction.objects.create(
+                            account=source_account,
+                            beneficiary=None,
+                            subcategory=None,
+                            transaction_type='DB',
+                            value=value,
+                            due_date=due_date,
+                            transaction_date=transaction_date,
+                            purchase_date=purchase_date,
+                            notes=notes,
+                            transfer_group_id=transfer_group_id,
+                            is_transfer=True,
+                            multiple_transaction_group_id=multiple_group_id,
+                            is_multiple=True
+                        )
+                        
+                        # Transação de crédito (conta destino)
+                        credit_transaction = Transaction.objects.create(
+                            account=destination_account,
+                            beneficiary=None,
+                            subcategory=None,
+                            transaction_type='CR',
+                            value=value,
+                            due_date=due_date,
+                            transaction_date=transaction_date,
+                            purchase_date=purchase_date,
+                            notes=notes,
+                            transfer_group_id=transfer_group_id,
+                            is_transfer=True,
+                            multiple_transaction_group_id=multiple_group_id,
+                            is_multiple=True
+                        )
+                        
+                        created_transactions.extend([debit_transaction, credit_transaction])
+                    else:
+                        # Criar transação normal
+                        transaction = Transaction.objects.create(
+                            account=account,
+                            beneficiary=beneficiary,
+                            subcategory=item_data['subcategory'],
+                            transaction_type=item_data['transaction_type'],
+                            value=value,
+                            due_date=due_date,
+                            transaction_date=transaction_date,
+                            purchase_date=purchase_date,
+                            notes=notes,
+                            multiple_transaction_group_id=multiple_group_id,
+                            is_multiple=True
+                        )
+                        created_transactions.append(transaction)
+            
+            messages.success(request, f'Transação múltipla criada com sucesso! {len(created_transactions)} transação(ões) criada(s).')
+            return redirect('finance:transaction_list')
+        else:
+            messages.error(request, 'Por favor, corrija os erros abaixo.')
+    else:
+        form = MultipleTransactionForm()
+        formset = MultipleTransactionItemFormSet()
+    
+    return render(request, 'finance/multiple_transaction_form.html', {
+        'form': form,
+        'formset': formset
+    })
+
+
+def multiple_transaction_update(request, group_id):
+    """Editar transação múltipla existente"""
+    # Buscar todas as transações do grupo
+    transactions = Transaction.objects.filter(
+        multiple_transaction_group_id=group_id,
+        is_multiple=True
+    ).order_by('id')
+    
+    if not transactions.exists():
+        messages.error(request, 'Transação múltipla não encontrada.')
+        return redirect('finance:transaction_list')
+    
+    # Separar transações normais e transferências
+    normal_transactions = []
+    transfer_pairs = {}
+    
+    for transaction in transactions:
+        if transaction.is_transfer:
+            transfer_group_id = transaction.transfer_group_id
+            if transfer_group_id not in transfer_pairs:
+                transfer_pairs[transfer_group_id] = []
+            transfer_pairs[transfer_group_id].append(transaction)
+        else:
+            normal_transactions.append(transaction)
+    
+    # Pegar primeira transação para campos compartilhados
+    first_transaction = transactions.first()
+    
+    if request.method == 'POST':
+        form = MultipleTransactionForm(request.POST)
+        # Usar formset com extra=0 quando editando para evitar item vazio
+        from django.forms import formset_factory
+        MultipleTransactionItemFormSetEdit = formset_factory(
+            MultipleTransactionItemForm,
+            extra=0,
+            can_delete=True,
+            min_num=1,
+            validate_min=True
+        )
+        formset = MultipleTransactionItemFormSetEdit(request.POST)
+        
+        if form.is_valid() and formset.is_valid():
+            # Campos compartilhados do cabeçalho
+            account = form.cleaned_data['account']
+            beneficiary = form.cleaned_data['beneficiary']
+            due_date = form.cleaned_data.get('due_date')
+            transaction_date = form.cleaned_data.get('transaction_date')
+            purchase_date = form.cleaned_data.get('purchase_date')
+            notes = form.cleaned_data.get('notes', '')
+            
+            # Deletar transações antigas
+            with db_transaction.atomic():
+                transactions.delete()
+                
+                # Criar novas transações
+                for item_form in formset:
+                    # Verificar se o form tem dados
+                    if not item_form.cleaned_data:
+                        continue  # Pular forms sem dados
+                    
+                    # Verificar se está marcado para deletar
+                    # O campo DELETE pode estar como True, 'on', ou presente no POST
+                    if item_form.cleaned_data.get('DELETE', False):
+                        continue  # Pular este item marcado para deletar
+                    
+                    item_data = item_form.cleaned_data
+                    is_transfer = item_data.get('is_transfer', False)
+                    value = item_data.get('value')
+                    
+                    # Verificar se tem valor (form não está vazio)
+                    if not value:
+                        continue  # Pular forms vazios
+                    
+                    if is_transfer:
+                        # Criar transferência (2 transações)
+                        # Conta de origem vem do cabeçalho
+                        source_account = account
+                        destination_account = item_data['destination_account']
+                        
+                        # Validar que destino é diferente da origem
+                        if source_account == destination_account:
+                            messages.error(request, 'A conta de destino deve ser diferente da conta de origem.')
+                            return render(request, 'finance/multiple_transaction_form.html', {
+                                'form': form,
+                                'formset': formset,
+                                'group_id': group_id
+                            })
+                        
+                        transfer_group_id = uuid.uuid4()
+                        
+                        # Transação de débito (conta origem)
+                        Transaction.objects.create(
+                            account=source_account,
+                            beneficiary=None,
+                            subcategory=None,
+                            transaction_type='DB',
+                            value=value,
+                            due_date=due_date,
+                            transaction_date=transaction_date,
+                            purchase_date=purchase_date,
+                            notes=notes,
+                            transfer_group_id=transfer_group_id,
+                            is_transfer=True,
+                            multiple_transaction_group_id=group_id,
+                            is_multiple=True
+                        )
+                        
+                        # Transação de crédito (conta destino)
+                        Transaction.objects.create(
+                            account=destination_account,
+                            beneficiary=None,
+                            subcategory=None,
+                            transaction_type='CR',
+                            value=value,
+                            due_date=due_date,
+                            transaction_date=transaction_date,
+                            purchase_date=purchase_date,
+                            notes=notes,
+                            transfer_group_id=transfer_group_id,
+                            is_transfer=True,
+                            multiple_transaction_group_id=group_id,
+                            is_multiple=True
+                        )
+                    else:
+                        # Criar transação normal
+                        Transaction.objects.create(
+                            account=account,
+                            beneficiary=beneficiary,
+                            subcategory=item_data['subcategory'],
+                            transaction_type=item_data['transaction_type'],
+                            value=value,
+                            due_date=due_date,
+                            transaction_date=transaction_date,
+                            purchase_date=purchase_date,
+                            notes=notes,
+                            multiple_transaction_group_id=group_id,
+                            is_multiple=True
+                        )
+            
+            messages.success(request, 'Transação múltipla atualizada com sucesso!')
+            return redirect('finance:transaction_list')
+        else:
+            messages.error(request, 'Por favor, corrija os erros abaixo.')
+    else:
+        # Preencher formulário com dados existentes
+        # Pegar account e beneficiary da primeira transação normal, ou da primeira transferência
+        header_account = None
+        header_beneficiary = None
+        if normal_transactions:
+            header_account = normal_transactions[0].account
+            header_beneficiary = normal_transactions[0].beneficiary
+        elif transfer_pairs:
+            # Se só tem transferências, usar a conta de origem da primeira
+            first_pair = list(transfer_pairs.values())[0]
+            if first_pair:
+                debit_t = next((t for t in first_pair if t.transaction_type == 'DB'), None)
+                if debit_t:
+                    header_account = debit_t.account
+        
+        initial_data = {
+            'account': header_account,
+            'beneficiary': header_beneficiary,
+            'due_date': first_transaction.due_date,
+            'transaction_date': first_transaction.transaction_date,
+            'purchase_date': first_transaction.purchase_date,
+            'notes': first_transaction.notes,
+        }
+        form = MultipleTransactionForm(initial=initial_data)
+        
+        # Preparar dados do formset
+        formset_data = []
+        for transaction in normal_transactions:
+            formset_data.append({
+                'transaction_type': transaction.transaction_type,
+                'subcategory': transaction.subcategory,
+                'value': transaction.value,
+                'is_transfer': False,
+            })
+        
+        # Adicionar transferências
+        for transfer_group_id, pair in transfer_pairs.items():
+            if len(pair) == 2:
+                debit_t = next((t for t in pair if t.transaction_type == 'DB'), None)
+                credit_t = next((t for t in pair if t.transaction_type == 'CR'), None)
+                if debit_t and credit_t:
+                    formset_data.append({
+                        'transaction_type': 'DB',
+                        'destination_account': credit_t.account,
+                        'value': debit_t.value,
+                        'is_transfer': True,
+                    })
+        
+        # Criar formset sem extra quando editando (já temos os dados)
+        from django.forms import formset_factory
+        MultipleTransactionItemFormSetEdit = formset_factory(
+            MultipleTransactionItemForm,
+            extra=0,  # Sem formulários extras quando editando
+            can_delete=True,
+            min_num=1,
+            validate_min=True
+        )
+        formset = MultipleTransactionItemFormSetEdit(initial=formset_data)
+    
+    return render(request, 'finance/multiple_transaction_form.html', {
+        'form': form,
+        'formset': formset,
+        'group_id': group_id
+    })
+
+
+def multiple_transaction_delete(request, group_id):
+    """Deletar transação múltipla"""
+    transactions = Transaction.objects.filter(
+        multiple_transaction_group_id=group_id,
+        is_multiple=True
+    )
+    
+    if not transactions.exists():
+        messages.error(request, 'Transação múltipla não encontrada.')
+        return redirect('finance:transaction_list')
+    
+    if request.method == 'POST':
+        count = transactions.count()
+        transactions.delete()
+        messages.success(request, f'Transação múltipla deletada com sucesso! {count} transação(ões) removida(s).')
+        return redirect('finance:transaction_list')
+    
+    return render(request, 'finance/multiple_transaction_confirm_delete.html', {
+        'transactions': transactions,
+        'group_id': group_id
+    })
+
+
+# Multiple Scheduler Views
+def multiple_scheduler_list(request):
+    """Lista de agendamentos múltiplos - redireciona para scheduler_list unificado"""
+    return redirect('finance:scheduler_list')
+
+
+def multiple_scheduler_create(request):
+    """Criar novo agendamento múltiplo"""
+    if request.method == 'POST':
+        form = MultipleSchedulerForm(request.POST)
+        formset = MultipleSchedulerItemFormSet(request.POST)
+        
+        # Verificar erros de validação
+        if not form.is_valid():
+            messages.error(request, 'Por favor, corrija os erros no formulário principal.')
+            for field, errors in form.errors.items():
+                for error in errors:
+                    messages.error(request, f'{field}: {error}')
+        
+        if not formset.is_valid():
+            messages.error(request, 'Por favor, corrija os erros nos itens do agendamento.')
+            for form_index, item_form in enumerate(formset):
+                if item_form.errors:
+                    for field, errors in item_form.errors.items():
+                        for error in errors:
+                            messages.error(request, f'Item {form_index + 1} - {field}: {error}')
+                if item_form.non_field_errors():
+                    for error in item_form.non_field_errors():
+                        messages.error(request, f'Item {form_index + 1}: {error}')
+        
+        if form.is_valid() and formset.is_valid():
+            # Gerar UUID para o grupo
+            group_id = uuid.uuid4()
+            
+            # Obter dados compartilhados do formulário
+            account = form.cleaned_data['account']
+            beneficiary = form.cleaned_data['beneficiary']
+            due_date = form.cleaned_data.get('due_date')
+            purchase_date = form.cleaned_data.get('purchase_date')
+            notes = form.cleaned_data.get('notes', '')
+            recurrence_type = form.cleaned_data['recurrence_type']
+            recurrence_interval = form.cleaned_data['recurrence_interval']
+            termination_type = form.cleaned_data['termination_type']
+            remaining_installments = form.cleaned_data.get('remaining_installments')
+            final_date = form.cleaned_data.get('final_date')
+            status = form.cleaned_data['status']
+            
+            # Validar transferências: destino deve ser diferente da origem
+            for item_form in formset:
+                if item_form.cleaned_data:
+                    # Verificar se está marcado para deletar
+                    if item_form.cleaned_data.get('DELETE'):
+                        continue  # Pular este item
+                    
+                    item_data = item_form.cleaned_data
+                    value = item_data.get('value')
+                    
+                    if not value:  # Skip empty forms
+                        continue
+                    
+                    if item_data.get('is_transfer'):
+                        destination_account = item_data.get('destination_account')
+                        if destination_account and destination_account == account:
+                            messages.error(request, 'A conta de destino deve ser diferente da conta de origem para transferências.')
+                            return render(request, 'finance/multiple_scheduler_form.html', {
+                                'form': form,
+                                'formset': formset
+                            })
+            
+            # Criar Scheduler para cada item válido
+            with db_transaction.atomic():
+                created_schedulers = []
+                for item_form in formset:
+                    if item_form.cleaned_data:
+                        # Verificar se está marcado para deletar
+                        if item_form.cleaned_data.get('DELETE'):
+                            continue  # Pular este item
+                        
+                        item_data = item_form.cleaned_data
+                        value = item_data.get('value')
+                        
+                        if not value:  # Skip empty forms
+                            continue
+                        
+                        is_transfer = item_data.get('is_transfer', False)
+                        
+                        if is_transfer:
+                            # Criar transferência (2 schedulers: débito e crédito)
+                            destination_account = item_data.get('destination_account')
+                            
+                            # Scheduler de débito (conta origem)
+                            debit_scheduler = Scheduler(
+                                account=account,
+                                beneficiary=beneficiary,
+                                subcategory=None,
+                                transaction_type='DB',
+                                value=value,
+                                due_date=due_date,
+                                purchase_date=purchase_date,
+                                notes=notes,
+                                recurrence_type=recurrence_type,
+                                recurrence_interval=recurrence_interval,
+                                termination_type=termination_type,
+                                remaining_installments=remaining_installments,
+                                final_date=final_date,
+                                status=status,
+                                multiple_scheduler_group_id=group_id,
+                                is_multiple=True,
+                                is_transfer=True,
+                                destination_account=destination_account,
+                            )
+                            
+                            # Scheduler de crédito (conta destino)
+                            credit_scheduler = Scheduler(
+                                account=destination_account,
+                                beneficiary=beneficiary,
+                                subcategory=None,
+                                transaction_type='CR',
+                                value=value,
+                                due_date=due_date,
+                                purchase_date=purchase_date,
+                                notes=notes,
+                                recurrence_type=recurrence_type,
+                                recurrence_interval=recurrence_interval,
+                                termination_type=termination_type,
+                                remaining_installments=remaining_installments,
+                                final_date=final_date,
+                                status=status,
+                                multiple_scheduler_group_id=group_id,
+                                is_multiple=True,
+                                is_transfer=True,
+                                destination_account=None,  # O scheduler de crédito não precisa de destination_account
+                            )
+                            
+                            # Definir original_due_date se não estiver definido
+                            if debit_scheduler.due_date and not debit_scheduler.original_due_date:
+                                debit_scheduler.original_due_date = debit_scheduler.due_date
+                            if credit_scheduler.due_date and not credit_scheduler.original_due_date:
+                                credit_scheduler.original_due_date = credit_scheduler.due_date
+                            
+                            debit_scheduler.save()
+                            credit_scheduler.save()
+                            created_schedulers.extend([debit_scheduler, credit_scheduler])
+                        else:
+                            # Criar Scheduler normal para este item
+                            scheduler = Scheduler(
+                                account=account,
+                                beneficiary=beneficiary,
+                                subcategory=item_data.get('subcategory'),
+                                transaction_type=item_data['transaction_type'],
+                                value=value,
+                                due_date=due_date,
+                                purchase_date=purchase_date,
+                                notes=notes,
+                                recurrence_type=recurrence_type,
+                                recurrence_interval=recurrence_interval,
+                                termination_type=termination_type,
+                                remaining_installments=remaining_installments,
+                                final_date=final_date,
+                                status=status,
+                                multiple_scheduler_group_id=group_id,
+                                is_multiple=True,
+                                is_transfer=False,
+                                destination_account=None,
+                            )
+                            
+                            # Definir original_due_date se não estiver definido
+                            if scheduler.due_date and not scheduler.original_due_date:
+                                scheduler.original_due_date = scheduler.due_date
+                            
+                            scheduler.save()
+                            created_schedulers.append(scheduler)
+                
+                if not created_schedulers:
+                    messages.error(request, 'É necessário pelo menos um item válido para criar o agendamento múltiplo.')
+                    return render(request, 'finance/multiple_scheduler_form.html', {
+                        'form': form,
+                        'formset': formset
+                    })
+            
+            messages.success(request, f'Agendamento múltiplo criado com sucesso! {len(created_schedulers)} item(ns) criado(s).')
+            return redirect('finance:scheduler_list')
+        else:
+            messages.error(request, 'Por favor, corrija os erros abaixo.')
+    else:
+        form = MultipleSchedulerForm()
+        formset = MultipleSchedulerItemFormSet()
+    
+    return render(request, 'finance/multiple_scheduler_form.html', {
+        'form': form,
+        'formset': formset
+    })
+
+
+def multiple_scheduler_update(request, group_id):
+    """Editar agendamento múltiplo existente"""
+    # Buscar todos os schedulers do grupo
+    schedulers = Scheduler.objects.filter(
+        multiple_scheduler_group_id=group_id,
+        is_multiple=True
+    ).order_by('id')
+    
+    if not schedulers.exists():
+        messages.error(request, 'Agendamento múltiplo não encontrado.')
+        return redirect('finance:scheduler_list')
+    
+    # Usar o primeiro scheduler como referência para dados compartilhados
+    first_scheduler = schedulers.first()
+    
+    if request.method == 'POST':
+        form = MultipleSchedulerForm(request.POST)
+        formset = MultipleSchedulerItemFormSet(request.POST)
+        
+        # Verificar erros de validação
+        if not form.is_valid():
+            messages.error(request, 'Por favor, corrija os erros no formulário principal.')
+            for field, errors in form.errors.items():
+                for error in errors:
+                    messages.error(request, f'{field}: {error}')
+        
+        if not formset.is_valid():
+            messages.error(request, 'Por favor, corrija os erros nos itens do agendamento.')
+            for form_index, item_form in enumerate(formset):
+                if item_form.errors:
+                    for field, errors in item_form.errors.items():
+                        for error in errors:
+                            messages.error(request, f'Item {form_index + 1} - {field}: {error}')
+                if item_form.non_field_errors():
+                    for error in item_form.non_field_errors():
+                        messages.error(request, f'Item {form_index + 1}: {error}')
+        
+        if form.is_valid() and formset.is_valid():
+            # Obter dados compartilhados do formulário
+            account = form.cleaned_data['account']
+            beneficiary = form.cleaned_data['beneficiary']
+            due_date = form.cleaned_data.get('due_date')
+            purchase_date = form.cleaned_data.get('purchase_date')
+            notes = form.cleaned_data.get('notes', '')
+            recurrence_type = form.cleaned_data['recurrence_type']
+            recurrence_interval = form.cleaned_data['recurrence_interval']
+            termination_type = form.cleaned_data['termination_type']
+            remaining_installments = form.cleaned_data.get('remaining_installments')
+            final_date = form.cleaned_data.get('final_date')
+            status = form.cleaned_data['status']
+            
+            # Validar transferências: destino deve ser diferente da origem
+            for item_form in formset:
+                if item_form.cleaned_data:
+                    # Verificar se está marcado para deletar
+                    if item_form.cleaned_data.get('DELETE'):
+                        continue  # Pular este item
+                    
+                    item_data = item_form.cleaned_data
+                    value = item_data.get('value')
+                    
+                    if not value:  # Skip empty forms
+                        continue
+                    
+                    if item_data.get('is_transfer'):
+                        destination_account = item_data.get('destination_account')
+                        if destination_account and destination_account == account:
+                            messages.error(request, 'A conta de destino deve ser diferente da conta de origem para transferências.')
+                            return render(request, 'finance/multiple_scheduler_form.html', {
+                                'form': form,
+                                'formset': formset,
+                                'group_id': group_id
+                            })
+            
+            # Deletar schedulers antigos e criar novos
+            with db_transaction.atomic():
+                # Deletar todos os schedulers do grupo
+                schedulers.delete()
+                
+                # Criar novos schedulers para cada item válido
+                created_schedulers = []
+                for item_form in formset:
+                    if item_form.cleaned_data:
+                        # Verificar se está marcado para deletar
+                        if item_form.cleaned_data.get('DELETE'):
+                            continue  # Pular este item
+                        
+                        item_data = item_form.cleaned_data
+                        value = item_data.get('value')
+                        
+                        if not value:  # Skip empty forms
+                            continue
+                        
+                        is_transfer = item_data.get('is_transfer', False)
+                        
+                        if is_transfer:
+                            # Criar transferência (2 schedulers: débito e crédito)
+                            destination_account = item_data.get('destination_account')
+                            
+                            # Scheduler de débito (conta origem)
+                            debit_scheduler = Scheduler(
+                                account=account,
+                                beneficiary=beneficiary,
+                                subcategory=None,
+                                transaction_type='DB',
+                                value=value,
+                                due_date=due_date,
+                                purchase_date=purchase_date,
+                                notes=notes,
+                                recurrence_type=recurrence_type,
+                                recurrence_interval=recurrence_interval,
+                                termination_type=termination_type,
+                                remaining_installments=remaining_installments,
+                                final_date=final_date,
+                                status=status,
+                                multiple_scheduler_group_id=group_id,
+                                is_multiple=True,
+                                is_transfer=True,
+                                destination_account=destination_account,
+                            )
+                            
+                            # Scheduler de crédito (conta destino)
+                            credit_scheduler = Scheduler(
+                                account=destination_account,
+                                beneficiary=beneficiary,
+                                subcategory=None,
+                                transaction_type='CR',
+                                value=value,
+                                due_date=due_date,
+                                purchase_date=purchase_date,
+                                notes=notes,
+                                recurrence_type=recurrence_type,
+                                recurrence_interval=recurrence_interval,
+                                termination_type=termination_type,
+                                remaining_installments=remaining_installments,
+                                final_date=final_date,
+                                status=status,
+                                multiple_scheduler_group_id=group_id,
+                                is_multiple=True,
+                                is_transfer=True,
+                                destination_account=None,  # O scheduler de crédito não precisa de destination_account
+                            )
+                            
+                            # Definir original_due_date se não estiver definido
+                            if debit_scheduler.due_date and not debit_scheduler.original_due_date:
+                                debit_scheduler.original_due_date = debit_scheduler.due_date
+                            if credit_scheduler.due_date and not credit_scheduler.original_due_date:
+                                credit_scheduler.original_due_date = credit_scheduler.due_date
+                            
+                            debit_scheduler.save()
+                            credit_scheduler.save()
+                            created_schedulers.extend([debit_scheduler, credit_scheduler])
+                        else:
+                            # Criar Scheduler normal para este item
+                            scheduler = Scheduler(
+                                account=account,
+                                beneficiary=beneficiary,
+                                subcategory=item_data.get('subcategory'),
+                                transaction_type=item_data['transaction_type'],
+                                value=value,
+                                due_date=due_date,
+                                purchase_date=purchase_date,
+                                notes=notes,
+                                recurrence_type=recurrence_type,
+                                recurrence_interval=recurrence_interval,
+                                termination_type=termination_type,
+                                remaining_installments=remaining_installments,
+                                final_date=final_date,
+                                status=status,
+                                multiple_scheduler_group_id=group_id,
+                                is_multiple=True,
+                                is_transfer=False,
+                                destination_account=None,
+                            )
+                            
+                            # Definir original_due_date se não estiver definido
+                            if scheduler.due_date and not scheduler.original_due_date:
+                                scheduler.original_due_date = scheduler.due_date
+                            
+                            scheduler.save()
+                            created_schedulers.append(scheduler)
+                
+                if not created_schedulers:
+                    messages.error(request, 'É necessário pelo menos um item válido para atualizar o agendamento múltiplo.')
+                    return render(request, 'finance/multiple_scheduler_form.html', {
+                        'form': form,
+                        'formset': formset,
+                        'group_id': group_id
+                    })
+            
+            messages.success(request, f'Agendamento múltiplo atualizado com sucesso! {len(created_schedulers)} item(ns) atualizado(s).')
+            return redirect('finance:scheduler_list')
+        else:
+            messages.error(request, 'Por favor, corrija os erros abaixo.')
+    else:
+        # Preparar dados iniciais do formulário
+        initial_data = {
+            'account': first_scheduler.account,
+            'beneficiary': first_scheduler.beneficiary,
+            'due_date': first_scheduler.due_date,
+            'purchase_date': first_scheduler.purchase_date,
+            'notes': first_scheduler.notes,
+            'recurrence_type': first_scheduler.recurrence_type,
+            'recurrence_interval': first_scheduler.recurrence_interval,
+            'termination_type': first_scheduler.termination_type,
+            'remaining_installments': first_scheduler.remaining_installments,
+            'final_date': first_scheduler.final_date,
+            'status': first_scheduler.status,
+        }
+        form = MultipleSchedulerForm(initial=initial_data)
+        
+        # Preparar dados iniciais do formset
+        # Separar schedulers normais e transferências
+        # Para transferências, o scheduler de débito tem destination_account preenchido
+        # O scheduler de crédito tem destination_account=None e account = destination_account do débito
+        formset_data = []
+        
+        for scheduler in schedulers:
+            if scheduler.is_transfer:
+                if scheduler.destination_account:
+                    # É o scheduler de débito - adicionar ao formset
+                    formset_data.append({
+                        'subcategory': None,
+                        'transaction_type': None,  # Não usado para transferências
+                        'value': scheduler.value,
+                        'is_transfer': True,
+                        'destination_account': scheduler.destination_account,
+                    })
+                # Scheduler de crédito não precisa ser adicionado (já representado pelo par)
+            else:
+                # Scheduler normal
+                formset_data.append({
+                    'subcategory': scheduler.subcategory,
+                    'transaction_type': scheduler.transaction_type,
+                    'value': scheduler.value,
+                    'is_transfer': False,
+                    'destination_account': None,
+                })
+        
+        # Criar formset com extra=0 quando editando para evitar item vazio
+        from django.forms import formset_factory
+        MultipleSchedulerItemFormSetEdit = formset_factory(
+            MultipleSchedulerItemForm,
+            extra=0,
+            can_delete=True,
+            min_num=1,
+            validate_min=True
+        )
+        formset = MultipleSchedulerItemFormSetEdit(initial=formset_data)
+    
+    return render(request, 'finance/multiple_scheduler_form.html', {
+        'form': form,
+        'formset': formset,
+        'group_id': group_id
+    })
+
+
+def multiple_scheduler_delete(request, group_id):
+    """Deletar agendamento múltiplo"""
+    # Buscar todos os schedulers do grupo
+    schedulers = Scheduler.objects.filter(
+        multiple_scheduler_group_id=group_id,
+        is_multiple=True
+    ).order_by('id')
+    
+    if not schedulers.exists():
+        messages.error(request, 'Agendamento múltiplo não encontrado.')
+        return redirect('finance:scheduler_list')
+    
+    # Usar o primeiro scheduler como referência
+    first_scheduler = schedulers.first()
+    
+    if request.method == 'POST':
+        count = schedulers.count()
+        schedulers.delete()
+        messages.success(request, f'Agendamento múltiplo deletado com sucesso! {count} item(ns) removido(s).')
+        return redirect('finance:scheduler_list')
+    
+    return render(request, 'finance/multiple_scheduler_confirm_delete.html', {
+        'schedulers': schedulers,
+        'group_id': group_id,
+        'first_scheduler': first_scheduler
+    })
+
+
+def multiple_scheduler_register(request, group_id):
+    """Registrar transações do agendamento múltiplo"""
+    # Buscar todos os schedulers do grupo
+    schedulers = Scheduler.objects.filter(
+        multiple_scheduler_group_id=group_id,
+        is_multiple=True
+    ).order_by('id')
+    
+    if not schedulers.exists():
+        messages.error(request, 'Agendamento múltiplo não encontrado.')
+        return redirect('finance:scheduler_list')
+    
+    # Usar o primeiro scheduler como referência para dados compartilhados
+    first_scheduler = schedulers.first()
+    
+    if request.method == 'POST':
+        formset = MultipleSchedulerRegisterItemFormSet(request.POST)
+        
+        if formset.is_valid():
+            try:
+                # Validar transferências: destino deve ser diferente da origem
+                for item_form in formset:
+                    item_data = item_form.cleaned_data
+                    if item_data.get('is_transfer'):
+                        destination_account = item_data.get('destination_account')
+                        if destination_account and destination_account == first_scheduler.account:
+                            messages.error(request, 'A conta de destino deve ser diferente da conta de origem para transferências.')
+                            next_due_date = first_scheduler.get_next_due_date_after_registration()
+                            return render(request, 'finance/multiple_scheduler_register.html', {
+                                'schedulers': schedulers,
+                                'formset': formset,
+                                'next_due_date': next_due_date,
+                                'group_id': group_id
+                            })
+                
+                # Agrupar schedulers na mesma ordem que foi usado no GET
+                # Ordem: schedulers normais primeiro, depois transferências (apenas débito)
+                grouped_schedulers = []
+                processed_credit_ids = set()
+                
+                # Primeiro, adicionar schedulers normais
+                for scheduler in schedulers:
+                    if not scheduler.is_transfer:
+                        grouped_schedulers.append(scheduler)
+                
+                # Depois, adicionar schedulers de transferência (apenas débito)
+                for scheduler in schedulers:
+                    if scheduler.is_transfer and scheduler.destination_account:
+                        # É o scheduler de débito - adicionar ao grupo
+                        grouped_schedulers.append(scheduler)
+                        # Encontrar e marcar o scheduler de crédito correspondente
+                        credit_scheduler = schedulers.filter(
+                            is_transfer=True,
+                            destination_account=None,
+                            account=scheduler.destination_account,
+                            value=scheduler.value,
+                            due_date=scheduler.due_date
+                        ).exclude(id__in=processed_credit_ids).first()
+                        if credit_scheduler:
+                            processed_credit_ids.add(credit_scheduler.id)
+                
+                # Registrar transações para cada item do formset
+                created_transactions = []
+                updated_schedulers = set()  # IDs dos schedulers já atualizados pelo método register()
+                
+                # Gerar UUID para o grupo de transações múltiplas
+                multiple_transaction_group_id = uuid.uuid4()
+                
+                with db_transaction.atomic():
+                    # Garantir que temos o mesmo número de itens no formset e nos schedulers agrupados
+                    if len(formset) != len(grouped_schedulers):
+                        messages.error(request, f'Erro: número de itens no formulário ({len(formset)}) não corresponde ao número de schedulers ({len(grouped_schedulers)}).')
+                        next_due_date = first_scheduler.get_next_due_date_after_registration()
+                        return render(request, 'finance/multiple_scheduler_register.html', {
+                            'schedulers': schedulers,
+                            'formset': formset,
+                            'next_due_date': next_due_date,
+                            'group_id': group_id
+                        })
+                    
+                    for i, item_form in enumerate(formset):
+                        if i >= len(grouped_schedulers):
+                            break
+                        
+                        scheduler = grouped_schedulers[i]
+                        scheduler.refresh_from_db()
+                        
+                        if not scheduler.is_valid():
+                            messages.warning(request, f'Scheduler {scheduler.id} não é válido e será pulado.')
+                            continue  # Pular schedulers inválidos
+                        
+                        item_data = item_form.cleaned_data
+                        
+                        if scheduler.is_transfer and scheduler.destination_account:
+                            # Transferência: criar par de transações
+                            destination_account = item_data.get('destination_account', scheduler.destination_account)
+                            source_account = scheduler.account
+                            
+                            if source_account == destination_account:
+                                messages.error(request, 'A conta de destino deve ser diferente da conta de origem para transferências.')
+                                next_due_date = first_scheduler.get_next_due_date_after_registration()
+                                return render(request, 'finance/multiple_scheduler_register.html', {
+                                    'schedulers': schedulers,
+                                    'formset': formset,
+                                    'next_due_date': next_due_date,
+                                    'group_id': group_id
+                                })
+                            
+                            value = item_data.get('value', scheduler.value)
+                            
+                            # Criar débito na conta de origem
+                            transfer_group_id = uuid.uuid4()
+                            debit_transaction = Transaction.objects.create(
+                                account=source_account,
+                                beneficiary=scheduler.beneficiary,
+                                subcategory=None,  # Transferências não têm subcategoria
+                                transaction_type='DB',
+                                value=value,
+                                due_date=scheduler.due_date,
+                                transaction_date=scheduler.due_date,
+                                purchase_date=scheduler.purchase_date,
+                                notes=scheduler.notes,
+                                is_transfer=True,
+                                transfer_group_id=transfer_group_id,
+                                is_multiple=True,
+                                multiple_transaction_group_id=multiple_transaction_group_id,
+                            )
+                            
+                            # Criar crédito na conta de destino
+                            credit_transaction = Transaction.objects.create(
+                                account=destination_account,
+                                beneficiary=scheduler.beneficiary,
+                                subcategory=None,
+                                transaction_type='CR',
+                                value=value,
+                                due_date=scheduler.due_date,
+                                transaction_date=scheduler.due_date,
+                                purchase_date=scheduler.purchase_date,
+                                notes=scheduler.notes,
+                                is_transfer=True,
+                                transfer_group_id=transfer_group_id,
+                                is_multiple=True,
+                                multiple_transaction_group_id=multiple_transaction_group_id,
+                            )
+                            
+                            created_transactions.extend([debit_transaction, credit_transaction])
+                            
+                            # Marcar schedulers de transferência para atualização manual
+                            # (não usar register() porque criamos as transações manualmente)
+                            updated_schedulers.add(scheduler.id)
+                            # Encontrar e marcar o scheduler de crédito correspondente
+                            credit_scheduler = schedulers.filter(
+                                is_transfer=True,
+                                destination_account=None,
+                                account=scheduler.destination_account,
+                                value=scheduler.value,
+                                due_date=scheduler.due_date
+                            ).first()
+                            if credit_scheduler:
+                                updated_schedulers.add(credit_scheduler.id)
+                        else:
+                            # Transação normal - usar register() que já atualiza o scheduler
+                            transaction_data = {
+                                'subcategory': item_data.get('subcategory', scheduler.subcategory),
+                                'transaction_type': item_data.get('transaction_type', scheduler.transaction_type),
+                                'value': item_data.get('value', scheduler.value),
+                                'is_multiple': True,
+                                'multiple_transaction_group_id': multiple_transaction_group_id,
+                                'is_transfer': False,
+                                'transfer_group_id': None,
+                            }
+                            transaction = scheduler.register(transaction_data=transaction_data)
+                            created_transactions.append(transaction)
+                            # Marcar como já atualizado pelo método register()
+                            updated_schedulers.add(scheduler.id)
+                    
+                    # Atualizar schedulers de transferência manualmente (não foram atualizados pelo register())
+                    all_group_schedulers = Scheduler.objects.filter(
+                        multiple_scheduler_group_id=group_id,
+                        is_multiple=True
+                    )
+                    
+                    for group_scheduler in all_group_schedulers:
+                        if group_scheduler.id not in updated_schedulers:
+                            # Este scheduler não foi atualizado ainda (pode ser um scheduler de crédito de transferência)
+                            continue
+                        
+                        # Atualizar apenas os schedulers de transferência que criamos manualmente
+                        if group_scheduler.is_transfer:
+                            group_scheduler.refresh_from_db()
+                            group_scheduler.registered_count += 1
+                            
+                            # Decrementar parcelas restantes se aplicável
+                            if group_scheduler.termination_type == 'INSTALLMENTS' and group_scheduler.remaining_installments is not None:
+                                group_scheduler.remaining_installments -= 1
+                            
+                            # Calcular próxima data baseada na due_date atual + intervalo
+                            next_due_date_for_scheduler = group_scheduler.calculate_next_due_date_from_current()
+                            if next_due_date_for_scheduler:
+                                group_scheduler.due_date = next_due_date_for_scheduler
+                            
+                            # Verificar se deve marcar como concluído
+                            if group_scheduler.termination_type == 'INSTALLMENTS':
+                                if group_scheduler.remaining_installments is not None and group_scheduler.remaining_installments <= 0:
+                                    group_scheduler.mark_completed()
+                                else:
+                                    group_scheduler.save()
+                            elif group_scheduler.termination_type == 'FINAL_DATE':
+                                if group_scheduler.final_date and next_due_date_for_scheduler and next_due_date_for_scheduler > group_scheduler.final_date:
+                                    group_scheduler.mark_completed()
+                                else:
+                                    group_scheduler.save()
+                            else:
+                                group_scheduler.save()
+                
+                # Calcular próxima data (usar a do primeiro scheduler)
+                first_scheduler.refresh_from_db()
+                next_due_date = first_scheduler.due_date
+                
+                messages.success(request, f'Transações registradas com sucesso! {len(created_transactions)} transação(ões) criada(s). Próxima data: {next_due_date}')
+                return redirect('finance:scheduler_list')
+            except ValueError as e:
+                messages.error(request, str(e))
+        else:
+            messages.error(request, 'Por favor, corrija os erros abaixo.')
+    else:
+        # Criar formset com dados dos schedulers do grupo
+        # Agrupar schedulers na mesma ordem: normais primeiro, depois transferências (apenas débito)
+        initial_data = []
+        
+        # Primeiro, adicionar schedulers normais
+        for scheduler in schedulers:
+            if not scheduler.is_transfer:
+                initial_data.append({
+                    'subcategory': scheduler.subcategory,
+                    'transaction_type': scheduler.transaction_type,
+                    'value': scheduler.value,
+                    'is_transfer': False,
+                    'destination_account': None,
+                })
+        
+        # Depois, adicionar schedulers de transferência (apenas débito)
+        for scheduler in schedulers:
+            if scheduler.is_transfer and scheduler.destination_account:
+                # É o scheduler de débito - adicionar ao formset
+                initial_data.append({
+                    'subcategory': None,
+                    'transaction_type': None,  # Não usado para transferências
+                    'value': scheduler.value,
+                    'is_transfer': True,
+                    'destination_account': scheduler.destination_account,
+                })
+                # Scheduler de crédito não precisa ser adicionado (já representado pelo par)
+        
+        formset = MultipleSchedulerRegisterItemFormSet(initial=initial_data)
+    
+    next_due_date = first_scheduler.get_next_due_date_after_registration()
+    return render(request, 'finance/multiple_scheduler_register.html', {
+        'schedulers': schedulers,
+        'formset': formset,
+        'next_due_date': next_due_date,
+        'group_id': group_id
+    })

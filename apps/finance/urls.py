@@ -30,12 +30,22 @@ urlpatterns = [
     path('transactions/create/', views.transaction_create, name='transaction_create'),
     path('transactions/<int:pk>/update/', views.transaction_update, name='transaction_update'),
     path('transactions/<int:pk>/delete/', views.transaction_delete, name='transaction_delete'),
+    # Multiple Transaction URLs
+    path('transactions/multiple/create/', views.multiple_transaction_create, name='multiple_transaction_create'),
+    path('transactions/multiple/<uuid:group_id>/update/', views.multiple_transaction_update, name='multiple_transaction_update'),
+    path('transactions/multiple/<uuid:group_id>/delete/', views.multiple_transaction_delete, name='multiple_transaction_delete'),
     # Scheduler URLs
     path('schedulers/', views.scheduler_list, name='scheduler_list'),
     path('schedulers/create/', views.scheduler_create, name='scheduler_create'),
     path('schedulers/<int:pk>/update/', views.scheduler_update, name='scheduler_update'),
     path('schedulers/<int:pk>/delete/', views.scheduler_delete, name='scheduler_delete'),
     path('schedulers/<int:pk>/register/', views.scheduler_register, name='scheduler_register'),
+    # Multiple Scheduler URLs (usando group_id em vez de pk)
+    path('schedulers/multiple/', views.multiple_scheduler_list, name='multiple_scheduler_list'),
+    path('schedulers/multiple/create/', views.multiple_scheduler_create, name='multiple_scheduler_create'),
+    path('schedulers/multiple/<uuid:group_id>/update/', views.multiple_scheduler_update, name='multiple_scheduler_update'),
+    path('schedulers/multiple/<uuid:group_id>/delete/', views.multiple_scheduler_delete, name='multiple_scheduler_delete'),
+    path('schedulers/multiple/<uuid:group_id>/register/', views.multiple_scheduler_register, name='multiple_scheduler_register'),
     # API endpoint for JavaScript
     path('api/subcategory/<int:subcategory_id>/default-transaction-type/', views.get_subcategory_default_transaction_type, name='subcategory_default_transaction_type'),
 ]

@@ -1,0 +1,30 @@
+{% extends 'finance/base.html' %}
+
+{% block title %}Deletar Transação Múltipla{% endblock %}
+
+{% block content %}
+<h1>Deletar Transação Múltipla</h1>
+
+<p>Tem certeza que deseja deletar esta transação múltipla?</p>
+
+<p><strong>Total de transações:</strong> {{ transactions.count }}</p>
+
+<ul>
+    {% for transaction in transactions %}
+    <li>
+        {% if transaction.is_transfer %}
+            Transferência: {{ transaction.account }} - R$ {{ transaction.value }}
+        {% else %}
+            {{ transaction.account }} - {{ transaction.get_transaction_type_display }} - R$ {{ transaction.value }}
+        {% endif %}
+    </li>
+    {% endfor %}
+</ul>
+
+<form method="post">
+    {% csrf_token %}
+    <button type="submit">Confirmar Deletar</button>
+    <a href="{% url 'finance:transaction_list' %}">Cancelar</a>
+</form>
+{% endblock %}
+

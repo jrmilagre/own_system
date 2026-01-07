@@ -5,13 +5,16 @@
 {% block content %}
 <h1>Agendamentos</h1>
 <a href="{% url 'finance:scheduler_create' %}"><button>Criar Novo Agendamento</button></a>
-{% if schedulers %}
+<a href="{% url 'finance:multiple_scheduler_create' %}"><button>Criar Novo Agendamento Múltiplo</button></a>
+
+{% if multiple_groups or schedulers %}
     <table>
         <thead>
             <tr>
                 <th>Conta</th>
                 <th>Beneficiário</th>
-                <th>Categoria</th>
+                <th>Subcategoria</th>
+                <th>Tipo</th>
                 <th>Valor</th>
                 <th>Próxima Data</th>
                 <th>Recorrência</th>
@@ -21,20 +24,83 @@
             </tr>
         </thead>
         <tbody>
+            {% for group in multiple_groups %}
+            <tr class="multiple-group-header" data-group-id="{{ group.group_id }}">
+                <td colspan="10">
+                    <strong>Agendamento Múltiplo</strong> ({{ group.count }} item(ns), Total: R$ {{ group.total_value|floatformat:2 }})
+                    <button type="button" class="toggle-group" data-group-id="{{ group.group_id }}">Expandir/Colapsar</button>
+                </td>
+            </tr>
+            <tr class="multiple-group-details" data-group-id="{{ group.group_id }}" style="display: none;">
+                <td colspan="10">
+                    <table style="width: 100%; margin-left: 20px;">
+                        <thead>
+                            <tr>
+                                <th>Conta</th>
+                                <th>Beneficiário</th>
+                                <th>Subcategoria</th>
+                                <th>Tipo</th>
+                                <th>Valor</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for scheduler in group.schedulers %}
+                            <tr>
+                                <td>{{ scheduler.account }}</td>
+                                <td>{{ scheduler.beneficiary|default:"-" }}</td>
+                                <td>
+                                    {% if scheduler.is_transfer %}
+                                        Transferência: {{ scheduler.account }} → {{ scheduler.destination_account }}
+                                    {% elif scheduler.subcategory %}
+                                        {{ scheduler.subcategory }}
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </td>
+                                <td>{{ scheduler.get_transaction_type_display }}</td>
+                                <td>{{ scheduler.value }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                    <div style="margin-top: 10px;">
+                        <strong>Próxima Data:</strong> {{ group.representative.due_date|default:"-"|date:"d/m/Y" }}<br>
+                        <strong>Recorrência:</strong> {{ group.representative.get_recurrence_type_display }} ({{ group.representative.recurrence_interval }})<br>
+                        <strong>Status:</strong> {{ group.representative.get_status_display }}<br>
+                        <strong>Parcelas Restantes:</strong>
+                        {% if group.representative.termination_type == 'INSTALLMENTS' %}
+                            {{ group.representative.remaining_installments|default:"-" }}
+                        {% elif group.representative.termination_type == 'FINAL_DATE' %}
+                            Até {{ group.representative.final_date|default:"-"|date:"d/m/Y" }}
+                        {% else %}
+                            Infinito
+                        {% endif %}
+                        <br>
+                        <a href="{% url 'finance:multiple_scheduler_update' group.group_id %}"><button>Editar</button></a>
+                        <a href="{% url 'finance:multiple_scheduler_delete' group.group_id %}"><button>Deletar</button></a>
+                        {% if group.representative.status == 'ACTIVE' %}
+                            <a href="{% url 'finance:multiple_scheduler_register' group.group_id %}"><button>Registrar</button></a>
+                        {% endif %}
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+            
             {% for scheduler in schedulers %}
             <tr>
                 <td>{{ scheduler.account }}</td>
                 <td>{{ scheduler.beneficiary }}</td>
-                <td>{{ scheduler.category }}</td>
+                <td>{{ scheduler.subcategory }}</td>
+                <td>{{ scheduler.get_transaction_type_display }}</td>
                 <td>{{ scheduler.value }}</td>
-                <td>{{ scheduler.due_date|default:"-" }}</td>
+                <td>{{ scheduler.due_date|default:"-"|date:"d/m/Y" }}</td>
                 <td>{{ scheduler.get_recurrence_type_display }} ({{ scheduler.recurrence_interval }})</td>
                 <td>{{ scheduler.get_status_display }}</td>
                 <td>
                     {% if scheduler.termination_type == 'INSTALLMENTS' %}
                         {{ scheduler.remaining_installments|default:"-" }}
                     {% elif scheduler.termination_type == 'FINAL_DATE' %}
-                        Até {{ scheduler.final_date|default:"-" }}
+                        Até {{ scheduler.final_date|default:"-"|date:"d/m/Y" }}
                     {% else %}
                         Infinito
                     {% endif %}
@@ -53,6 +119,22 @@
 {% else %}
     <p>Nenhum agendamento cadastrado.</p>
 {% endif %}
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        document.querySelectorAll('.toggle-group').forEach(button => {
+            button.addEventListener('click', function() {
+                const groupId = this.getAttribute('data-group-id');
+                const detailsRow = document.querySelector(`.multiple-group-details[data-group-id="${groupId}"]`);
+                if (detailsRow) {
+                    if (detailsRow.style.display === 'none') {
+                        detailsRow.style.display = '';
+                    } else {
+                        detailsRow.style.display = 'none';
+                    }
+                }
+            });
+        });
+    });
+</script>
 {% endblock %}
-
-

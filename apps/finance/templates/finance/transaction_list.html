@@ -5,7 +5,9 @@
 {% block content %}
 <h1>Transações</h1>
 <a href="{% url 'finance:transaction_create' %}"><button>Criar Nova Transação</button></a>
-{% if transactions %}
+<a href="{% url 'finance:multiple_transaction_create' %}"><button>Criar Transação Múltipla</button></a>
+
+{% if multiple_groups or transactions %}
     <table>
         <thead>
             <tr>
@@ -22,6 +24,59 @@
             </tr>
         </thead>
         <tbody>
+            {% for group in multiple_groups %}
+            <tr class="multiple-group-header" data-group-id="{{ group.group_id }}">
+                <td colspan="10">
+                    <strong>Transação Múltipla</strong> ({{ group.count }} transação(ões), Total: R$ {{ group.total_value|floatformat:2 }})
+                    <button type="button" class="toggle-group" data-group-id="{{ group.group_id }}">Expandir/Colapsar</button>
+                </td>
+            </tr>
+            <tr class="multiple-group-details" data-group-id="{{ group.group_id }}" style="display: none;">
+                <td colspan="10">
+                    <table style="width: 100%; margin-left: 20px;">
+                        <thead>
+                            <tr>
+                                <th>Tipo</th>
+                                <th>Conta</th>
+                                <th>Beneficiário</th>
+                                <th>Subcategoria</th>
+                                <th>Tipo Transação</th>
+                                <th>Valor</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for transaction in group.transactions %}
+                            <tr>
+                                <td>
+                                    {% if transaction.is_transfer %}
+                                        Transferência
+                                    {% else %}
+                                        Normal
+                                    {% endif %}
+                                </td>
+                                <td>{{ transaction.account }}</td>
+                                <td>{{ transaction.beneficiary|default:"-" }}</td>
+                                <td>
+                                    {% if transaction.subcategory %}
+                                        {{ transaction.subcategory }}
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </td>
+                                <td>{{ transaction.get_transaction_type_display }}</td>
+                                <td>{{ transaction.value }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                    <div style="margin-top: 10px;">
+                        <a href="{% url 'finance:multiple_transaction_update' group.group_id %}"><button>Editar</button></a>
+                        <a href="{% url 'finance:multiple_transaction_delete' group.group_id %}"><button>Deletar</button></a>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+            
             {% for transaction in transactions %}
             <tr>
                 <td>
@@ -59,5 +114,23 @@
 {% else %}
     <p>Nenhuma transação cadastrada.</p>
 {% endif %}
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.toggle-group').forEach(button => {
+        button.addEventListener('click', function() {
+            const groupId = this.getAttribute('data-group-id');
+            const detailsRow = document.querySelector(`.multiple-group-details[data-group-id="${groupId}"]`);
+            if (detailsRow) {
+                if (detailsRow.style.display === 'none') {
+                    detailsRow.style.display = '';
+                } else {
+                    detailsRow.style.display = 'none';
+                }
+            }
+        });
+    });
+});
+</script>
 {% endblock %}
 
