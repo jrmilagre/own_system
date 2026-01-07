@@ -16,7 +16,7 @@
                 <th>Tipo Transação</th>
                 <th>Valor</th>
                 <th>Data do Vencimento</th>
-                <th>Data do Registro</th>
+                <th>Data da Transação</th>
                 <th>Data da Compra</th>
                 <th>Ações</th>
             </tr>
@@ -46,7 +46,7 @@
                 <td>{{ transaction.get_transaction_type_display }}</td>
                 <td>{{ transaction.value }}</td>
                 <td>{{ transaction.due_date|default:"-" }}</td>
-                <td>{{ transaction.registration_date|default:"-" }}</td>
+                <td>{{ transaction.transaction_date|default:"-" }}</td>
                 <td>{{ transaction.purchase_date|default:"-" }}</td>
                 <td>
                     <a href="{% url 'finance:transaction_update' transaction.pk %}"><button>Editar</button></a>

@@ -125,8 +125,8 @@ class Transaction(BaseModel):
         null=True,
         blank=True
     )
-    registration_date = models.DateField(
-        'Data do registro',
+    transaction_date = models.DateField(
+        'Data da transação',
         null=True,
         blank=True
     )
@@ -191,7 +191,7 @@ class Scheduler(BaseModel):
         ('COMPLETED', 'Concluído'),
     ]
 
-    # Campos de Transação (sem registration_date)
+    # Campos de Transação (sem transaction_date)
     account = models.ForeignKey(
         Account,
         on_delete=models.CASCADE,
@@ -401,7 +401,7 @@ class Scheduler(BaseModel):
         Args:
             transaction_data: Dicionário opcional com dados para sobrescrever valores padrão do agendamento.
                              Se não fornecido, usa os valores do agendamento.
-                             registration_date padrão é self.due_date (não date.today()).
+                             transaction_date padrão é self.due_date (não date.today()).
         """
         if not self.is_valid():
             raise ValueError("Agendamento não está válido para registro")
@@ -415,7 +415,7 @@ class Scheduler(BaseModel):
         transaction_type = transaction_data.get('transaction_type', self.transaction_type)
         value = transaction_data.get('value', self.value)
         due_date = transaction_data.get('due_date', self.due_date)
-        registration_date = transaction_data.get('registration_date', self.due_date)
+        transaction_date = transaction_data.get('transaction_date', self.due_date)
         purchase_date = transaction_data.get('purchase_date', self.purchase_date)
         notes = transaction_data.get('notes', self.notes)
 
@@ -427,7 +427,7 @@ class Scheduler(BaseModel):
             transaction_type=transaction_type,
             value=value,
             due_date=due_date,
-            registration_date=registration_date,
+            transaction_date=transaction_date,
             purchase_date=purchase_date,
             notes=notes
         )

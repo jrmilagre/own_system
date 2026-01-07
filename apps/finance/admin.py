@@ -58,7 +58,7 @@ class TransactionAdmin(admin.ModelAdmin):
         'transaction_type',
         'value',
         'due_date',
-        'registration_date',
+        'transaction_date',
         'purchase_date',
         'created_at',
         'updated_at',

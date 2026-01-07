@@ -64,7 +64,7 @@ class TransactionForm(forms.ModelForm):
 
     class Meta:
         model = Transaction
-        fields = ['account', 'beneficiary', 'subcategory', 'transaction_type', 'value', 'due_date', 'registration_date', 'purchase_date', 'notes']
+        fields = ['account', 'beneficiary', 'subcategory', 'transaction_type', 'value', 'due_date', 'transaction_date', 'purchase_date', 'notes']
         widgets = {
             'account': forms.Select(attrs={'required': False}),
             'beneficiary': forms.Select(attrs={'required': False}),
@@ -72,7 +72,7 @@ class TransactionForm(forms.ModelForm):
             'transaction_type': forms.Select(attrs={'required': False}),
             'value': forms.NumberInput(attrs={'step': '0.01', 'required': True}),
             'due_date': forms.DateInput(attrs={'type': 'date'}),
-            'registration_date': forms.DateInput(attrs={'type': 'date'}),
+            'transaction_date': forms.DateInput(attrs={'type': 'date'}),
             'purchase_date': forms.DateInput(attrs={'type': 'date'}),
             'notes': forms.Textarea(attrs={'rows': 4}),
         }
@@ -161,9 +161,9 @@ class TransferTransactionForm(forms.Form):
         label='Data do vencimento',
         widget=forms.DateInput(attrs={'type': 'date'})
     )
-    registration_date = forms.DateField(
+    transaction_date = forms.DateField(
         required=False,
-        label='Data do registro',
+        label='Data da transação',
         widget=forms.DateInput(attrs={'type': 'date'})
     )
     purchase_date = forms.DateField(

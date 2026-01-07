@@ -237,7 +237,7 @@ def transaction_create(request):
                 destination_account = form.cleaned_data['destination_account']
                 value = form.cleaned_data['value']
                 due_date = form.cleaned_data.get('due_date')
-                registration_date = form.cleaned_data.get('registration_date')
+                transaction_date = form.cleaned_data.get('transaction_date')
                 purchase_date = form.cleaned_data.get('purchase_date')
                 notes = form.cleaned_data.get('notes', '')
                 
@@ -254,7 +254,7 @@ def transaction_create(request):
                         transaction_type='DB',
                         value=value,
                         due_date=due_date,
-                        registration_date=registration_date,
+                        transaction_date=transaction_date,
                         purchase_date=purchase_date,
                         notes=notes,
                         transfer_group_id=transfer_group_id,
@@ -269,7 +269,7 @@ def transaction_create(request):
                         transaction_type='CR',
                         value=value,
                         due_date=due_date,
-                        registration_date=registration_date,
+                        transaction_date=transaction_date,
                         purchase_date=purchase_date,
                         notes=notes,
                         transfer_group_id=transfer_group_id,
@@ -312,7 +312,7 @@ def transaction_update(request, pk):
                     destination_account = form.cleaned_data['destination_account']
                     value = form.cleaned_data['value']
                     due_date = form.cleaned_data.get('due_date')
-                    registration_date = form.cleaned_data.get('registration_date')
+                    transaction_date = form.cleaned_data.get('transaction_date')
                     purchase_date = form.cleaned_data.get('purchase_date')
                     notes = form.cleaned_data.get('notes', '')
                     
@@ -331,7 +331,7 @@ def transaction_update(request, pk):
                         debit_transaction.account = source_account
                         debit_transaction.value = value
                         debit_transaction.due_date = due_date
-                        debit_transaction.registration_date = registration_date
+                        debit_transaction.transaction_date = transaction_date
                         debit_transaction.purchase_date = purchase_date
                         debit_transaction.notes = notes
                         debit_transaction.save()
@@ -340,7 +340,7 @@ def transaction_update(request, pk):
                         credit_transaction.account = destination_account
                         credit_transaction.value = value
                         credit_transaction.due_date = due_date
-                        credit_transaction.registration_date = registration_date
+                        credit_transaction.transaction_date = transaction_date
                         credit_transaction.purchase_date = purchase_date
                         credit_transaction.notes = notes
                         credit_transaction.save()
@@ -377,7 +377,7 @@ def transaction_update(request, pk):
                     'destination_account': destination_account,
                     'value': transaction.value,
                     'due_date': transaction.due_date,
-                    'registration_date': transaction.registration_date,
+                    'transaction_date': transaction.transaction_date,
                     'purchase_date': transaction.purchase_date,
                     'notes': transaction.notes,
                 }
@@ -481,7 +481,7 @@ def scheduler_register(request, pk):
                     'transaction_type': form.cleaned_data.get('transaction_type', scheduler.transaction_type),
                     'value': form.cleaned_data['value'],
                     'due_date': form.cleaned_data['due_date'],
-                    'registration_date': form.cleaned_data.get('registration_date') or scheduler.due_date,
+                    'transaction_date': form.cleaned_data.get('transaction_date') or scheduler.due_date,
                     'purchase_date': form.cleaned_data.get('purchase_date'),
                     'notes': form.cleaned_data.get('notes', ''),
                 }
@@ -507,7 +507,7 @@ def scheduler_register(request, pk):
             'transaction_type': scheduler.transaction_type,
             'value': scheduler.value,
             'due_date': scheduler.due_date,
-            'registration_date': scheduler.due_date,  # Padrão é due_date
+            'transaction_date': scheduler.due_date,  # Padrão é due_date
             'purchase_date': scheduler.purchase_date,
             'notes': scheduler.notes,
         }
