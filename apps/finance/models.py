@@ -1,6 +1,7 @@
 from django.db import models
 from datetime import date
 from dateutil.relativedelta import relativedelta
+import uuid
 
 # Create your models here.
 class BaseModel(models.Model):
@@ -97,12 +98,16 @@ class Transaction(BaseModel):
     beneficiary = models.ForeignKey(
         Beneficiary,
         on_delete=models.CASCADE,
-        verbose_name='Beneficiário'
+        verbose_name='Beneficiário',
+        null=True,
+        blank=True
     )
     subcategory = models.ForeignKey(
         Subcategory,
         on_delete=models.CASCADE,
-        verbose_name='Subcategoria'
+        verbose_name='Subcategoria',
+        null=True,
+        blank=True
     )
     transaction_type = models.CharField(
         'Tipo de transação',
@@ -134,6 +139,17 @@ class Transaction(BaseModel):
         'Anotações',
         blank=True
     )
+    transfer_group_id = models.UUIDField(
+        'ID do grupo de transferência',
+        null=True,
+        blank=True,
+        help_text='UUID que vincula as duas transações de uma transferência'
+    )
+    is_transfer = models.BooleanField(
+        'É transferência',
+        default=False,
+        help_text='Indica se esta transação faz parte de uma transferência entre contas'
+    )
 
     class Meta:
         verbose_name = 'Transação'
@@ -141,7 +157,18 @@ class Transaction(BaseModel):
         ordering = ('-created_at',)
 
     def __str__(self):
-        return f"{self.account} - {self.beneficiary} - {self.value}"
+        if self.is_transfer:
+            return f"Transferência: {self.account} - {self.value}"
+        beneficiary_str = self.beneficiary if self.beneficiary else "N/A"
+        return f"{self.account} - {beneficiary_str} - {self.value}"
+
+    def get_transfer_pair(self):
+        """Retorna a transação vinculada em uma transferência, se existir"""
+        if not self.is_transfer or not self.transfer_group_id:
+            return None
+        return Transaction.objects.filter(
+            transfer_group_id=self.transfer_group_id
+        ).exclude(pk=self.pk).first()
 
 
 class Scheduler(BaseModel):

@@ -9,27 +9,48 @@
     {% csrf_token %}
     <table>
         <tr>
+            <td><label for="{{ form.is_transfer.id_for_label }}">É uma transferência entre contas:</label></td>
+            <td>{{ form.is_transfer }}</td>
+            {% if form.is_transfer.errors %}
+            <td>{{ form.is_transfer.errors }}</td>
+            {% endif %}
+        </tr>
+        <tr id="normal-account-row" class="normal-transaction">
             <td><label for="{{ form.account.id_for_label }}">Conta:</label></td>
             <td>{{ form.account }}</td>
             {% if form.account.errors %}
             <td>{{ form.account.errors }}</td>
             {% endif %}
         </tr>
-        <tr>
+        <tr id="transfer-accounts-row" class="transfer-transaction" style="display: none;">
+            <td><label for="{{ form.source_account.id_for_label }}">Conta de origem:</label></td>
+            <td>{{ form.source_account }}</td>
+            {% if form.source_account.errors %}
+            <td>{{ form.source_account.errors }}</td>
+            {% endif %}
+        </tr>
+        <tr id="transfer-destination-row" class="transfer-transaction" style="display: none;">
+            <td><label for="{{ form.destination_account.id_for_label }}">Conta de destino:</label></td>
+            <td>{{ form.destination_account }}</td>
+            {% if form.destination_account.errors %}
+            <td>{{ form.destination_account.errors }}</td>
+            {% endif %}
+        </tr>
+        <tr id="beneficiary-row" class="normal-transaction">
             <td><label for="{{ form.beneficiary.id_for_label }}">Beneficiário:</label></td>
             <td>{{ form.beneficiary }}</td>
             {% if form.beneficiary.errors %}
             <td>{{ form.beneficiary.errors }}</td>
             {% endif %}
         </tr>
-        <tr>
+        <tr id="subcategory-row" class="normal-transaction">
             <td><label for="{{ form.subcategory.id_for_label }}">Subcategoria:</label></td>
             <td>{{ form.subcategory }}</td>
             {% if form.subcategory.errors %}
             <td>{{ form.subcategory.errors }}</td>
             {% endif %}
         </tr>
-        <tr>
+        <tr id="transaction-type-row" class="normal-transaction">
             <td><label for="{{ form.transaction_type.id_for_label }}">Tipo de transação:</label></td>
             <td>{{ form.transaction_type }}</td>
             {% if form.transaction_type.errors %}
@@ -78,13 +99,119 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    const isTransferCheckbox = document.getElementById('id_is_transfer');
     const subcategorySelect = document.getElementById('id_subcategory');
     const transactionTypeSelect = document.getElementById('id_transaction_type');
+    const normalFields = document.querySelectorAll('.normal-transaction');
+    const transferFields = document.querySelectorAll('.transfer-transaction');
     
+    // Função para mostrar/ocultar campos baseado no tipo de transação
+    function toggleTransactionFields() {
+        const isTransfer = isTransferCheckbox && isTransferCheckbox.checked;
+        
+        if (isTransfer) {
+            // Ocultar campos de transação normal
+            normalFields.forEach(function(field) {
+                field.style.display = 'none';
+                // Remover required dos campos ocultos
+                const inputs = field.querySelectorAll('input, select, textarea');
+                inputs.forEach(function(input) {
+                    input.removeAttribute('required');
+                    input.required = false;
+                });
+            });
+            // Mostrar campos de transferência
+            transferFields.forEach(function(field) {
+                field.style.display = '';
+                // Adicionar required aos campos de transferência
+                const inputs = field.querySelectorAll('input, select');
+                inputs.forEach(function(input) {
+                    if (input.id === 'id_source_account' || input.id === 'id_destination_account') {
+                        input.setAttribute('required', 'required');
+                        input.required = true;
+                    }
+                });
+            });
+        } else {
+            // Mostrar campos de transação normal
+            normalFields.forEach(function(field) {
+                field.style.display = '';
+                // Adicionar required aos campos normais necessários
+                const accountInput = field.querySelector('#id_account');
+                const beneficiaryInput = field.querySelector('#id_beneficiary');
+                const subcategoryInput = field.querySelector('#id_subcategory');
+                const transactionTypeInput = field.querySelector('#id_transaction_type');
+                
+                if (accountInput) {
+                    accountInput.setAttribute('required', 'required');
+                    accountInput.required = true;
+                }
+                if (beneficiaryInput) {
+                    beneficiaryInput.setAttribute('required', 'required');
+                    beneficiaryInput.required = true;
+                }
+                if (subcategoryInput) {
+                    subcategoryInput.setAttribute('required', 'required');
+                    subcategoryInput.required = true;
+                }
+                if (transactionTypeInput) {
+                    transactionTypeInput.setAttribute('required', 'required');
+                    transactionTypeInput.required = true;
+                }
+            });
+            // Ocultar campos de transferência
+            transferFields.forEach(function(field) {
+                field.style.display = 'none';
+                // Remover required dos campos ocultos
+                const inputs = field.querySelectorAll('input, select');
+                inputs.forEach(function(input) {
+                    input.removeAttribute('required');
+                    input.required = false;
+                });
+            });
+        }
+    }
+    
+    // Adicionar listener ao checkbox
+    if (isTransferCheckbox) {
+        isTransferCheckbox.addEventListener('change', toggleTransactionFields);
+        // Executar uma vez ao carregar para definir estado inicial
+        toggleTransactionFields();
+    }
+    
+    // Handler para o submit do formulário - garantir que campos ocultos não sejam validados
+    const form = document.querySelector('form');
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            const isTransfer = isTransferCheckbox && isTransferCheckbox.checked;
+            
+            if (isTransfer) {
+                // Remover required de todos os campos ocultos antes de submeter
+                normalFields.forEach(function(field) {
+                    const inputs = field.querySelectorAll('input, select, textarea');
+                    inputs.forEach(function(input) {
+                        input.removeAttribute('required');
+                        input.required = false;
+                    });
+                });
+            } else {
+                // Remover required dos campos de transferência antes de submeter
+                transferFields.forEach(function(field) {
+                    const inputs = field.querySelectorAll('input, select');
+                    inputs.forEach(function(input) {
+                        input.removeAttribute('required');
+                        input.required = false;
+                    });
+                });
+            }
+        });
+    }
+    
+    // Listener para subcategoria (apenas para transações normais)
     if (subcategorySelect && transactionTypeSelect) {
         subcategorySelect.addEventListener('change', function() {
             const subcategoryId = this.value;
-            if (subcategoryId) {
+            if (subcategoryId && (!isTransferCheckbox || !isTransferCheckbox.checked)) {
                 fetch('/finance/api/subcategory/' + subcategoryId + '/default-transaction-type/')
                     .then(response => response.json())
                     .then(data => {

@@ -1,6 +1,8 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.http import JsonResponse
+from django.db import transaction as db_transaction
+import uuid
 from .models import Account, Beneficiary, Category, Subcategory, Transaction, Scheduler
 from .forms import AccountForm, BeneficiaryForm, CategoryForm, SubcategoryForm, TransactionForm, SchedulerForm
 
@@ -207,7 +209,18 @@ def subcategory_delete(request, category_pk, pk):
 # Transaction Views
 def transaction_list(request):
     """Lista de transações"""
-    transactions = Transaction.objects.all()
+    transactions = Transaction.objects.all().select_related('account', 'beneficiary', 'subcategory')
+    # Adicionar informação sobre transferências para cada transação
+    for transaction in transactions:
+        if transaction.is_transfer:
+            transfer_pair = transaction.get_transfer_pair()
+            if transfer_pair:
+                if transaction.transaction_type == 'DB':
+                    transaction.transfer_info = f"De: {transaction.account} → Para: {transfer_pair.account}"
+                else:
+                    transaction.transfer_info = f"De: {transfer_pair.account} → Para: {transaction.account}"
+            else:
+                transaction.transfer_info = "Transferência (parceiro não encontrado)"
     return render(request, 'finance/transaction_list.html', {'transactions': transactions})
 
 
@@ -216,8 +229,63 @@ def transaction_create(request):
     if request.method == 'POST':
         form = TransactionForm(request.POST)
         if form.is_valid():
-            form.save()
+            is_transfer = form.cleaned_data.get('is_transfer', False)
+            
+            if is_transfer:
+                # Criar transferência (2 transações)
+                source_account = form.cleaned_data['source_account']
+                destination_account = form.cleaned_data['destination_account']
+                value = form.cleaned_data['value']
+                due_date = form.cleaned_data.get('due_date')
+                registration_date = form.cleaned_data.get('registration_date')
+                purchase_date = form.cleaned_data.get('purchase_date')
+                notes = form.cleaned_data.get('notes', '')
+                
+                # Gerar UUID para vincular as duas transações
+                transfer_group_id = uuid.uuid4()
+                
+                # Criar ambas as transações em uma transação de banco de dados
+                with db_transaction.atomic():
+                    # Transação de débito (conta origem)
+                    debit_transaction = Transaction.objects.create(
+                        account=source_account,
+                        beneficiary=None,
+                        subcategory=None,
+                        transaction_type='DB',
+                        value=value,
+                        due_date=due_date,
+                        registration_date=registration_date,
+                        purchase_date=purchase_date,
+                        notes=notes,
+                        transfer_group_id=transfer_group_id,
+                        is_transfer=True
+                    )
+                    
+                    # Transação de crédito (conta destino)
+                    credit_transaction = Transaction.objects.create(
+                        account=destination_account,
+                        beneficiary=None,
+                        subcategory=None,
+                        transaction_type='CR',
+                        value=value,
+                        due_date=due_date,
+                        registration_date=registration_date,
+                        purchase_date=purchase_date,
+                        notes=notes,
+                        transfer_group_id=transfer_group_id,
+                        is_transfer=True
+                    )
+                
+                messages.success(request, 'Transferência criada com sucesso!')
+            else:
+                # Criar transação normal
+                form.save()
+                messages.success(request, 'Transação criada com sucesso!')
+            
             return redirect('finance:transaction_list')
+        else:
+            # Formulário inválido - mostrar erros
+            messages.error(request, 'Por favor, corrija os erros abaixo.')
     else:
         form = TransactionForm()
     return render(request, 'finance/transaction_form.html', {'form': form})
@@ -226,13 +294,99 @@ def transaction_create(request):
 def transaction_update(request, pk):
     """Editar transação existente"""
     transaction = get_object_or_404(Transaction, pk=pk)
+    
     if request.method == 'POST':
-        form = TransactionForm(request.POST, instance=transaction)
+        # Para transferências, não usar instance para evitar validação do campo account
+        if transaction.is_transfer:
+            form = TransactionForm(request.POST)
+        else:
+            form = TransactionForm(request.POST, instance=transaction)
+            
         if form.is_valid():
-            form.save()
+            if transaction.is_transfer:
+                # Atualizar ambas as transações da transferência
+                transfer_pair = transaction.get_transfer_pair()
+                if transfer_pair:
+                    # Campos que devem ser sincronizados
+                    source_account = form.cleaned_data['source_account']
+                    destination_account = form.cleaned_data['destination_account']
+                    value = form.cleaned_data['value']
+                    due_date = form.cleaned_data.get('due_date')
+                    registration_date = form.cleaned_data.get('registration_date')
+                    purchase_date = form.cleaned_data.get('purchase_date')
+                    notes = form.cleaned_data.get('notes', '')
+                    
+                    with db_transaction.atomic():
+                        # Determinar qual transação é débito e qual é crédito
+                        if transaction.transaction_type == 'DB':
+                            # Esta é a transação de débito (origem)
+                            debit_transaction = transaction
+                            credit_transaction = transfer_pair
+                        else:
+                            # Esta é a transação de crédito (destino)
+                            debit_transaction = transfer_pair
+                            credit_transaction = transaction
+                        
+                        # Atualizar transação de débito (conta origem)
+                        debit_transaction.account = source_account
+                        debit_transaction.value = value
+                        debit_transaction.due_date = due_date
+                        debit_transaction.registration_date = registration_date
+                        debit_transaction.purchase_date = purchase_date
+                        debit_transaction.notes = notes
+                        debit_transaction.save()
+                        
+                        # Atualizar transação de crédito (conta destino)
+                        credit_transaction.account = destination_account
+                        credit_transaction.value = value
+                        credit_transaction.due_date = due_date
+                        credit_transaction.registration_date = registration_date
+                        credit_transaction.purchase_date = purchase_date
+                        credit_transaction.notes = notes
+                        credit_transaction.save()
+                    
+                    messages.success(request, 'Transferência atualizada com sucesso!')
+                else:
+                    messages.error(request, 'Transação vinculada não encontrada.')
+            else:
+                # Atualizar transação normal
+                form.save()
+                messages.success(request, 'Transação atualizada com sucesso!')
+            
             return redirect('finance:transaction_list')
+        else:
+            # Formulário inválido - mostrar erros
+            messages.error(request, 'Por favor, corrija os erros abaixo.')
     else:
-        form = TransactionForm(instance=transaction)
+        # Se for transferência, criar formulário sem instance para evitar conflito com campo account
+        if transaction.is_transfer:
+            transfer_pair = transaction.get_transfer_pair()
+            if transfer_pair:
+                if transaction.transaction_type == 'DB':
+                    # Esta é a transação de débito (origem)
+                    source_account = transaction.account
+                    destination_account = transfer_pair.account
+                else:
+                    # Esta é a transação de crédito (destino)
+                    source_account = transfer_pair.account
+                    destination_account = transaction.account
+                
+                initial_data = {
+                    'is_transfer': True,
+                    'source_account': source_account,
+                    'destination_account': destination_account,
+                    'value': transaction.value,
+                    'due_date': transaction.due_date,
+                    'registration_date': transaction.registration_date,
+                    'purchase_date': transaction.purchase_date,
+                    'notes': transaction.notes,
+                }
+                form = TransactionForm(initial=initial_data)
+            else:
+                form = TransactionForm(instance=transaction)
+        else:
+            form = TransactionForm(instance=transaction)
+    
     return render(request, 'finance/transaction_form.html', {'form': form, 'transaction': transaction})
 
 
@@ -240,7 +394,20 @@ def transaction_delete(request, pk):
     """Deletar transação"""
     transaction = get_object_or_404(Transaction, pk=pk)
     if request.method == 'POST':
-        transaction.delete()
+        if transaction.is_transfer:
+            # Deletar ambas as transações da transferência
+            transfer_pair = transaction.get_transfer_pair()
+            if transfer_pair:
+                with db_transaction.atomic():
+                    transfer_pair.delete()
+                    transaction.delete()
+                messages.success(request, 'Transferência deletada com sucesso!')
+            else:
+                transaction.delete()
+                messages.warning(request, 'Transação deletada, mas a transação vinculada não foi encontrada.')
+        else:
+            transaction.delete()
+            messages.success(request, 'Transação deletada com sucesso!')
         return redirect('finance:transaction_list')
     return render(request, 'finance/transaction_confirm_delete.html', {'transaction': transaction})
 

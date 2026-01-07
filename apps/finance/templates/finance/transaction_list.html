@@ -9,9 +9,11 @@
     <table>
         <thead>
             <tr>
+                <th>Tipo</th>
                 <th>Conta</th>
                 <th>Beneficiário</th>
-                <th>Categoria</th>
+                <th>Subcategoria</th>
+                <th>Tipo Transação</th>
                 <th>Valor</th>
                 <th>Data do Vencimento</th>
                 <th>Data do Registro</th>
@@ -22,9 +24,26 @@
         <tbody>
             {% for transaction in transactions %}
             <tr>
+                <td>
+                    {% if transaction.is_transfer %}
+                        <strong>Transferência</strong>
+                        {% if transaction.transfer_info %}
+                            <br><small>{{ transaction.transfer_info }}</small>
+                        {% endif %}
+                    {% else %}
+                        Normal
+                    {% endif %}
+                </td>
                 <td>{{ transaction.account }}</td>
-                <td>{{ transaction.beneficiary }}</td>
-                <td>{{ transaction.category }}</td>
+                <td>{{ transaction.beneficiary|default:"-" }}</td>
+                <td>
+                    {% if transaction.subcategory %}
+                        {{ transaction.subcategory }}
+                    {% else %}
+                        -
+                    {% endif %}
+                </td>
+                <td>{{ transaction.get_transaction_type_display }}</td>
                 <td>{{ transaction.value }}</td>
                 <td>{{ transaction.due_date|default:"-" }}</td>
                 <td>{{ transaction.registration_date|default:"-" }}</td>
