@@ -4,7 +4,12 @@
 
 {% block content %}
 <h1>Relatórios</h1>
+<h2>Contas</h2>
 <ul>
-    <li><a href="{% url 'finance:account_statement' %}">Extrato de Contas</a></li>
+    <li><a href="{% url 'finance:account_statement' %}">Extrato</a></li>
+</ul>
+<h2>Ativos</h2>
+<ul>
+    <li><a href="{% url 'finance:asset_stock_position_report' %}">Posição de estoque</a></li>
 </ul>
 {% endblock %}

@@ -1794,12 +1794,6 @@ def asset_transaction_delete(request, pk):
 
 
 # AssetPosition Views
-def asset_position_list(request):
-    """Lista de posições de ativos"""
-    positions = AssetPosition.objects.all().select_related('asset', 'account')
-    return render(request, 'finance/asset_position_list.html', {'positions': positions})
-
-
 def asset_position_create(request):
     """Criar nova posição de ativo"""
     if request.method == 'POST':
@@ -1807,7 +1801,7 @@ def asset_position_create(request):
         if form.is_valid():
             form.save()
             messages.success(request, 'Posição de ativo criada com sucesso!')
-            return redirect('finance:asset_position_list')
+            return redirect('finance:asset_list')
     else:
         form = AssetPositionForm()
     return render(request, 'finance/asset_position_form.html', {'form': form})
@@ -1821,7 +1815,7 @@ def asset_position_update(request, pk):
         if form.is_valid():
             form.save()
             messages.success(request, 'Posição de ativo atualizada com sucesso!')
-            return redirect('finance:asset_position_list')
+            return redirect('finance:asset_list')
     else:
         form = AssetPositionForm(instance=position)
     return render(request, 'finance/asset_position_form.html', {'form': form, 'position': position})
@@ -1833,7 +1827,7 @@ def asset_position_delete(request, pk):
     if request.method == 'POST':
         position.delete()
         messages.success(request, 'Posição de ativo deletada com sucesso!')
-        return redirect('finance:asset_position_list')
+        return redirect('finance:asset_list')
     return render(request, 'finance/asset_position_confirm_delete.html', {'position': position})
 
 
@@ -1908,4 +1902,69 @@ def account_statement(request):
         'movements': movements,
         'previous_balance': previous_balance,
         'final_balance': final_balance,
+    })
+
+
+def asset_stock_position_report(request):
+    """Relatório de posição de estoque de ativos"""
+    from decimal import Decimal
+    
+    # Buscar todos os ativos que têm transações
+    assets = Asset.objects.filter(
+        transactions__isnull=False
+    ).distinct().order_by('code')
+    
+    report_data = []
+    
+    for asset in assets:
+        # Buscar todas as transações ordenadas por data
+        transactions = AssetTransaction.objects.filter(
+            asset=asset
+        ).order_by('date', 'created_at')
+        
+        # Inicializar variáveis
+        valor_total_acumulado = Decimal('0')
+        quantidade_atual = Decimal('0')
+        
+        # Iterar sobre transações seguindo a regra de preço médio
+        for trans in transactions:
+            if trans.operation_type in ['BUY', 'SUB']:
+                # Compras: adicionam ao valor total acumulado e quantidade
+                custo_operacao = (trans.quantity * trans.price) + trans.fees
+                valor_total_acumulado += custo_operacao
+                quantidade_atual += trans.quantity
+            elif trans.operation_type == 'SELL':
+                # Vendas: apenas reduzem quantidade (mantém valor total acumulado)
+                quantidade_atual -= trans.quantity
+            elif trans.operation_type in ['SPLIT', 'BONUS', 'CAPITAL_INCREASE', 'RIGHTS_EXERCISE']:
+                # Operações que aumentam quantidade sem custo
+                quantidade_atual += trans.quantity
+            elif trans.operation_type == 'GROUP':
+                # Grupamento: reduz quantidade sem alterar valor total
+                quantidade_atual -= trans.quantity
+        
+        # Filtrar apenas ativos com quantidade > 0
+        if quantidade_atual > 0:
+            # Calcular preço médio
+            preco_medio = valor_total_acumulado / quantidade_atual if quantidade_atual > 0 else Decimal('0')
+            
+            # Calcular valor total
+            valor_total = quantidade_atual * preco_medio
+            
+            report_data.append({
+                'asset': asset,
+                'code': asset.code,
+                'description': asset.name,
+                'currency': asset.currency,
+                'quantity': quantidade_atual,
+                'unit_value': preco_medio,
+                'total_value': valor_total,
+            })
+    
+    # Calcular totais
+    total_value_all = sum(item['total_value'] for item in report_data)
+    
+    return render(request, 'finance/asset_stock_position_report.html', {
+        'report_data': report_data,
+        'total_value_all': total_value_all,
     })

@@ -9,6 +9,6 @@
 <form method="post">
     {% csrf_token %}
     <button type="submit">Confirmar Deletar</button>
-    <a href="{% url 'finance:asset_position_list' %}">Cancelar</a>
+    <a href="{% url 'finance:asset_list' %}">Cancelar</a>
 </form>
 {% endblock %}

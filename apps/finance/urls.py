@@ -59,12 +59,12 @@ urlpatterns = [
     path('asset-transactions/<int:pk>/update/', views.asset_transaction_update, name='asset_transaction_update'),
     path('asset-transactions/<int:pk>/delete/', views.asset_transaction_delete, name='asset_transaction_delete'),
     # AssetPosition URLs
-    path('asset-positions/', views.asset_position_list, name='asset_position_list'),
     path('asset-positions/create/', views.asset_position_create, name='asset_position_create'),
     path('asset-positions/<int:pk>/update/', views.asset_position_update, name='asset_position_update'),
     path('asset-positions/<int:pk>/delete/', views.asset_position_delete, name='asset_position_delete'),
     # Reports URLs
     path('reports/', views.reports_index, name='reports_index'),
     path('reports/account-statement/', views.account_statement, name='account_statement'),
+    path('reports/asset-stock-position/', views.asset_stock_position_report, name='asset_stock_position_report'),
 ]
 

@@ -1,0 +1,46 @@
+{% extends 'finance/base.html' %}
+
+{% block title %}Relatório de Posição de Estoque de Ativos{% endblock %}
+
+{% block content %}
+<h1>Relatório de Posição de Estoque de Ativos</h1>
+
+{% if report_data %}
+    <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
+        <thead>
+            <tr style="background-color: #f0f0f0;">
+                <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Código</th>
+                <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Descrição</th>
+                <th style="border: 1px solid #ddd; padding: 8px; text-align: center;">Moeda</th>
+                <th style="border: 1px solid #ddd; padding: 8px; text-align: right;">Quantidade</th>
+                <th style="border: 1px solid #ddd; padding: 8px; text-align: right;">Valor Unitário</th>
+                <th style="border: 1px solid #ddd; padding: 8px; text-align: right;">Valor Total</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in report_data %}
+            <tr>
+                <td style="border: 1px solid #ddd; padding: 8px;"><strong>{{ item.code }}</strong></td>
+                <td style="border: 1px solid #ddd; padding: 8px;">{{ item.description }}</td>
+                <td style="border: 1px solid #ddd; padding: 8px; text-align: center;">{{ item.currency }}</td>
+                <td style="border: 1px solid #ddd; padding: 8px; text-align: right;">{{ item.quantity|floatformat:6 }}</td>
+                <td style="border: 1px solid #ddd; padding: 8px; text-align: right;">R$ {{ item.unit_value|floatformat:4 }}</td>
+                <td style="border: 1px solid #ddd; padding: 8px; text-align: right;">R$ {{ item.total_value|floatformat:2 }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+        <tfoot style="background-color: #f0f0f0; font-weight: bold;">
+            <tr>
+                <td style="border: 1px solid #ddd; padding: 8px;" colspan="5"><strong>TOTAL</strong></td>
+                <td style="border: 1px solid #ddd; padding: 8px; text-align: right;">R$ {{ total_value_all|floatformat:2 }}</td>
+            </tr>
+        </tfoot>
+    </table>
+{% else %}
+    <p>Nenhum ativo com posição encontrado.</p>
+{% endif %}
+
+<p style="margin-top: 20px;">
+    <a href="{% url 'finance:reports_index' %}">← Voltar para Relatórios</a>
+</p>
+{% endblock %}
