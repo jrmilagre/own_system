@@ -2,13 +2,14 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.http import JsonResponse
 from django.db import transaction as db_transaction
+from datetime import datetime, date
 import uuid
-from .models import Account, Beneficiary, Category, Subcategory, Transaction, Scheduler
+from .models import Account, Beneficiary, Category, Subcategory, Transaction, Scheduler, Asset, AssetTransaction, AssetPosition
 from .forms import (
     AccountForm, BeneficiaryForm, CategoryForm, SubcategoryForm, TransactionForm, SchedulerForm,
     MultipleTransactionForm, MultipleTransactionItemForm, MultipleTransactionItemFormSet,
     MultipleSchedulerForm, MultipleSchedulerItemForm, MultipleSchedulerItemFormSet,
-    MultipleSchedulerRegisterItemFormSet
+    MultipleSchedulerRegisterItemFormSet, AssetForm, AssetTransactionForm, AssetPositionForm
 )
 
 
@@ -29,7 +30,14 @@ def get_subcategory_default_transaction_type(request, subcategory_id):
 def account_list(request):
     """Lista de contas"""
     accounts = Account.objects.all()
-    return render(request, 'finance/account_list.html', {'accounts': accounts})
+    # Calcular datas padrão para o botão de extrato
+    today = date.today()
+    first_day_of_month = date(today.year, today.month, 1)
+    return render(request, 'finance/account_list.html', {
+        'accounts': accounts,
+        'default_start_date': first_day_of_month,
+        'default_end_date': today,
+    })
 
 
 def account_create(request):
@@ -1694,4 +1702,210 @@ def multiple_scheduler_register(request, group_id):
         'formset': formset,
         'next_due_date': next_due_date,
         'group_id': group_id
+    })
+
+
+# Asset Views
+def asset_list(request):
+    """Lista de ativos"""
+    assets = Asset.objects.all()
+    return render(request, 'finance/asset_list.html', {'assets': assets})
+
+
+def asset_create(request):
+    """Criar novo ativo"""
+    if request.method == 'POST':
+        form = AssetForm(request.POST)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Ativo criado com sucesso!')
+            return redirect('finance:asset_list')
+    else:
+        form = AssetForm()
+    return render(request, 'finance/asset_form.html', {'form': form})
+
+
+def asset_update(request, pk):
+    """Editar ativo existente"""
+    asset = get_object_or_404(Asset, pk=pk)
+    if request.method == 'POST':
+        form = AssetForm(request.POST, instance=asset)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Ativo atualizado com sucesso!')
+            return redirect('finance:asset_list')
+    else:
+        form = AssetForm(instance=asset)
+    return render(request, 'finance/asset_form.html', {'form': form, 'asset': asset})
+
+
+def asset_delete(request, pk):
+    """Deletar ativo"""
+    asset = get_object_or_404(Asset, pk=pk)
+    if request.method == 'POST':
+        asset.delete()
+        messages.success(request, 'Ativo deletado com sucesso!')
+        return redirect('finance:asset_list')
+    return render(request, 'finance/asset_confirm_delete.html', {'asset': asset})
+
+
+# AssetTransaction Views
+def asset_transaction_list(request):
+    """Lista de transações de ativos"""
+    transactions = AssetTransaction.objects.all().select_related('asset', 'account')
+    return render(request, 'finance/asset_transaction_list.html', {'transactions': transactions})
+
+
+def asset_transaction_create(request):
+    """Criar nova transação de ativo"""
+    if request.method == 'POST':
+        form = AssetTransactionForm(request.POST)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Transação de ativo criada com sucesso!')
+            return redirect('finance:asset_transaction_list')
+    else:
+        form = AssetTransactionForm()
+    return render(request, 'finance/asset_transaction_form.html', {'form': form})
+
+
+def asset_transaction_update(request, pk):
+    """Editar transação de ativo existente"""
+    transaction = get_object_or_404(AssetTransaction, pk=pk)
+    if request.method == 'POST':
+        form = AssetTransactionForm(request.POST, instance=transaction)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Transação de ativo atualizada com sucesso!')
+            return redirect('finance:asset_transaction_list')
+    else:
+        form = AssetTransactionForm(instance=transaction)
+    return render(request, 'finance/asset_transaction_form.html', {'form': form, 'transaction': transaction})
+
+
+def asset_transaction_delete(request, pk):
+    """Deletar transação de ativo"""
+    transaction = get_object_or_404(AssetTransaction, pk=pk)
+    if request.method == 'POST':
+        transaction.delete()
+        messages.success(request, 'Transação de ativo deletada com sucesso!')
+        return redirect('finance:asset_transaction_list')
+    return render(request, 'finance/asset_transaction_confirm_delete.html', {'transaction': transaction})
+
+
+# AssetPosition Views
+def asset_position_list(request):
+    """Lista de posições de ativos"""
+    positions = AssetPosition.objects.all().select_related('asset', 'account')
+    return render(request, 'finance/asset_position_list.html', {'positions': positions})
+
+
+def asset_position_create(request):
+    """Criar nova posição de ativo"""
+    if request.method == 'POST':
+        form = AssetPositionForm(request.POST)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Posição de ativo criada com sucesso!')
+            return redirect('finance:asset_position_list')
+    else:
+        form = AssetPositionForm()
+    return render(request, 'finance/asset_position_form.html', {'form': form})
+
+
+def asset_position_update(request, pk):
+    """Editar posição de ativo existente"""
+    position = get_object_or_404(AssetPosition, pk=pk)
+    if request.method == 'POST':
+        form = AssetPositionForm(request.POST, instance=position)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Posição de ativo atualizada com sucesso!')
+            return redirect('finance:asset_position_list')
+    else:
+        form = AssetPositionForm(instance=position)
+    return render(request, 'finance/asset_position_form.html', {'form': form, 'position': position})
+
+
+def asset_position_delete(request, pk):
+    """Deletar posição de ativo"""
+    position = get_object_or_404(AssetPosition, pk=pk)
+    if request.method == 'POST':
+        position.delete()
+        messages.success(request, 'Posição de ativo deletada com sucesso!')
+        return redirect('finance:asset_position_list')
+    return render(request, 'finance/asset_position_confirm_delete.html', {'position': position})
+
+
+# Reports Views
+def reports_index(request):
+    """Página inicial de relatórios"""
+    return render(request, 'finance/reports_index.html')
+
+
+def account_statement(request):
+    """Exibe o extrato bancário da conta"""
+    accounts = Account.objects.all()
+    
+    # Valores padrão: início do mês atual e data de hoje
+    today = date.today()
+    first_day_of_month = date(today.year, today.month, 1)
+    
+    # Obter parâmetros do GET
+    account_id = request.GET.get('account')
+    start_date_str = request.GET.get('start_date')
+    end_date_str = request.GET.get('end_date')
+    
+    account = None
+    # Usar valores padrão se não fornecidos
+    start_date = first_day_of_month
+    end_date = today
+    movements = []
+    previous_balance = None
+    final_balance = None
+    
+    # Processar data inicial
+    if start_date_str:
+        try:
+            start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+        except ValueError:
+            messages.error(request, 'Data inicial inválida.')
+            start_date = first_day_of_month
+    else:
+        # Se não foi fornecida, usar padrão
+        start_date = first_day_of_month
+    
+    # Processar data final
+    if end_date_str:
+        try:
+            end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+        except ValueError:
+            messages.error(request, 'Data final inválida.')
+            end_date = today
+    else:
+        # Se não foi fornecida, usar padrão
+        end_date = today
+    
+    if account_id:
+        account = get_object_or_404(Account, pk=account_id)
+        
+        if account and start_date and end_date:
+            if start_date > end_date:
+                messages.error(request, 'Data inicial deve ser anterior à data final.')
+            else:
+                movements = account.get_statement(start_date, end_date)
+                previous_balance = account.get_previous_balance(start_date)
+                if movements:
+                    final_balance = movements[-1]['balance']
+                else:
+                    final_balance = previous_balance
+    
+    return render(request, 'finance/account_statement.html', {
+        'accounts': accounts,
+        'selected_account': account,
+        'start_date': start_date,
+        'end_date': end_date,
+        'movements': movements,
+        'previous_balance': previous_balance,
+        'final_balance': final_balance,
     })

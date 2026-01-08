@@ -1,6 +1,6 @@
 from django.db import models
 from django.db import transaction as db_transaction
-from datetime import date
+from datetime import date, timedelta
 from dateutil.relativedelta import relativedelta
 import uuid
 
@@ -37,6 +37,141 @@ class Account(BaseModel):
 
     def __str__(self):
         return self.name
+    
+    def get_balance(self, date=None):
+        """
+        Calcula o saldo da conta até uma data específica.
+        Se date=None, calcula o saldo atual (todas as movimentações).
+        """
+        from django.db.models import Q
+        from decimal import Decimal
+        
+        balance = self.opening_balance
+        
+        # Filtro de data para transações
+        date_filter = Q()
+        if date:
+            date_filter = Q(transaction_date__lte=date) | Q(transaction_date__isnull=True, due_date__lte=date)
+        
+        # Transações normais
+        transactions = Transaction.objects.filter(account=self)
+        if date:
+            transactions = transactions.filter(date_filter)
+        
+        for trans in transactions:
+            if trans.transaction_type == 'CR':
+                balance += trans.value
+            elif trans.transaction_type == 'DB':
+                balance -= trans.value
+        
+        # Movimentações de ativos que afetam dinheiro
+        asset_transactions = AssetTransaction.objects.filter(account=self)
+        if date:
+            asset_transactions = asset_transactions.filter(date__lte=date)
+        
+        for asset_trans in asset_transactions:
+            net_value = asset_trans.get_net_value()
+            balance += net_value  # get_net_value() já retorna negativo para saídas
+        
+        return balance
+    
+    def get_previous_balance(self, date):
+        """
+        Calcula o saldo anterior a uma data específica.
+        Retorna: saldo de abertura + todas as movimentações antes da data.
+        Se date for None, retorna apenas o saldo de abertura.
+        """
+        if date is None:
+            return self.opening_balance
+        # Calcular saldo até o dia anterior
+        previous_date = date - timedelta(days=1)
+        return self.get_balance(previous_date)
+    
+    def get_statement(self, start_date=None, end_date=None):
+        """
+        Retorna o extrato da conta no período especificado.
+        Retorna uma lista ordenada de movimentações com saldo acumulado.
+        """
+        from django.db.models import Q
+        from datetime import datetime, timedelta
+        from decimal import Decimal
+        
+        movements = []
+        
+        # Transações normais
+        transactions = Transaction.objects.filter(account=self)
+        if start_date:
+            transactions = transactions.filter(
+                Q(transaction_date__gte=start_date) | 
+                Q(transaction_date__isnull=True, due_date__gte=start_date)
+            )
+        if end_date:
+            transactions = transactions.filter(
+                Q(transaction_date__lte=end_date) | 
+                Q(transaction_date__isnull=True, due_date__lte=end_date)
+            )
+        
+        for trans in transactions:
+            movement_date = trans.transaction_date or trans.due_date
+            if movement_date:  # Só adicionar se tiver data
+                description = ""
+                if trans.beneficiary:
+                    description = str(trans.beneficiary)
+                if trans.subcategory:
+                    description += f" - {trans.subcategory.subcategory}"
+                if not description:
+                    description = "Transação"
+                
+                movements.append({
+                    'date': movement_date,
+                    'type': 'TRANSACTION',
+                    'description': description,
+                    'debit': trans.value if trans.transaction_type == 'DB' else None,
+                    'credit': trans.value if trans.transaction_type == 'CR' else None,
+                    'transaction': trans,
+                    'asset_transaction': None,
+                })
+        
+        # Movimentações de ativos que afetam dinheiro
+        asset_transactions = AssetTransaction.objects.filter(account=self)
+        if start_date:
+            asset_transactions = asset_transactions.filter(date__gte=start_date)
+        if end_date:
+            asset_transactions = asset_transactions.filter(date__lte=end_date)
+        
+        for asset_trans in asset_transactions:
+            net_value = asset_trans.get_net_value()
+            if net_value != 0:  # Apenas operações que afetam dinheiro
+                description = f"{asset_trans.get_operation_type_display()} - {asset_trans.asset.code}"
+                if asset_trans.notes:
+                    description += f" ({asset_trans.notes})"
+                
+                movements.append({
+                    'date': asset_trans.date,
+                    'type': 'ASSET',
+                    'description': description,
+                    'debit': abs(net_value) if net_value < 0 else None,
+                    'credit': net_value if net_value > 0 else None,
+                    'transaction': None,
+                    'asset_transaction': asset_trans,
+                })
+        
+        # Ordenar por data
+        movements.sort(key=lambda x: x['date'] if x['date'] else datetime.min.date())
+        
+        # Calcular saldo acumulado
+        # Começar com saldo anterior ao período
+        previous_balance = self.get_previous_balance(start_date) if start_date else self.opening_balance
+        balance = previous_balance
+        
+        for movement in movements:
+            if movement['debit']:
+                balance -= movement['debit']
+            if movement['credit']:
+                balance += movement['credit']
+            movement['balance'] = balance
+        
+        return movements
 
 
 class Beneficiary(BaseModel):
@@ -536,3 +671,329 @@ class Scheduler(BaseModel):
 
 # REMOVIDO: MultipleScheduler e MultipleSchedulerItem unificados em Scheduler
 # Os modelos foram removidos apÃ³s migraÃ§Ã£o de dados
+
+
+class Asset(BaseModel):
+    """Modelo para representar um ativo financeiro"""
+    
+    ASSET_TYPE_CHOICES = [
+        ('STOCK', 'Ação'),
+        ('FII', 'Fundo Imobiliário'),
+        ('ETF', 'ETF'),
+        ('BOND', 'Renda Fixa'),
+        ('REIT', 'REIT'),
+        ('CRYPTO', 'Criptomoeda'),
+        ('OTHER', 'Outro'),
+    ]
+    
+    # Identificação
+    code = models.CharField(
+        'Código',
+        max_length=20,
+        unique=True,
+        help_text='Código do ativo (ex: PETR4, HGLG11, CDB123)'
+    )
+    name = models.CharField(
+        'Nome',
+        max_length=200,
+        help_text='Nome completo do ativo'
+    )
+    asset_type = models.CharField(
+        'Tipo de ativo',
+        max_length=10,
+        choices=ASSET_TYPE_CHOICES,
+        default='STOCK'
+    )
+    
+    # Informações adicionais
+    sector = models.CharField(
+        'Setor',
+        max_length=100,
+        blank=True,
+        help_text='Setor do ativo (ex: Petróleo, Varejo)'
+    )
+    currency = models.CharField(
+        'Moeda',
+        max_length=10,
+        default='BRL',
+        help_text='Moeda de negociação (BRL, USD, etc.)'
+    )
+    notes = models.TextField(
+        'Observações',
+        blank=True
+    )
+    
+    class Meta:
+        verbose_name = 'Ativo'
+        verbose_name_plural = 'Ativos'
+        ordering = ('code',)
+        indexes = [
+            models.Index(fields=['code']),
+            models.Index(fields=['asset_type']),
+        ]
+    
+    def __str__(self):
+        return f"{self.code} - {self.name}"
+    
+    def get_current_position(self, account=None):
+        """Retorna a posição atual do ativo"""
+        from django.db.models import Sum, F, Q
+        
+        filters = {'asset': self}
+        if account:
+            filters['account'] = account
+        
+        # Operações que AUMENTAM a quantidade
+        increases = AssetTransaction.objects.filter(
+            **filters,
+            operation_type__in=[
+                'BUY',           # Compra
+                'BONUS',         # Bonificação (ações gratuitas)
+                'SUB',           # Subscrição
+                'SPLIT',         # Desdobramento (aumenta quantidade)
+                'CAPITAL_INCREASE',  # Aumento de capital
+                'RIGHTS_EXERCISE',   # Exercício de direitos
+            ]
+        ).aggregate(
+            total_quantity=Sum('quantity'),
+            total_cost=Sum(F('quantity') * F('price') + F('fees'))
+        )
+        
+        # Operações que DIMINUEM a quantidade
+        decreases = AssetTransaction.objects.filter(
+            **filters,
+            operation_type__in=['SELL', 'GROUP']  # Venda e Grupamento
+        ).aggregate(
+            total_quantity=Sum('quantity'),
+            total_revenue=Sum(F('quantity') * F('price') - F('fees'))
+        )
+        
+        quantity = (increases['total_quantity'] or 0) - (decreases['total_quantity'] or 0)
+        avg_cost = 0
+        if quantity > 0:
+            # Preço médio baseado no custo médio ponderado das compras
+            # Para simplificar, usamos o custo médio de todas as compras
+            # (método de custo médio simples, não PEPS)
+            total_cost = increases['total_cost'] or 0
+            total_quantity_bought = increases['total_quantity'] or 0
+            if total_quantity_bought > 0:
+                avg_cost = total_cost / total_quantity_bought
+        
+        return {
+            'quantity': quantity,
+            'average_cost': avg_cost,
+            'total_cost': avg_cost * quantity if quantity > 0 else 0
+        }
+
+
+class AssetTransaction(BaseModel):
+    """Modelo para registrar transações de ativos"""
+    
+    OPERATION_TYPE_CHOICES = [
+        ('BUY', 'Compra'),
+        ('SELL', 'Venda'),
+        ('DIVIDEND', 'Dividendo'),
+        ('JCP', 'Juros sobre Capital Próprio'),
+        ('BONUS', 'Bonificação'),
+        ('SPLIT', 'Desdobramento'),
+        ('GROUP', 'Grupamento'),
+        ('SUB', 'Subscrição'),
+        ('CAPITAL_INCREASE', 'Aumento de Capital'),
+        ('RIGHTS_EXERCISE', 'Exercício de Direitos'),
+        ('AMORTIZATION', 'Amortização'),
+        ('INTEREST', 'Juros (Renda Fixa)'),
+        ('REDEMPTION', 'Resgate (Renda Fixa)'),
+    ]
+    
+    # Relacionamentos
+    asset = models.ForeignKey(
+        Asset,
+        on_delete=models.CASCADE,
+        verbose_name='Ativo',
+        related_name='transactions'
+    )
+    account = models.ForeignKey(
+        Account,
+        on_delete=models.CASCADE,
+        verbose_name='Conta',
+        help_text='Conta onde o ativo está alocado'
+    )
+    
+    # Tipo de operação
+    operation_type = models.CharField(
+        'Tipo de operação',
+        max_length=20,
+        choices=OPERATION_TYPE_CHOICES
+    )
+    
+    # Dados da operação
+    date = models.DateField(
+        'Data da operação'
+    )
+    quantity = models.DecimalField(
+        'Quantidade',
+        max_digits=15,
+        decimal_places=6,
+        default=0,
+        help_text='Quantidade de ativos (0 para dividendos, juros, etc.)'
+    )
+    price = models.DecimalField(
+        'Preço unitário',
+        max_digits=12,
+        decimal_places=4,
+        default=0,
+        help_text='Preço por unidade (0 para dividendos, juros, etc.)'
+    )
+    fees = models.DecimalField(
+        'Taxas e impostos',
+        max_digits=12,
+        decimal_places=2,
+        default=0,
+        help_text='Taxas de corretagem, emolumentos, etc.'
+    )
+    
+    # Valor total (calculado ou manual)
+    total_value = models.DecimalField(
+        'Valor total',
+        max_digits=12,
+        decimal_places=2,
+        default=0,
+        help_text='Valor total da operação (quantity * price ± fees)'
+    )
+    
+    # Para operações de renda (dividendos, juros)
+    income_value = models.DecimalField(
+        'Valor de rendimento',
+        max_digits=12,
+        decimal_places=2,
+        default=0,
+        help_text='Valor recebido em dividendos, juros, etc.'
+    )
+    
+    # Referência a transação financeira (opcional)
+    transaction = models.ForeignKey(
+        Transaction,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        verbose_name='Transação relacionada',
+        help_text='Transação financeira relacionada (para integração com o sistema existente)'
+    )
+    
+    # Informações adicionais
+    notes = models.TextField(
+        'Observações',
+        blank=True
+    )
+    
+    class Meta:
+        verbose_name = 'Transação de Ativo'
+        verbose_name_plural = 'Transações de Ativos'
+        ordering = ('-date', '-created_at')
+        indexes = [
+            models.Index(fields=['asset', 'date']),
+            models.Index(fields=['operation_type', 'date']),
+            models.Index(fields=['account', 'date']),
+        ]
+    
+    def __str__(self):
+        return f"{self.asset.code} - {self.get_operation_type_display()} - {self.date} - {self.quantity}"
+    
+    def save(self, *args, **kwargs):
+        # Calcular total_value automaticamente baseado no tipo de operação
+        if self.operation_type in ['BUY', 'SELL', 'SUB']:
+            # Para compras: quantity * price + fees
+            # Para vendas: quantity * price - fees
+            if self.operation_type == 'BUY':
+                self.total_value = (self.quantity * self.price) + self.fees
+            elif self.operation_type == 'SELL':
+                self.total_value = (self.quantity * self.price) - self.fees
+            else:  # SUB
+                self.total_value = (self.quantity * self.price) + self.fees
+        elif self.operation_type in ['DIVIDEND', 'JCP', 'INTEREST', 'AMORTIZATION']:
+            # Para rendimentos, usar income_value
+            self.total_value = self.income_value
+        elif self.operation_type in ['BONUS', 'SPLIT', 'GROUP', 'CAPITAL_INCREASE', 'RIGHTS_EXERCISE']:
+            # Operações que não envolvem dinheiro
+            self.total_value = 0
+        
+        super().save(*args, **kwargs)
+    
+    def get_net_value(self):
+        """Retorna o valor líquido da operação"""
+        if self.operation_type == 'BUY':
+            return -self.total_value  # Saída de dinheiro
+        elif self.operation_type == 'SELL':
+            return self.total_value  # Entrada de dinheiro
+        elif self.operation_type == 'SUB':
+            return -self.total_value  # Saída de dinheiro (pagamento para exercer direito)
+        elif self.operation_type == 'REDEMPTION':
+            return self.total_value  # Entrada de dinheiro (resgate)
+        elif self.operation_type in ['DIVIDEND', 'JCP', 'INTEREST', 'AMORTIZATION']:
+            return self.income_value  # Entrada de dinheiro
+        return 0
+
+
+class AssetPosition(BaseModel):
+    """Snapshot de posição de ativo em uma data específica (opcional, para histórico)"""
+    
+    asset = models.ForeignKey(
+        Asset,
+        on_delete=models.CASCADE,
+        verbose_name='Ativo',
+        related_name='positions'
+    )
+    account = models.ForeignKey(
+        Account,
+        on_delete=models.CASCADE,
+        verbose_name='Conta'
+    )
+    date = models.DateField(
+        'Data da posição'
+    )
+    quantity = models.DecimalField(
+        'Quantidade',
+        max_digits=15,
+        decimal_places=6
+    )
+    average_cost = models.DecimalField(
+        'Preço médio',
+        max_digits=12,
+        decimal_places=4
+    )
+    current_price = models.DecimalField(
+        'Preço atual',
+        max_digits=12,
+        decimal_places=4,
+        null=True,
+        blank=True
+    )
+    
+    class Meta:
+        verbose_name = 'Posição de Ativo'
+        verbose_name_plural = 'Posições de Ativos'
+        ordering = ('-date', 'asset')
+        unique_together = [['asset', 'account', 'date']]
+        indexes = [
+            models.Index(fields=['asset', 'account', 'date']),
+        ]
+    
+    def __str__(self):
+        return f"{self.asset.code} - {self.date} - {self.quantity}"
+    
+    def get_total_cost(self):
+        """Retorna o custo total da posição"""
+        return self.quantity * self.average_cost
+    
+    def get_market_value(self):
+        """Retorna o valor de mercado da posição"""
+        if self.current_price:
+            return self.quantity * self.current_price
+        return None
+    
+    def get_profit_loss(self):
+        """Retorna o lucro/prejuízo da posição"""
+        market_value = self.get_market_value()
+        if market_value:
+            return market_value - self.get_total_cost()
+        return None

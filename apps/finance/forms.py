@@ -1,6 +1,6 @@
 from django import forms
 from django.forms import formset_factory, inlineformset_factory, BaseFormSet
-from .models import Account, Beneficiary, Category, Subcategory, Transaction, Scheduler
+from .models import Account, Beneficiary, Category, Subcategory, Transaction, Scheduler, Asset, AssetTransaction, AssetPosition
 
 
 class AccountForm(forms.ModelForm):
@@ -576,4 +576,94 @@ MultipleSchedulerRegisterItemFormSet = formset_factory(
     min_num=1,
     validate_min=True
 )
+
+
+class AssetForm(forms.ModelForm):
+    class Meta:
+        model = Asset
+        fields = ['code', 'name', 'asset_type', 'sector', 'currency', 'notes']
+        widgets = {
+            'code': forms.TextInput(attrs={'required': True}),
+            'name': forms.TextInput(attrs={'required': True}),
+            'asset_type': forms.Select(attrs={'required': True}),
+            'sector': forms.TextInput(attrs={'required': False}),
+            'currency': forms.TextInput(attrs={'required': True}),
+            'notes': forms.Textarea(attrs={'rows': 4, 'required': False}),
+        }
+
+
+class AssetTransactionForm(forms.ModelForm):
+    class Meta:
+        model = AssetTransaction
+        fields = ['asset', 'account', 'operation_type', 'date', 'quantity', 'price', 'fees', 'income_value', 'transaction', 'notes']
+        widgets = {
+            'asset': forms.Select(attrs={'required': True}),
+            'account': forms.Select(attrs={'required': True}),
+            'operation_type': forms.Select(attrs={'required': True}),
+            'date': forms.DateInput(attrs={'type': 'date', 'required': True}),
+            'quantity': forms.NumberInput(attrs={'step': '0.000001', 'required': False}),
+            'price': forms.NumberInput(attrs={'step': '0.0001', 'required': False}),
+            'fees': forms.NumberInput(attrs={'step': '0.01', 'required': False}),
+            'income_value': forms.NumberInput(attrs={'step': '0.01', 'required': False}),
+            'transaction': forms.Select(attrs={'required': False}),
+            'notes': forms.Textarea(attrs={'rows': 4, 'required': False}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Filtrar contas do tipo INVEST para o campo account
+        self.fields['account'].queryset = Account.objects.filter(account_type='INVEST')
+        # Tornar transaction opcional
+        self.fields['transaction'].required = False
+        self.fields['transaction'].queryset = Transaction.objects.all()
+
+    def clean(self):
+        cleaned_data = super().clean()
+        operation_type = cleaned_data.get('operation_type')
+        quantity = cleaned_data.get('quantity', 0)
+        price = cleaned_data.get('price', 0)
+        fees = cleaned_data.get('fees', 0)
+        income_value = cleaned_data.get('income_value', 0)
+
+        # Validações baseadas no tipo de operação
+        if operation_type in ['BUY', 'SELL', 'SUB', 'REDEMPTION']:
+            if quantity <= 0:
+                raise forms.ValidationError({
+                    'quantity': 'Quantidade deve ser maior que zero para este tipo de operação.'
+                })
+            if price <= 0:
+                raise forms.ValidationError({
+                    'price': 'Preço deve ser maior que zero para este tipo de operação.'
+                })
+        elif operation_type in ['BONUS', 'SPLIT', 'GROUP', 'CAPITAL_INCREASE', 'RIGHTS_EXERCISE']:
+            if quantity <= 0:
+                raise forms.ValidationError({
+                    'quantity': 'Quantidade deve ser maior que zero para este tipo de operação.'
+                })
+        elif operation_type in ['DIVIDEND', 'JCP', 'INTEREST', 'AMORTIZATION']:
+            if income_value <= 0:
+                raise forms.ValidationError({
+                    'income_value': 'Valor de rendimento deve ser maior que zero para este tipo de operação.'
+                })
+
+        return cleaned_data
+
+
+class AssetPositionForm(forms.ModelForm):
+    class Meta:
+        model = AssetPosition
+        fields = ['asset', 'account', 'date', 'quantity', 'average_cost', 'current_price']
+        widgets = {
+            'asset': forms.Select(attrs={'required': True}),
+            'account': forms.Select(attrs={'required': True}),
+            'date': forms.DateInput(attrs={'type': 'date', 'required': True}),
+            'quantity': forms.NumberInput(attrs={'step': '0.000001', 'required': True}),
+            'average_cost': forms.NumberInput(attrs={'step': '0.0001', 'required': True}),
+            'current_price': forms.NumberInput(attrs={'step': '0.0001', 'required': False}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Filtrar contas do tipo INVEST para o campo account
+        self.fields['account'].queryset = Account.objects.filter(account_type='INVEST')
 

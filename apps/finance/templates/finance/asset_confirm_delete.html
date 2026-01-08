@@ -1,0 +1,14 @@
+{% extends 'finance/base.html' %}
+
+{% block title %}Deletar Ativo{% endblock %}
+
+{% block content %}
+<h1>Deletar Ativo</h1>
+<p>Tem certeza que deseja deletar o ativo <strong>{{ asset.code }} - {{ asset.name }}</strong>?</p>
+<p>Esta ação não pode ser desfeita.</p>
+<form method="post">
+    {% csrf_token %}
+    <button type="submit">Confirmar Deletar</button>
+    <a href="{% url 'finance:asset_list' %}">Cancelar</a>
+</form>
+{% endblock %}

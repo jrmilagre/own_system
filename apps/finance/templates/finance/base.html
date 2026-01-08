@@ -13,7 +13,12 @@
         <a href="{% url 'finance:beneficiary_list' %}">Beneficiários</a> |
         <a href="{% url 'finance:category_list' %}">Categorias</a> |
         <a href="{% url 'finance:transaction_list' %}">Transações</a> |
-        <a href="{% url 'finance:scheduler_list' %}">Agendamentos</a>
+        <a href="{% url 'finance:scheduler_list' %}">Agendamentos</a> |
+        <a href="{% url 'finance:asset_list' %}">Ativos</a> |
+        <a href="{% url 'finance:asset_transaction_list' %}">Transações de Ativos</a> |
+        Relatórios:
+        <a href="{% url 'finance:reports_index' %}">Relatórios</a> |
+        <a href="{% url 'finance:account_statement' %}">Extrato de Contas</a>
     </nav>
     
     <main>

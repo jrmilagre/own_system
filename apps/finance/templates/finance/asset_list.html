@@ -1,0 +1,39 @@
+{% extends 'finance/base.html' %}
+
+{% block title %}Ativos{% endblock %}
+
+{% block content %}
+<h1>Ativos</h1>
+<a href="{% url 'finance:asset_create' %}"><button>Criar Novo Ativo</button></a>
+{% if assets %}
+    <table>
+        <thead>
+            <tr>
+                <th>Código</th>
+                <th>Nome</th>
+                <th>Tipo</th>
+                <th>Setor</th>
+                <th>Moeda</th>
+                <th>Ações</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for asset in assets %}
+            <tr>
+                <td>{{ asset.code }}</td>
+                <td>{{ asset.name }}</td>
+                <td>{{ asset.get_asset_type_display }}</td>
+                <td>{{ asset.sector|default:"-" }}</td>
+                <td>{{ asset.currency }}</td>
+                <td>
+                    <a href="{% url 'finance:asset_update' asset.pk %}"><button>Editar</button></a>
+                    <a href="{% url 'finance:asset_delete' asset.pk %}"><button>Deletar</button></a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+{% else %}
+    <p>Nenhum ativo cadastrado.</p>
+{% endif %}
+{% endblock %}

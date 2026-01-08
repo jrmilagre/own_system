@@ -1,0 +1,78 @@
+{% extends 'finance/base.html' %}
+
+{% block title %}Extrato de Contas{% endblock %}
+
+{% block content %}
+<h1>Extrato de Contas</h1>
+
+<form method="get">
+    <table>
+        <tr>
+            <td><label for="account">Conta:</label></td>
+            <td>
+                <select name="account" id="account" required>
+                    <option value="">Selecione uma conta</option>
+                    {% for acc in accounts %}
+                    <option value="{{ acc.pk }}" {% if selected_account and selected_account.pk == acc.pk %}selected{% endif %}>
+                        {{ acc.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </td>
+        </tr>
+        <tr>
+            <td><label for="start_date">Data Inicial:</label></td>
+            <td><input type="date" name="start_date" id="start_date" value="{% if start_date %}{{ start_date|date:'Y-m-d' }}{% endif %}" required></td>
+        </tr>
+        <tr>
+            <td><label for="end_date">Data Final:</label></td>
+            <td><input type="date" name="end_date" id="end_date" value="{% if end_date %}{{ end_date|date:'Y-m-d' }}{% endif %}" required></td>
+        </tr>
+    </table>
+    <button type="submit">Gerar Extrato</button>
+</form>
+
+{% if selected_account and start_date and end_date %}
+    <h2>Extrato - {{ selected_account.name }}</h2>
+    <p><strong>Período:</strong> {{ start_date|date:'d/m/Y' }} a {{ end_date|date:'d/m/Y' }}</p>
+    
+    {% if previous_balance is not None %}
+    <p><strong>Saldo Anterior:</strong> {{ previous_balance }}</p>
+    {% endif %}
+    
+    {% if movements %}
+    <table>
+        <thead>
+            <tr>
+                <th>Data</th>
+                <th>Tipo</th>
+                <th>Descrição</th>
+                <th>Débito</th>
+                <th>Crédito</th>
+                <th>Saldo</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for movement in movements %}
+            <tr>
+                <td>{{ movement.date|date:'d/m/Y' }}</td>
+                <td>{{ movement.type }}</td>
+                <td>{{ movement.description }}</td>
+                <td>{% if movement.debit %}{{ movement.debit }}{% endif %}</td>
+                <td>{% if movement.credit %}{{ movement.credit }}{% endif %}</td>
+                <td>{{ movement.balance }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+        <tfoot>
+            <tr>
+                <td colspan="5"><strong>Saldo Final</strong></td>
+                <td><strong>{{ final_balance }}</strong></td>
+            </tr>
+        </tfoot>
+    </table>
+    {% else %}
+    <p>Nenhuma movimentação encontrada no período selecionado.</p>
+    {% endif %}
+{% endif %}
+{% endblock %}

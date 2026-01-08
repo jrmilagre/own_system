@@ -48,5 +48,23 @@ urlpatterns = [
     path('schedulers/multiple/<uuid:group_id>/register/', views.multiple_scheduler_register, name='multiple_scheduler_register'),
     # API endpoint for JavaScript
     path('api/subcategory/<int:subcategory_id>/default-transaction-type/', views.get_subcategory_default_transaction_type, name='subcategory_default_transaction_type'),
+    # Asset URLs
+    path('assets/', views.asset_list, name='asset_list'),
+    path('assets/create/', views.asset_create, name='asset_create'),
+    path('assets/<int:pk>/update/', views.asset_update, name='asset_update'),
+    path('assets/<int:pk>/delete/', views.asset_delete, name='asset_delete'),
+    # AssetTransaction URLs
+    path('asset-transactions/', views.asset_transaction_list, name='asset_transaction_list'),
+    path('asset-transactions/create/', views.asset_transaction_create, name='asset_transaction_create'),
+    path('asset-transactions/<int:pk>/update/', views.asset_transaction_update, name='asset_transaction_update'),
+    path('asset-transactions/<int:pk>/delete/', views.asset_transaction_delete, name='asset_transaction_delete'),
+    # AssetPosition URLs
+    path('asset-positions/', views.asset_position_list, name='asset_position_list'),
+    path('asset-positions/create/', views.asset_position_create, name='asset_position_create'),
+    path('asset-positions/<int:pk>/update/', views.asset_position_update, name='asset_position_update'),
+    path('asset-positions/<int:pk>/delete/', views.asset_position_delete, name='asset_position_delete'),
+    # Reports URLs
+    path('reports/', views.reports_index, name='reports_index'),
+    path('reports/account-statement/', views.account_statement, name='account_statement'),
 ]
 

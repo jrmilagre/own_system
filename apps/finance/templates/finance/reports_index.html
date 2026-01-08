@@ -1,0 +1,10 @@
+{% extends 'finance/base.html' %}
+
+{% block title %}Relatórios{% endblock %}
+
+{% block content %}
+<h1>Relatórios</h1>
+<ul>
+    <li><a href="{% url 'finance:account_statement' %}">Extrato de Contas</a></li>
+</ul>
+{% endblock %}

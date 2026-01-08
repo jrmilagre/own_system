@@ -72,6 +72,7 @@ class TransactionAdmin(admin.ModelAdmin):
 @admin.register(Scheduler)
 class SchedulerAdmin(admin.ModelAdmin):
     list_display = (
+        'id',
         'account',
         'beneficiary',
         'subcategory',
@@ -89,3 +90,59 @@ class SchedulerAdmin(admin.ModelAdmin):
     search_fields = ('account__name', 'beneficiary__full_name', 'subcategory__subcategory', 'subcategory__category__category', 'notes')
     list_filter = ('status', 'recurrence_type', 'termination_type', 'account', 'subcategory', 'transaction_type', 'created_at')
     ordering = ('-created_at',)
+
+
+@admin.register(Asset)
+class AssetAdmin(admin.ModelAdmin):
+    list_display = (
+        'code',
+        'name',
+        'asset_type',
+        'sector',
+        'currency',
+        'created_at',
+        'updated_at',
+    )
+    search_fields = ('code', 'name', 'sector')
+    list_filter = ('asset_type', 'currency', 'created_at')
+    ordering = ('code',)
+
+
+@admin.register(AssetTransaction)
+class AssetTransactionAdmin(admin.ModelAdmin):
+    list_display = (
+        'id',
+        'asset',
+        'account',
+        'operation_type',
+        'date',
+        'quantity',
+        'price',
+        'total_value',
+        'income_value',
+        'created_at',
+        'updated_at',
+    )
+    search_fields = ('asset__code', 'asset__name', 'account__name', 'notes')
+    list_filter = ('operation_type', 'asset', 'account', 'date', 'created_at')
+    ordering = ('-date', '-created_at')
+    date_hierarchy = 'date'
+
+
+@admin.register(AssetPosition)
+class AssetPositionAdmin(admin.ModelAdmin):
+    list_display = (
+        'id',
+        'asset',
+        'account',
+        'date',
+        'quantity',
+        'average_cost',
+        'current_price',
+        'created_at',
+        'updated_at',
+    )
+    search_fields = ('asset__code', 'asset__name', 'account__name')
+    list_filter = ('asset', 'account', 'date', 'created_at')
+    ordering = ('-date', 'asset')
+    date_hierarchy = 'date'

@@ -1,0 +1,41 @@
+{% extends 'finance/base.html' %}
+
+{% block title %}Posições de Ativos{% endblock %}
+
+{% block content %}
+<h1>Posições de Ativos</h1>
+<a href="{% url 'finance:asset_position_create' %}"><button>Criar Nova Posição</button></a>
+{% if positions %}
+    <table>
+        <thead>
+            <tr>
+                <th>Ativo</th>
+                <th>Conta</th>
+                <th>Data</th>
+                <th>Quantidade</th>
+                <th>Preço Médio</th>
+                <th>Preço Atual</th>
+                <th>Ações</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for position in positions %}
+            <tr>
+                <td>{{ position.asset.code }}</td>
+                <td>{{ position.account.name }}</td>
+                <td>{{ position.date }}</td>
+                <td>{{ position.quantity }}</td>
+                <td>{{ position.average_cost }}</td>
+                <td>{{ position.current_price|default:"-" }}</td>
+                <td>
+                    <a href="{% url 'finance:asset_position_update' position.pk %}"><button>Editar</button></a>
+                    <a href="{% url 'finance:asset_position_delete' position.pk %}"><button>Deletar</button></a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+{% else %}
+    <p>Nenhuma posição de ativo cadastrada.</p>
+{% endif %}
+{% endblock %}

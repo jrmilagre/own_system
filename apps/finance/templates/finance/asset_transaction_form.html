@@ -1,0 +1,85 @@
+{% extends 'finance/base.html' %}
+
+{% block title %}{% if form.instance.pk %}Editar Transação de Ativo{% else %}Criar Transação de Ativo{% endif %}{% endblock %}
+
+{% block content %}
+<h1>{% if form.instance.pk %}Editar Transação de Ativo{% else %}Criar Nova Transação de Ativo{% endif %}</h1>
+
+<form method="post">
+    {% csrf_token %}
+    <table>
+        <tr>
+            <td><label for="{{ form.asset.id_for_label }}">Ativo:</label></td>
+            <td>{{ form.asset }}</td>
+            {% if form.asset.errors %}
+            <td>{{ form.asset.errors }}</td>
+            {% endif %}
+        </tr>
+        <tr>
+            <td><label for="{{ form.account.id_for_label }}">Conta:</label></td>
+            <td>{{ form.account }}</td>
+            {% if form.account.errors %}
+            <td>{{ form.account.errors }}</td>
+            {% endif %}
+        </tr>
+        <tr>
+            <td><label for="{{ form.operation_type.id_for_label }}">Tipo de operação:</label></td>
+            <td>{{ form.operation_type }}</td>
+            {% if form.operation_type.errors %}
+            <td>{{ form.operation_type.errors }}</td>
+            {% endif %}
+        </tr>
+        <tr>
+            <td><label for="{{ form.date.id_for_label }}">Data da operação:</label></td>
+            <td>{{ form.date }}</td>
+            {% if form.date.errors %}
+            <td>{{ form.date.errors }}</td>
+            {% endif %}
+        </tr>
+        <tr>
+            <td><label for="{{ form.quantity.id_for_label }}">Quantidade:</label></td>
+            <td>{{ form.quantity }}</td>
+            {% if form.quantity.errors %}
+            <td>{{ form.quantity.errors }}</td>
+            {% endif %}
+        </tr>
+        <tr>
+            <td><label for="{{ form.price.id_for_label }}">Preço unitário:</label></td>
+            <td>{{ form.price }}</td>
+            {% if form.price.errors %}
+            <td>{{ form.price.errors }}</td>
+            {% endif %}
+        </tr>
+        <tr>
+            <td><label for="{{ form.fees.id_for_label }}">Taxas e impostos:</label></td>
+            <td>{{ form.fees }}</td>
+            {% if form.fees.errors %}
+            <td>{{ form.fees.errors }}</td>
+            {% endif %}
+        </tr>
+        <tr>
+            <td><label for="{{ form.income_value.id_for_label }}">Valor de rendimento:</label></td>
+            <td>{{ form.income_value }}</td>
+            {% if form.income_value.errors %}
+            <td>{{ form.income_value.errors }}</td>
+            {% endif %}
+        </tr>
+        <tr>
+            <td><label for="{{ form.transaction.id_for_label }}">Transação relacionada:</label></td>
+            <td>{{ form.transaction }}</td>
+            {% if form.transaction.errors %}
+            <td>{{ form.transaction.errors }}</td>
+            {% endif %}
+        </tr>
+        <tr>
+            <td><label for="{{ form.notes.id_for_label }}">Observações:</label></td>
+            <td>{{ form.notes }}</td>
+            {% if form.notes.errors %}
+            <td>{{ form.notes.errors }}</td>
+            {% endif %}
+        </tr>
+    </table>
+    <button type="submit">Salvar</button>
+    <a href="{% url 'finance:asset_transaction_list' %}">Cancelar</a>
+</form>
+{% endblock %}

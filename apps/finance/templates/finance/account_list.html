@@ -26,6 +26,7 @@
                 <td>
                     <a href="{% url 'finance:account_update' account.pk %}"><button>Editar</button></a>
                     <a href="{% url 'finance:account_delete' account.pk %}"><button>Deletar</button></a>
+                    <a href="{% url 'finance:account_statement' %}?account={{ account.pk }}&start_date={{ default_start_date|date:'Y-m-d' }}&end_date={{ default_end_date|date:'Y-m-d' }}"><button>Extrato</button></a>
                 </td>
             </tr>
             {% endfor %}

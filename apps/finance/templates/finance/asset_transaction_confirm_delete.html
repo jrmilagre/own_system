@@ -1,0 +1,14 @@
+{% extends 'finance/base.html' %}
+
+{% block title %}Deletar Transação de Ativo{% endblock %}
+
+{% block content %}
+<h1>Deletar Transação de Ativo</h1>
+<p>Tem certeza que deseja deletar a transação <strong>{{ transaction.asset.code }} - {{ transaction.get_operation_type_display }} - {{ transaction.date }}</strong>?</p>
+<p>Esta ação não pode ser desfeita.</p>
+<form method="post">
+    {% csrf_token %}
+    <button type="submit">Confirmar Deletar</button>
+    <a href="{% url 'finance:asset_transaction_list' %}">Cancelar</a>
+</form>
+{% endblock %}

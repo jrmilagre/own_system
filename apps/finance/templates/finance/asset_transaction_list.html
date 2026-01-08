@@ -1,0 +1,45 @@
+{% extends 'finance/base.html' %}
+
+{% block title %}Transações de Ativos{% endblock %}
+
+{% block content %}
+<h1>Transações de Ativos</h1>
+<a href="{% url 'finance:asset_transaction_create' %}"><button>Criar Nova Transação</button></a>
+{% if transactions %}
+    <table>
+        <thead>
+            <tr>
+                <th>Ativo</th>
+                <th>Conta</th>
+                <th>Tipo</th>
+                <th>Data</th>
+                <th>Quantidade</th>
+                <th>Preço</th>
+                <th>Valor Total</th>
+                <th>Rendimento</th>
+                <th>Ações</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for transaction in transactions %}
+            <tr>
+                <td>{{ transaction.asset.code }}</td>
+                <td>{{ transaction.account.name }}</td>
+                <td>{{ transaction.get_operation_type_display }}</td>
+                <td>{{ transaction.date }}</td>
+                <td>{{ transaction.quantity|default:"-" }}</td>
+                <td>{{ transaction.price|default:"-" }}</td>
+                <td>{{ transaction.total_value|default:"-" }}</td>
+                <td>{{ transaction.income_value|default:"-" }}</td>
+                <td>
+                    <a href="{% url 'finance:asset_transaction_update' transaction.pk %}"><button>Editar</button></a>
+                    <a href="{% url 'finance:asset_transaction_delete' transaction.pk %}"><button>Deletar</button></a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+{% else %}
+    <p>Nenhuma transação de ativo cadastrada.</p>
+{% endif %}
+{% endblock %}
