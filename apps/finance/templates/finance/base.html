@@ -81,8 +81,13 @@
         <a href="{% url 'finance:transaction_list' %}">Transações</a> |
         <a href="{% url 'finance:scheduler_list' %}">Agendamentos</a> |
         <a href="{% url 'finance:budget_manage' %}">Orçamento</a> |
-        <a href="{% url 'finance:asset_list' %}">Ativos</a> |
-        <a href="{% url 'finance:asset_transaction_list' %}">Transações de Ativos</a> |
+        <div class="dropdown">
+            <a href="#">Investimentos</a>
+            <div class="dropdown-content">
+                <a href="{% url 'finance:asset_list' %}">Ativos</a>
+                <a href="{% url 'finance:asset_transaction_list' %}">Transações de Ativos</a>
+            </div>
+        </div> |
         <div class="dropdown">
             <a href="{% url 'finance:reports_index' %}">Relatórios</a>
             <div class="dropdown-content">
