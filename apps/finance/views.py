@@ -1,10 +1,11 @@
 from django.shortcuts import render, redirect, get_object_or_404
+from django.urls import reverse
 from django.contrib import messages
 from django.http import JsonResponse
 from django.db import transaction as db_transaction
 from datetime import datetime, date
 import uuid
-from .models import Account, Beneficiary, Category, Subcategory, Transaction, Scheduler, Asset, AssetTransaction, AssetPosition
+from .models import Account, Beneficiary, Category, Subcategory, Transaction, Scheduler, Asset, AssetTransaction, AssetPosition, Budget
 from .forms import (
     AccountForm, BeneficiaryForm, CategoryForm, SubcategoryForm, TransactionForm, SchedulerForm,
     MultipleTransactionForm, MultipleTransactionItemForm, MultipleTransactionItemFormSet,
@@ -1968,3 +1969,115 @@ def asset_stock_position_report(request):
         'report_data': report_data,
         'total_value_all': total_value_all,
     })
+
+
+def budget_manage(request):
+    """View para gerenciar orçamento em formato de tabela dinâmica"""
+    from decimal import Decimal, InvalidOperation
+    
+    # Obter ano selecionado (query param ou ano atual)
+    selected_year = int(request.GET.get('year', date.today().year))
+    
+    # Obter todas as subcategorias ordenadas por categoria/subcategoria
+    subcategories = Subcategory.objects.all().select_related('category').order_by('category', 'subcategory')
+    
+    # Buscar orçamentos do ano selecionado
+    budgets = Budget.objects.filter(
+        budget_date__year=selected_year
+    ).select_related('subcategory', 'subcategory__category')
+    
+    # Criar dicionário para acesso rápido: key = (subcategory_id, month) -> amount
+    budgets_dict = {}
+    for budget in budgets:
+        key = (budget.subcategory_id, budget.month)
+        budgets_dict[key] = budget.amount
+    
+    # Preparar dados para o template
+    budget_data = []
+    for subcategory in subcategories:
+        # Calcular média do ano anterior
+        avg_previous = Budget.get_average_previous_year(subcategory, selected_year)
+        
+        # Obter valores dos 12 meses
+        months_data = []
+        total_year = Decimal('0.00')
+        for month in range(1, 13):
+            key = (subcategory.id, month)
+            amount = budgets_dict.get(key, Decimal('0.00'))
+            months_data.append({
+                'month': month,
+                'amount': amount
+            })
+            total_year += amount
+        
+        budget_data.append({
+            'subcategory': subcategory,
+            'default_transaction_type': subcategory.default_transaction_type,
+            'avg_previous_year': avg_previous,
+            'months': months_data,
+            'total_year': total_year
+        })
+    
+    # Calcular totais separados por tipo
+    totals_by_type = Budget.get_totals_by_type(selected_year)
+    
+    # Processar POST (salvar orçamento)
+    if request.method == 'POST':
+        year = int(request.POST.get('year', selected_year))
+        
+        with db_transaction.atomic():
+            # Processar cada subcategoria
+            for subcategory in subcategories:
+                for month in range(1, 13):
+                    field_name = f"budget_{subcategory.id}_{month}"
+                    value = request.POST.get(field_name, '').strip()
+                    
+                    if value:
+                        try:
+                            # Converter valor (tratar vírgula/ponto decimal)
+                            value = value.replace(',', '.')
+                            amount = Decimal(value)
+                            
+                            # Criar budget_date usando date(year, month, 1) (sempre dia 1)
+                            budget_date = date(year, month, 1)
+                            
+                            # Usar update_or_create com subcategory e budget_date
+                            Budget.objects.update_or_create(
+                                subcategory=subcategory,
+                                budget_date=budget_date,
+                                defaults={'amount': amount}
+                            )
+                        except (ValueError, InvalidOperation):
+                            pass  # Ignorar valores inválidos
+                    else:
+                        # Se o campo estiver vazio, remover o orçamento se existir
+                        budget_date = date(year, month, 1)
+                        Budget.objects.filter(
+                            subcategory=subcategory,
+                            budget_date=budget_date
+                        ).delete()
+            
+            messages.success(request, f'Orçamento de {year} salvo com sucesso!')
+            return redirect(f"{reverse('finance:budget_manage')}?year={year}")
+    
+    # Anos disponíveis (últimos 5 anos + próximos 2)
+    current_year = date.today().year
+    years = list(range(current_year - 5, current_year + 3))
+    
+    # Nomes dos meses
+    months = [
+        (1, 'Janeiro'), (2, 'Fevereiro'), (3, 'Março'),
+        (4, 'Abril'), (5, 'Maio'), (6, 'Junho'),
+        (7, 'Julho'), (8, 'Agosto'), (9, 'Setembro'),
+        (10, 'Outubro'), (11, 'Novembro'), (12, 'Dezembro'),
+    ]
+    
+    context = {
+        'budget_data': budget_data,
+        'selected_year': selected_year,
+        'years': years,
+        'months': months,
+        'totals_by_type': totals_by_type,
+    }
+    
+    return render(request, 'finance/budget_manage.html', context)

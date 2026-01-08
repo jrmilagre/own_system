@@ -225,6 +225,108 @@ class Subcategory(BaseModel):
         return f"{self.category.category} - {self.subcategory}"
 
 
+class Budget(BaseModel):
+    """Modelo para armazenar orçamento por subcategoria e mês/ano"""
+    
+    subcategory = models.ForeignKey(
+        Subcategory,
+        on_delete=models.CASCADE,
+        verbose_name='Subcategoria',
+        related_name='budgets'
+    )
+    budget_date = models.DateField(
+        'Data do orçamento',
+        help_text='Data do orçamento (sempre dia 1 do mês/ano)'
+    )
+    amount = models.DecimalField(
+        'Valor',
+        max_digits=12,
+        decimal_places=2,
+        default=0
+    )
+    
+    class Meta:
+        verbose_name = 'Orçamento'
+        verbose_name_plural = 'Orçamentos'
+        ordering = ('budget_date', 'subcategory')
+        unique_together = [['subcategory', 'budget_date']]
+        indexes = [
+            models.Index(fields=['subcategory', 'budget_date']),
+            models.Index(fields=['budget_date']),
+        ]
+    
+    def __str__(self):
+        return f"{self.subcategory} - {self.budget_date.strftime('%m/%Y')} - R$ {self.amount}"
+    
+    @property
+    def year(self):
+        """Retorna o ano do orçamento"""
+        return self.budget_date.year
+    
+    @property
+    def month(self):
+        """Retorna o mês do orçamento"""
+        return self.budget_date.month
+    
+    @property
+    def transaction_type(self):
+        """Retorna o tipo de transação padrão da subcategoria"""
+        return self.subcategory.default_transaction_type
+    
+    def save(self, *args, **kwargs):
+        """Garante que budget_date sempre tenha dia = 1"""
+        if self.budget_date:
+            # Normalizar para sempre ter dia 1
+            self.budget_date = self.budget_date.replace(day=1)
+        super().save(*args, **kwargs)
+    
+    @classmethod
+    def get_average_previous_year(cls, subcategory, year):
+        """Calcula a média do ano anterior para uma subcategoria"""
+        from django.db.models import Avg
+        previous_year = year - 1
+        budgets = cls.objects.filter(
+            subcategory=subcategory,
+            budget_date__year=previous_year
+        )
+        result = budgets.aggregate(avg=Avg('amount'))
+        return result['avg'] or 0
+    
+    @classmethod
+    def get_year_total(cls, subcategory, year):
+        """Calcula o total do ano para uma subcategoria"""
+        from django.db.models import Sum
+        budgets = cls.objects.filter(
+            subcategory=subcategory,
+            budget_date__year=year
+        )
+        result = budgets.aggregate(total=Sum('amount'))
+        return result['total'] or 0
+    
+    @classmethod
+    def get_totals_by_type(cls, year):
+        """Calcula totais separados por tipo (CR/DB) para um ano"""
+        from django.db.models import Sum, Q
+        
+        # Total de receitas (CR)
+        credit_total = cls.objects.filter(
+            budget_date__year=year,
+            subcategory__default_transaction_type='CR'
+        ).aggregate(total=Sum('amount'))['total'] or 0
+        
+        # Total de despesas (DB)
+        debit_total = cls.objects.filter(
+            budget_date__year=year,
+            subcategory__default_transaction_type='DB'
+        ).aggregate(total=Sum('amount'))['total'] or 0
+        
+        return {
+            'credit': credit_total,
+            'debit': debit_total,
+            'balance': credit_total - debit_total
+        }
+
+
 class Transaction(BaseModel):
     account = models.ForeignKey(
         Account,

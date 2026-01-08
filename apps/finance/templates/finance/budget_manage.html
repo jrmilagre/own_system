@@ -1,0 +1,257 @@
+{% extends 'finance/base.html' %}
+
+{% block title %}Gerenciar Orçamento{% endblock %}
+
+{% block content %}
+<h1>Gerenciar Orçamento</h1>
+
+<form method="get" action="{% url 'finance:budget_manage' %}" style="margin-bottom: 20px;">
+    <label for="year">Ano:</label>
+    <select name="year" id="year" onchange="this.form.submit()" style="padding: 5px; margin-left: 10px;">
+        {% for year in years %}
+            <option value="{{ year }}" {% if year == selected_year %}selected{% endif %}>
+                {{ year }}
+            </option>
+        {% endfor %}
+    </select>
+</form>
+
+<form method="post" id="budgetForm">
+    {% csrf_token %}
+    <input type="hidden" name="year" value="{{ selected_year }}">
+    
+    <div style="overflow-x: auto;">
+        <table id="budgetTable" style="width: 100%; border-collapse: collapse; border: 1px solid #ddd;">
+            <thead style="background-color: #333; color: white;">
+                <tr>
+                    <th rowspan="2" style="vertical-align: middle; padding: 10px; border: 1px solid #ddd;">Subcategoria</th>
+                    <th rowspan="2" style="vertical-align: middle; padding: 10px; border: 1px solid #ddd;">Tipo</th>
+                    <th rowspan="2" style="vertical-align: middle; padding: 10px; border: 1px solid #ddd;">Média<br>Ano Anterior</th>
+                    {% for month_num, month_name in months %}
+                        <th style="padding: 10px; border: 1px solid #ddd; text-align: center;">{{ month_name }}</th>
+                    {% endfor %}
+                    <th rowspan="2" style="vertical-align: middle; padding: 10px; border: 1px solid #ddd;">Total<br>Anual</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in budget_data %}
+                    <tr class="{% if item.default_transaction_type == 'CR' %}budget-credit{% else %}budget-debit{% endif %}">
+                        <td style="padding: 8px; border: 1px solid #ddd;"><strong>{{ item.subcategory }}</strong></td>
+                        <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">
+                            {% if item.default_transaction_type == 'CR' %}
+                                <span style="background-color: #28a745; color: white; padding: 3px 8px; border-radius: 3px;">↑ Receita</span>
+                            {% else %}
+                                <span style="background-color: #dc3545; color: white; padding: 3px 8px; border-radius: 3px;">↓ Despesa</span>
+                            {% endif %}
+                        </td>
+                        <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">
+                            <span style="color: #666;">R$ {{ item.avg_previous_year|floatformat:2 }}</span>
+                        </td>
+                        {% for month in item.months %}
+                            <td style="padding: 5px; border: 1px solid #ddd;">
+                                <input type="text" 
+                                       name="budget_{{ item.subcategory.id }}_{{ month.month }}"
+                                       value="{% if month.amount %}{{ month.amount|floatformat:2 }}{% endif %}"
+                                       class="budget-input"
+                                       data-subcategory="{{ item.subcategory.id }}"
+                                       data-month="{{ month.month }}"
+                                       data-type="{{ item.default_transaction_type }}"
+                                       placeholder="0.00"
+                                       style="width: 100%; padding: 5px; text-align: right; box-sizing: border-box;">
+                            </td>
+                        {% endfor %}
+                        <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">
+                            <strong class="total-row" data-subcategory="{{ item.subcategory.id }}">
+                                R$ {{ item.total_year|floatformat:2 }}
+                            </strong>
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot style="background-color: #f0f0f0;">
+                <tr>
+                    <td colspan="2" style="padding: 8px; border: 1px solid #ddd;"><strong>Total Receitas</strong></td>
+                    <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">
+                        <strong id="totalAvgPreviousCredit">R$ 0.00</strong>
+                    </td>
+                    {% for month_num, month_name in months %}
+                        <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">
+                            <strong class="total-column-credit" data-month="{{ month_num }}">
+                                R$ 0.00
+                            </strong>
+                        </td>
+                    {% endfor %}
+                    <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">
+                        <strong id="totalCredit">R$ 0.00</strong>
+                    </td>
+                </tr>
+                <tr>
+                    <td colspan="2" style="padding: 8px; border: 1px solid #ddd;"><strong>Total Despesas</strong></td>
+                    <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">
+                        <strong id="totalAvgPreviousDebit">R$ 0.00</strong>
+                    </td>
+                    {% for month_num, month_name in months %}
+                        <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">
+                            <strong class="total-column-debit" data-month="{{ month_num }}">
+                                R$ 0.00
+                            </strong>
+                        </td>
+                    {% endfor %}
+                    <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">
+                        <strong id="totalDebit">R$ 0.00</strong>
+                    </td>
+                </tr>
+                <tr style="background-color: #e7f3ff;">
+                    <td colspan="2" style="padding: 8px; border: 1px solid #ddd;"><strong>Saldo (Receitas - Despesas)</strong></td>
+                    <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">
+                        <strong id="totalAvgPreviousBalance">R$ 0.00</strong>
+                    </td>
+                    {% for month_num, month_name in months %}
+                        <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">
+                            <strong class="total-column-balance" data-month="{{ month_num }}">
+                                R$ 0.00
+                            </strong>
+                        </td>
+                    {% endfor %}
+                    <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">
+                        <strong id="grandTotal">R$ 0.00</strong>
+                    </td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+    
+    <div style="margin-top: 20px;">
+        <button type="submit" style="padding: 10px 20px; background-color: #007bff; color: white; border: none; cursor: pointer; border-radius: 4px;">
+            Salvar Orçamento
+        </button>
+        <a href="{% url 'finance:index' %}" style="padding: 10px 20px; background-color: #6c757d; color: white; text-decoration: none; border-radius: 4px; display: inline-block; margin-left: 10px;">
+            Cancelar
+        </a>
+    </div>
+</form>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Calcular totais ao carregar
+    calculateTotals();
+    
+    // Calcular totais ao digitar
+    document.querySelectorAll('.budget-input').forEach(input => {
+        input.addEventListener('input', function() {
+            calculateRowTotal(this);
+            calculateTotals();
+        });
+    });
+    
+    function calculateRowTotal(input) {
+        const subcategoryId = input.dataset.subcategory;
+        let total = 0;
+        
+        // Somar todos os meses desta subcategoria
+        document.querySelectorAll(`input[data-subcategory="${subcategoryId}"]`).forEach(inp => {
+            const value = parseFloat(inp.value.replace(',', '.')) || 0;
+            total += value;
+        });
+        
+        // Atualizar total da linha
+        const totalRow = document.querySelector(`.total-row[data-subcategory="${subcategoryId}"]`);
+        if (totalRow) {
+            totalRow.textContent = 'R$ ' + total.toFixed(2).replace('.', ',');
+        }
+    }
+    
+    function calculateTotals() {
+        // Calcular totais por coluna (mês) separados por tipo
+        {% for month_num, month_name in months %}
+            let totalMonth{{ month_num }}Credit = 0;
+            let totalMonth{{ month_num }}Debit = 0;
+            
+            document.querySelectorAll(`input[data-month="{{ month_num }}"]`).forEach(input => {
+                const value = parseFloat(input.value.replace(',', '.')) || 0;
+                const type = input.dataset.type;
+                if (type === 'CR') {
+                    totalMonth{{ month_num }}Credit += value;
+                } else {
+                    totalMonth{{ month_num }}Debit += value;
+                }
+            });
+            
+            const totalCol{{ month_num }}Credit = document.querySelector(`.total-column-credit[data-month="{{ month_num }}"]`);
+            if (totalCol{{ month_num }}Credit) {
+                totalCol{{ month_num }}Credit.textContent = 'R$ ' + totalMonth{{ month_num }}Credit.toFixed(2).replace('.', ',');
+            }
+            
+            const totalCol{{ month_num }}Debit = document.querySelector(`.total-column-debit[data-month="{{ month_num }}"]`);
+            if (totalCol{{ month_num }}Debit) {
+                totalCol{{ month_num }}Debit.textContent = 'R$ ' + totalMonth{{ month_num }}Debit.toFixed(2).replace('.', ',');
+            }
+            
+            const totalCol{{ month_num }}Balance = document.querySelector(`.total-column-balance[data-month="{{ month_num }}"]`);
+            if (totalCol{{ month_num }}Balance) {
+                const balance = totalMonth{{ month_num }}Credit - totalMonth{{ month_num }}Debit;
+                totalCol{{ month_num }}Balance.textContent = 'R$ ' + balance.toFixed(2).replace('.', ',');
+            }
+        {% endfor %}
+        
+        // Calcular totais gerais por tipo
+        let totalCredit = 0;
+        let totalDebit = 0;
+        
+        document.querySelectorAll('.budget-input').forEach(input => {
+            const value = parseFloat(input.value.replace(',', '.')) || 0;
+            const type = input.dataset.type;
+            if (type === 'CR') {
+                totalCredit += value;
+            } else {
+                totalDebit += value;
+            }
+        });
+        
+        const totalCreditEl = document.getElementById('totalCredit');
+        if (totalCreditEl) {
+            totalCreditEl.textContent = 'R$ ' + totalCredit.toFixed(2).replace('.', ',');
+        }
+        
+        const totalDebitEl = document.getElementById('totalDebit');
+        if (totalDebitEl) {
+            totalDebitEl.textContent = 'R$ ' + totalDebit.toFixed(2).replace('.', ',');
+        }
+        
+        const grandTotalEl = document.getElementById('grandTotal');
+        if (grandTotalEl) {
+            const balance = totalCredit - totalDebit;
+            grandTotalEl.textContent = 'R$ ' + balance.toFixed(2).replace('.', ',');
+        }
+    }
+});
+</script>
+
+<style>
+.budget-input {
+    min-width: 100px;
+}
+#budgetTable {
+    font-size: 0.9rem;
+}
+#budgetTable th {
+    text-align: center;
+    white-space: nowrap;
+}
+#budgetTable td {
+    vertical-align: middle;
+}
+.budget-credit {
+    background-color: #d4edda !important;
+}
+.budget-debit {
+    background-color: #f8d7da !important;
+}
+.budget-credit:hover {
+    background-color: #c3e6cb !important;
+}
+.budget-debit:hover {
+    background-color: #f5c6cb !important;
+}
+</style>
+{% endblock %}

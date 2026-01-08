@@ -146,3 +146,36 @@ class AssetPositionAdmin(admin.ModelAdmin):
     list_filter = ('asset', 'account', 'date', 'created_at')
     ordering = ('-date', 'asset')
     date_hierarchy = 'date'
+
+
+@admin.register(Budget)
+class BudgetAdmin(admin.ModelAdmin):
+    list_display = (
+        'subcategory',
+        'budget_date',
+        'year',
+        'month',
+        'amount',
+        'get_transaction_type_display',
+        'created_at',
+        'updated_at',
+    )
+    search_fields = ('subcategory__subcategory', 'subcategory__category__category')
+    list_filter = ('budget_date', 'subcategory__category', 'subcategory__default_transaction_type', 'created_at')
+    ordering = ('-budget_date', 'subcategory')
+    date_hierarchy = 'budget_date'
+    
+    def year(self, obj):
+        """Retorna o ano do orçamento"""
+        return obj.budget_date.year
+    year.short_description = 'Ano'
+    
+    def month(self, obj):
+        """Retorna o mês do orçamento"""
+        return obj.budget_date.month
+    month.short_description = 'Mês'
+    
+    def get_transaction_type_display(self, obj):
+        """Retorna o tipo de transação da subcategoria"""
+        return obj.subcategory.get_default_transaction_type_display() if obj.subcategory else '-'
+    get_transaction_type_display.short_description = 'Tipo de Transação'

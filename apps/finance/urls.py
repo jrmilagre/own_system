@@ -66,5 +66,7 @@ urlpatterns = [
     path('reports/', views.reports_index, name='reports_index'),
     path('reports/account-statement/', views.account_statement, name='account_statement'),
     path('reports/asset-stock-position/', views.asset_stock_position_report, name='asset_stock_position_report'),
+    # Budget URLs
+    path('budgets/', views.budget_manage, name='budget_manage'),
 ]
 
