@@ -1099,3 +1099,195 @@ class AssetPosition(BaseModel):
         if market_value:
             return market_value - self.get_total_cost()
         return None
+
+
+class Inventory(BaseModel):
+    """Modelo para cadastrar bens duráveis de um lar"""
+    
+    INVENTORY_TYPE_CHOICES = [
+        ('ELECTRO', 'Eletrodoméstico'),
+        ('ART', 'Obra de arte'),
+        ('BOOK', 'Livro'),
+        ('MUSIC', 'Música'),
+        ('OFFICE', 'Escritório'),
+        ('TOOL', 'Ferramenta'),
+        ('VEHICLE', 'Veículo'),
+        ('ELECTRONIC', 'Eletrônico'),
+        ('REAL_ESTATE', 'Imobiliário'),
+        ('HOBBY', 'Hobby'),
+    ]
+    
+    CONDITION_CHOICES = [
+        ('NEW', 'Novo'),
+        ('EXCELLENT', 'Excelente'),
+        ('GOOD', 'Bom'),
+        ('FAIR', 'Regular'),
+        ('POOR', 'Ruim'),
+        ('DAMAGED', 'Danificado'),
+    ]
+    
+    STATUS_CHOICES = [
+        ('ACTIVE', 'Ativo'),
+        ('SOLD', 'Vendido'),
+        ('DONATED', 'Doado'),
+        ('DISCARDED', 'Descartado'),
+        ('LOST', 'Perdido'),
+    ]
+    
+    # Campos principais
+    type = models.CharField(
+        'Tipo',
+        max_length=20,
+        choices=INVENTORY_TYPE_CHOICES,
+        help_text='Categoria do bem'
+    )
+    description = models.CharField(
+        'Descrição',
+        max_length=200,
+        help_text='Descrição do item'
+    )
+    buy_price = models.DecimalField(
+        'Preço de compra',
+        max_digits=12,
+        decimal_places=2,
+        help_text='Valor pago na compra'
+    )
+    buy_date = models.DateField(
+        'Data de compra',
+        help_text='Data em que o item foi adquirido'
+    )
+    actual_price = models.DecimalField(
+        'Preço atual',
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text='Valor atual estimado do item'
+    )
+    
+    # Informações adicionais
+    brand = models.CharField(
+        'Marca',
+        max_length=100,
+        blank=True,
+        help_text='Marca do produto'
+    )
+    model = models.CharField(
+        'Modelo',
+        max_length=100,
+        blank=True,
+        help_text='Modelo do produto'
+    )
+    serial_number = models.CharField(
+        'Número de série',
+        max_length=100,
+        blank=True,
+        help_text='Número de série do produto'
+    )
+    condition = models.CharField(
+        'Condição',
+        max_length=20,
+        choices=CONDITION_CHOICES,
+        default='GOOD',
+        help_text='Estado atual do item'
+    )
+    status = models.CharField(
+        'Status',
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='ACTIVE',
+        help_text='Status do item no inventário'
+    )
+    location = models.CharField(
+        'Localização',
+        max_length=200,
+        blank=True,
+        help_text='Onde o item está guardado'
+    )
+    
+    # Garantia
+    warranty_end_date = models.DateField(
+        'Data de término da garantia',
+        null=True,
+        blank=True,
+        help_text='Data de término da garantia'
+    )
+    
+    # Informações de venda (se aplicável)
+    sale_date = models.DateField(
+        'Data de venda',
+        null=True,
+        blank=True,
+        help_text='Data em que o item foi vendido'
+    )
+    sale_price = models.DecimalField(
+        'Preço de venda',
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text='Valor pelo qual o item foi vendido'
+    )
+    
+    # Integração com sistema financeiro
+    purchase_transaction = models.ForeignKey(
+        Transaction,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        verbose_name='Transação de compra',
+        related_name='inventory_items',
+        help_text='Transação financeira relacionada à compra deste item'
+    )
+    
+    # Anotações
+    notes = models.TextField(
+        'Anotações',
+        blank=True,
+        help_text='Observações adicionais sobre o item'
+    )
+    
+    class Meta:
+        verbose_name = 'Item do Inventário'
+        verbose_name_plural = 'Itens do Inventário'
+        ordering = ('-created_at',)
+        indexes = [
+            models.Index(fields=['type', 'status']),
+            models.Index(fields=['status']),
+            models.Index(fields=['buy_date']),
+        ]
+    
+    def __str__(self):
+        return f"{self.get_type_display()} - {self.description}"
+    
+    def get_depreciation(self):
+        """Calcula a depreciação do item baseada em buy_price e actual_price"""
+        if not self.actual_price or not self.buy_price:
+            return None
+        return self.buy_price - self.actual_price
+    
+    def get_depreciation_percentage(self):
+        """Calcula a porcentagem de depreciação"""
+        if not self.actual_price or not self.buy_price or self.buy_price == 0:
+            return None
+        return ((self.buy_price - self.actual_price) / self.buy_price) * 100
+    
+    def get_age_days(self):
+        """Calcula a idade do item em dias"""
+        if not self.buy_date:
+            return None
+        from datetime import date
+        return (date.today() - self.buy_date).days
+    
+    def is_under_warranty(self):
+        """Verifica se o item ainda está na garantia"""
+        if not self.warranty_end_date:
+            return None
+        from datetime import date
+        return date.today() <= self.warranty_end_date
+    
+    def get_profit_loss_on_sale(self):
+        """Calcula lucro/prejuízo na venda (se vendido)"""
+        if not self.sale_price or not self.buy_price:
+            return None
+        return self.sale_price - self.buy_price

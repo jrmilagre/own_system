@@ -179,3 +179,47 @@ class BudgetAdmin(admin.ModelAdmin):
         """Retorna o tipo de transação da subcategoria"""
         return obj.subcategory.get_default_transaction_type_display() if obj.subcategory else '-'
     get_transaction_type_display.short_description = 'Tipo de Transação'
+
+
+@admin.register(Inventory)
+class InventoryAdmin(admin.ModelAdmin):
+    list_display = (
+        'id',
+        'type',
+        'description',
+        'brand',
+        'model',
+        'buy_price',
+        'actual_price',
+        'buy_date',
+        'condition',
+        'status',
+        'location',
+        'created_at',
+        'updated_at',
+    )
+    search_fields = ('description', 'brand', 'model', 'serial_number', 'location', 'notes')
+    list_filter = ('type', 'status', 'condition', 'buy_date', 'created_at')
+    ordering = ('-created_at',)
+    date_hierarchy = 'buy_date'
+    fieldsets = (
+        ('Informações Básicas', {
+            'fields': ('type', 'description', 'brand', 'model', 'serial_number')
+        }),
+        ('Valores e Datas', {
+            'fields': ('buy_price', 'buy_date', 'actual_price', 'purchase_transaction')
+        }),
+        ('Estado e Localização', {
+            'fields': ('condition', 'status', 'location')
+        }),
+        ('Garantia', {
+            'fields': ('warranty_end_date',)
+        }),
+        ('Venda', {
+            'fields': ('sale_date', 'sale_price'),
+            'classes': ('collapse',)
+        }),
+        ('Observações', {
+            'fields': ('notes',)
+        }),
+    )

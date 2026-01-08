@@ -68,5 +68,10 @@ urlpatterns = [
     path('reports/asset-stock-position/', views.asset_stock_position_report, name='asset_stock_position_report'),
     # Budget URLs
     path('budgets/', views.budget_manage, name='budget_manage'),
+    # Inventory URLs
+    path('inventory/', views.inventory_list, name='inventory_list'),
+    path('inventory/create/', views.inventory_create, name='inventory_create'),
+    path('inventory/<int:pk>/update/', views.inventory_update, name='inventory_update'),
+    path('inventory/<int:pk>/delete/', views.inventory_delete, name='inventory_delete'),
 ]
 

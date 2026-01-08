@@ -1,0 +1,49 @@
+{% extends 'finance/base.html' %}
+
+{% block title %}Inventário do Lar{% endblock %}
+
+{% block content %}
+<h1>Inventário do Lar</h1>
+<a href="{% url 'finance:inventory_create' %}"><button>Criar Novo Item</button></a>
+{% if inventories %}
+    <table>
+        <thead>
+            <tr>
+                <th>Tipo</th>
+                <th>Descrição</th>
+                <th>Marca</th>
+                <th>Modelo</th>
+                <th>Preço de Compra</th>
+                <th>Preço Atual</th>
+                <th>Data de Compra</th>
+                <th>Condição</th>
+                <th>Status</th>
+                <th>Localização</th>
+                <th>Ações</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for inventory in inventories %}
+            <tr>
+                <td>{{ inventory.get_type_display }}</td>
+                <td>{{ inventory.description }}</td>
+                <td>{{ inventory.brand|default:"-" }}</td>
+                <td>{{ inventory.model|default:"-" }}</td>
+                <td>R$ {{ inventory.buy_price }}</td>
+                <td>{% if inventory.actual_price %}R$ {{ inventory.actual_price }}{% else %}-{% endif %}</td>
+                <td>{{ inventory.buy_date|date:"d/m/Y" }}</td>
+                <td>{{ inventory.get_condition_display }}</td>
+                <td>{{ inventory.get_status_display }}</td>
+                <td>{{ inventory.location|default:"-" }}</td>
+                <td>
+                    <a href="{% url 'finance:inventory_update' inventory.pk %}"><button>Editar</button></a>
+                    <a href="{% url 'finance:inventory_delete' inventory.pk %}"><button>Deletar</button></a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+{% else %}
+    <p>Nenhum item cadastrado no inventário.</p>
+{% endif %}
+{% endblock %}

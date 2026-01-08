@@ -5,12 +5,12 @@ from django.http import JsonResponse
 from django.db import transaction as db_transaction
 from datetime import datetime, date
 import uuid
-from .models import Account, Beneficiary, Category, Subcategory, Transaction, Scheduler, Asset, AssetTransaction, AssetPosition, Budget
+from .models import Account, Beneficiary, Category, Subcategory, Transaction, Scheduler, Asset, AssetTransaction, AssetPosition, Budget, Inventory
 from .forms import (
     AccountForm, BeneficiaryForm, CategoryForm, SubcategoryForm, TransactionForm, SchedulerForm,
     MultipleTransactionForm, MultipleTransactionItemForm, MultipleTransactionItemFormSet,
     MultipleSchedulerForm, MultipleSchedulerItemForm, MultipleSchedulerItemFormSet,
-    MultipleSchedulerRegisterItemFormSet, AssetForm, AssetTransactionForm, AssetPositionForm
+    MultipleSchedulerRegisterItemFormSet, AssetForm, AssetTransactionForm, AssetPositionForm, InventoryForm
 )
 
 
@@ -2081,3 +2081,47 @@ def budget_manage(request):
     }
     
     return render(request, 'finance/budget_manage.html', context)
+
+
+# Inventory Views
+def inventory_list(request):
+    """Lista de itens do inventário"""
+    inventories = Inventory.objects.all()
+    return render(request, 'finance/inventory_list.html', {'inventories': inventories})
+
+
+def inventory_create(request):
+    """Criar novo item do inventário"""
+    if request.method == 'POST':
+        form = InventoryForm(request.POST)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Item do inventário criado com sucesso!')
+            return redirect('finance:inventory_list')
+    else:
+        form = InventoryForm()
+    return render(request, 'finance/inventory_form.html', {'form': form})
+
+
+def inventory_update(request, pk):
+    """Editar item do inventário existente"""
+    inventory = get_object_or_404(Inventory, pk=pk)
+    if request.method == 'POST':
+        form = InventoryForm(request.POST, instance=inventory)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Item do inventário atualizado com sucesso!')
+            return redirect('finance:inventory_list')
+    else:
+        form = InventoryForm(instance=inventory)
+    return render(request, 'finance/inventory_form.html', {'form': form, 'inventory': inventory})
+
+
+def inventory_delete(request, pk):
+    """Deletar item do inventário"""
+    inventory = get_object_or_404(Inventory, pk=pk)
+    if request.method == 'POST':
+        inventory.delete()
+        messages.success(request, 'Item do inventário deletado com sucesso!')
+        return redirect('finance:inventory_list')
+    return render(request, 'finance/inventory_confirm_delete.html', {'inventory': inventory})

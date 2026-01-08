@@ -1,0 +1,127 @@
+{% extends 'finance/base.html' %}
+
+{% block title %}{% if form.instance.pk %}Editar Item do Inventário{% else %}Criar Item do Inventário{% endif %}{% endblock %}
+
+{% block content %}
+<h1>{% if form.instance.pk %}Editar Item do Inventário{% else %}Criar Novo Item do Inventário{% endif %}</h1>
+
+<form method="post">
+    {% csrf_token %}
+    <table>
+        <tr>
+            <td><label for="{{ form.type.id_for_label }}">Tipo:</label></td>
+            <td>{{ form.type }}</td>
+            {% if form.type.errors %}
+            <td>{{ form.type.errors }}</td>
+            {% endif %}
+        </tr>
+        <tr>
+            <td><label for="{{ form.description.id_for_label }}">Descrição:</label></td>
+            <td>{{ form.description }}</td>
+            {% if form.description.errors %}
+            <td>{{ form.description.errors }}</td>
+            {% endif %}
+        </tr>
+        <tr>
+            <td><label for="{{ form.brand.id_for_label }}">Marca:</label></td>
+            <td>{{ form.brand }}</td>
+            {% if form.brand.errors %}
+            <td>{{ form.brand.errors }}</td>
+            {% endif %}
+        </tr>
+        <tr>
+            <td><label for="{{ form.model.id_for_label }}">Modelo:</label></td>
+            <td>{{ form.model }}</td>
+            {% if form.model.errors %}
+            <td>{{ form.model.errors }}</td>
+            {% endif %}
+        </tr>
+        <tr>
+            <td><label for="{{ form.serial_number.id_for_label }}">Número de Série:</label></td>
+            <td>{{ form.serial_number }}</td>
+            {% if form.serial_number.errors %}
+            <td>{{ form.serial_number.errors }}</td>
+            {% endif %}
+        </tr>
+        <tr>
+            <td><label for="{{ form.buy_price.id_for_label }}">Preço de Compra:</label></td>
+            <td>{{ form.buy_price }}</td>
+            {% if form.buy_price.errors %}
+            <td>{{ form.buy_price.errors }}</td>
+            {% endif %}
+        </tr>
+        <tr>
+            <td><label for="{{ form.buy_date.id_for_label }}">Data de Compra:</label></td>
+            <td>{{ form.buy_date }}</td>
+            {% if form.buy_date.errors %}
+            <td>{{ form.buy_date.errors }}</td>
+            {% endif %}
+        </tr>
+        <tr>
+            <td><label for="{{ form.actual_price.id_for_label }}">Preço Atual:</label></td>
+            <td>{{ form.actual_price }}</td>
+            {% if form.actual_price.errors %}
+            <td>{{ form.actual_price.errors }}</td>
+            {% endif %}
+        </tr>
+        <tr>
+            <td><label for="{{ form.condition.id_for_label }}">Condição:</label></td>
+            <td>{{ form.condition }}</td>
+            {% if form.condition.errors %}
+            <td>{{ form.condition.errors }}</td>
+            {% endif %}
+        </tr>
+        <tr>
+            <td><label for="{{ form.status.id_for_label }}">Status:</label></td>
+            <td>{{ form.status }}</td>
+            {% if form.status.errors %}
+            <td>{{ form.status.errors }}</td>
+            {% endif %}
+        </tr>
+        <tr>
+            <td><label for="{{ form.location.id_for_label }}">Localização:</label></td>
+            <td>{{ form.location }}</td>
+            {% if form.location.errors %}
+            <td>{{ form.location.errors }}</td>
+            {% endif %}
+        </tr>
+        <tr>
+            <td><label for="{{ form.warranty_end_date.id_for_label }}">Data de Término da Garantia:</label></td>
+            <td>{{ form.warranty_end_date }}</td>
+            {% if form.warranty_end_date.errors %}
+            <td>{{ form.warranty_end_date.errors }}</td>
+            {% endif %}
+        </tr>
+        <tr>
+            <td><label for="{{ form.sale_date.id_for_label }}">Data de Venda:</label></td>
+            <td>{{ form.sale_date }}</td>
+            {% if form.sale_date.errors %}
+            <td>{{ form.sale_date.errors }}</td>
+            {% endif %}
+        </tr>
+        <tr>
+            <td><label for="{{ form.sale_price.id_for_label }}">Preço de Venda:</label></td>
+            <td>{{ form.sale_price }}</td>
+            {% if form.sale_price.errors %}
+            <td>{{ form.sale_price.errors }}</td>
+            {% endif %}
+        </tr>
+        <tr>
+            <td><label for="{{ form.purchase_transaction.id_for_label }}">Transação de Compra:</label></td>
+            <td>{{ form.purchase_transaction }}</td>
+            {% if form.purchase_transaction.errors %}
+            <td>{{ form.purchase_transaction.errors }}</td>
+            {% endif %}
+        </tr>
+        <tr>
+            <td><label for="{{ form.notes.id_for_label }}">Anotações:</label></td>
+            <td>{{ form.notes }}</td>
+            {% if form.notes.errors %}
+            <td>{{ form.notes.errors }}</td>
+            {% endif %}
+        </tr>
+    </table>
+    <button type="submit">Salvar</button>
+    <a href="{% url 'finance:inventory_list' %}">Cancelar</a>
+</form>
+{% endblock %}

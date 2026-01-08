@@ -1,6 +1,6 @@
 from django import forms
 from django.forms import formset_factory, inlineformset_factory, BaseFormSet
-from .models import Account, Beneficiary, Category, Subcategory, Transaction, Scheduler, Asset, AssetTransaction, AssetPosition
+from .models import Account, Beneficiary, Category, Subcategory, Transaction, Scheduler, Asset, AssetTransaction, AssetPosition, Inventory
 
 
 class AccountForm(forms.ModelForm):
@@ -667,3 +667,30 @@ class AssetPositionForm(forms.ModelForm):
         # Filtrar contas do tipo INVEST para o campo account
         self.fields['account'].queryset = Account.objects.filter(account_type='INVEST')
 
+
+class InventoryForm(forms.ModelForm):
+    class Meta:
+        model = Inventory
+        fields = [
+            'type', 'description', 'buy_price', 'buy_date', 'actual_price',
+            'brand', 'model', 'serial_number', 'condition', 'status', 'location',
+            'warranty_end_date', 'sale_date', 'sale_price', 'purchase_transaction', 'notes'
+        ]
+        widgets = {
+            'type': forms.Select(attrs={'required': True}),
+            'description': forms.TextInput(attrs={'required': True}),
+            'buy_price': forms.NumberInput(attrs={'step': '0.01', 'required': True}),
+            'buy_date': forms.DateInput(attrs={'type': 'date', 'required': True}),
+            'actual_price': forms.NumberInput(attrs={'step': '0.01', 'required': False}),
+            'brand': forms.TextInput(attrs={'required': False}),
+            'model': forms.TextInput(attrs={'required': False}),
+            'serial_number': forms.TextInput(attrs={'required': False}),
+            'condition': forms.Select(attrs={'required': True}),
+            'status': forms.Select(attrs={'required': True}),
+            'location': forms.TextInput(attrs={'required': False}),
+            'warranty_end_date': forms.DateInput(attrs={'type': 'date', 'required': False}),
+            'sale_date': forms.DateInput(attrs={'type': 'date', 'required': False}),
+            'sale_price': forms.NumberInput(attrs={'step': '0.01', 'required': False}),
+            'purchase_transaction': forms.Select(attrs={'required': False}),
+            'notes': forms.Textarea(attrs={'rows': 4, 'required': False}),
+        }

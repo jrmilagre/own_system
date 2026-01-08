@@ -1,0 +1,14 @@
+{% extends 'finance/base.html' %}
+
+{% block title %}Deletar Item do Inventário{% endblock %}
+
+{% block content %}
+<h1>Deletar Item do Inventário</h1>
+<p>Tem certeza que deseja deletar o item <strong>{{ inventory.get_type_display }} - {{ inventory.description }}</strong>?</p>
+<p>Esta ação não pode ser desfeita.</p>
+<form method="post">
+    {% csrf_token %}
+    <button type="submit">Confirmar Deletar</button>
+    <a href="{% url 'finance:inventory_list' %}">Cancelar</a>
+</form>
+{% endblock %}
