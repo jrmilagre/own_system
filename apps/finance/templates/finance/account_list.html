@@ -13,6 +13,7 @@
                 <th>Tipo</th>
                 <th>Moeda</th>
                 <th>Saldo de Abertura</th>
+                <th>Saldo atual</th>
                 <th>Ações</th>
             </tr>
         </thead>
@@ -23,6 +24,7 @@
                 <td>{{ account.get_account_type_display }}</td>
                 <td>{{ account.currency }}</td>
                 <td>{{ account.opening_balance }}</td>
+                <td>{{ account.get_balance }}</td>
                 <td>
                     <a href="{% url 'finance:account_update' account.pk %}"><button>Editar</button></a>
                     <a href="{% url 'finance:account_delete' account.pk %}"><button>Deletar</button></a>
