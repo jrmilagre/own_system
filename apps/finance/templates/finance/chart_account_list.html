@@ -1,0 +1,80 @@
+{% extends 'finance/base.html' %}
+
+{% block title %}Planos de Contas{% endblock %}
+
+{% block content %}
+<style>
+.code-cell {
+    padding-left: 0;
+}
+</style>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const codeCells = document.querySelectorAll('.code-cell');
+    codeCells.forEach(function(cell) {
+        const code = cell.getAttribute('data-code');
+        if (code) {
+            // Contar o número de pontos para determinar o nível
+            const level = (code.match(/\./g) || []).length;
+            const padding = level * 20;
+            cell.style.paddingLeft = padding + 'px';
+        }
+    });
+});
+</script>
+<h1>Planos de Contas</h1>
+<a href="{% url 'finance:chart_account_create' %}"><button>Criar Novo Plano de Contas</button></a>
+{% if chart_accounts %}
+    <table>
+        <thead>
+            <tr>
+                <th>Código</th>
+                <th>Descrição</th>
+                <th>Tipo de Cálculo</th>
+                <th>Associação</th>
+                <th>Parent</th>
+                <th>Acumula em</th>
+                <th>Ações</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for chart_account in chart_accounts %}
+            <tr>
+                <td class="code-cell" data-code="{{ chart_account.code }}">{{ chart_account.code }}</td>
+                <td>{{ chart_account.description }}</td>
+                <td>{{ chart_account.get_calculation_type_display }}</td>
+                <td>
+                    {% if chart_account.subcategory %}
+                        Subcategoria: {{ chart_account.subcategory }}
+                    {% elif chart_account.asset_type %}
+                        Tipo de Operação: {{ chart_account.get_asset_type_display }}
+                    {% else %}
+                        -
+                    {% endif %}
+                </td>
+                <td>
+                    {% if chart_account.parent %}
+                        {{ chart_account.parent.code }} - {{ chart_account.parent.description }}
+                    {% else %}
+                        -
+                    {% endif %}
+                </td>
+                <td>
+                    {% if chart_account.accumulates_in %}
+                        {{ chart_account.accumulates_in.code }} - {{ chart_account.accumulates_in.description }}
+                    {% else %}
+                        -
+                    {% endif %}
+                </td>
+                <td>
+                    <a href="{% url 'finance:chart_account_update' chart_account.pk %}"><button>Editar</button></a>
+                    <a href="{% url 'finance:chart_account_delete' chart_account.pk %}"><button>Deletar</button></a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+{% else %}
+    <p>Nenhum plano de contas cadastrado.</p>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,117 @@
+{% extends 'finance/base.html' %}
+
+{% block title %}Itens do Fluxo de Caixa{% endblock %}
+
+{% block content %}
+<h1>Itens do Fluxo de Caixa</h1>
+<a href="{% url 'finance:cash_flow_item_create' %}"><button>Criar Novo Item</button></a>
+<a href="{% url 'finance:cash_flow_report' %}"><button>Ver Relatório</button></a>
+{% if items %}
+    <table style="border-collapse: collapse; margin-top: 20px;">
+        <thead>
+            <tr style="background-color: #f0f0f0;">
+                <th style="text-align: left; padding: 2px 8px; border: 1px solid #ddd;">Código : Descrição</th>
+                <th style="text-align: left; padding: 2px 8px; border: 1px solid #ddd;">Tipo de Cálculo</th>
+                <th style="text-align: left; padding: 2px 8px; border: 1px solid #ddd;">Acumula em</th>
+                <th style="text-align: left; padding: 2px 8px; border: 1px solid #ddd;">Ordem</th>
+                <th style="text-align: left; padding: 2px 8px; border: 1px solid #ddd;">Ações</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for data in items %}
+            <tr class="level-{{ data.level }}" data-code="{{ data.item.code }}" data-parent-code="{{ data.parent_code|default:'' }}">
+                <td class="code-cell" style="padding: 2px 8px; border: 1px solid #ddd; font-family: monospace;">
+                    <span class="expand-toggle" style="cursor: pointer; margin-right: 5px; display: inline-block; width: 12px; text-align: center;">{% if data.has_children %}+{% else %}&nbsp;{% endif %}</span>
+                    {{ data.item.code }} : {{ data.item.description }}
+                </td>
+                <td style="padding: 2px 8px; border: 1px solid #ddd;">{{ data.item.get_calculation_type_display }}</td>
+                <td style="padding: 2px 8px; border: 1px solid #ddd;">
+                    {% if data.item.accumulates_in %}
+                        {{ data.item.accumulates_in.code }} - {{ data.item.accumulates_in.description }}
+                    {% else %}
+                        -
+                    {% endif %}
+                </td>
+                <td style="padding: 2px 8px; border: 1px solid #ddd;">{{ data.item.order }}</td>
+                <td style="padding: 2px 8px; border: 1px solid #ddd;">
+                    <a href="{% url 'finance:cash_flow_item_create' %}?parent_id={{ data.item.pk }}&action=sibling"><button>Criar Novo Item</button></a>
+                    <a href="{% url 'finance:cash_flow_item_create' %}?parent_id={{ data.item.pk }}&action=child"><button>Criar Novo Subitem</button></a>
+                    <a href="{% url 'finance:cash_flow_item_update' data.item.pk %}"><button>Editar</button></a>
+                    <a href="{% url 'finance:cash_flow_item_delete' data.item.pk %}"><button>Deletar</button></a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+{% else %}
+    <p>Nenhum item do fluxo de caixa cadastrado.</p>
+{% endif %}
+
+<style>
+.code-cell {
+    padding-left: 0;
+}
+</style>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const codeCells = document.querySelectorAll('.code-cell');
+    const rows = document.querySelectorAll('tbody tr[data-code]');
+    
+    // Aplicar indentação baseada no nível hierárquico
+    codeCells.forEach(function(cell) {
+        const row = cell.closest('tr');
+        const level = parseInt(row.className.match(/level-(\d+)/)?.[1] || '0');
+        const padding = level * 20;
+        cell.style.paddingLeft = (padding + 20) + 'px'; // +20 para o botão expandir
+    });
+    
+    // Inicialmente, ocultar todos os filhos (nível > 0)
+    rows.forEach(function(row) {
+        const level = parseInt(row.className.match(/level-(\d+)/)?.[1] || '0');
+        if (level > 0) {
+            row.style.display = 'none';
+        }
+    });
+    
+    // Função para mostrar/ocultar filhos
+    function toggleChildren(parentCode, show) {
+        rows.forEach(function(row) {
+            const rowParentCode = row.getAttribute('data-parent-code');
+            if (rowParentCode === parentCode) {
+                row.style.display = show ? '' : 'none';
+                // Se estiver ocultando, também ocultar todos os descendentes
+                if (!show) {
+                    const rowCode = row.getAttribute('data-code');
+                    toggleChildren(rowCode, false);
+                    // Atualizar botão do item filho
+                    const toggleBtn = row.querySelector('.expand-toggle');
+                    if (toggleBtn && row.querySelector('.expand-toggle').textContent.trim() !== '') {
+                        toggleBtn.textContent = '+';
+                    }
+                }
+            }
+        });
+    }
+    
+    // Adicionar event listeners aos botões de expandir/recolher
+    document.querySelectorAll('.expand-toggle').forEach(function(btn) {
+        btn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            const row = this.closest('tr');
+            const code = row.getAttribute('data-code');
+            const isExpanded = this.textContent === '-';
+            
+            if (isExpanded) {
+                // Recolher
+                this.textContent = '+';
+                toggleChildren(code, false);
+            } else {
+                // Expandir
+                this.textContent = '-';
+                toggleChildren(code, true);
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

@@ -90,6 +90,13 @@
             </div>
         </div> |
         <div class="dropdown">
+            <a href="#">Fluxo de caixa</a>
+            <div class="dropdown-content">
+                <a href="{% url 'finance:cash_flow_item_list' %}">Cadastro</a>
+                <a href="{% url 'finance:cash_flow_report' %}">Relatório</a>
+            </div>
+        </div> |
+        <div class="dropdown">
             <a href="{% url 'finance:reports_index' %}">Relatórios</a>
             <div class="dropdown-content">
                 <div class="submenu">

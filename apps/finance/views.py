@@ -5,12 +5,13 @@ from django.http import JsonResponse
 from django.db import transaction as db_transaction
 from datetime import datetime, date
 import uuid
-from .models import Account, Beneficiary, Category, Subcategory, Transaction, Scheduler, Asset, AssetTransaction, AssetPosition, Budget, Inventory
+from .models import Account, Beneficiary, Category, Subcategory, Transaction, Scheduler, Asset, AssetTransaction, AssetPosition, Budget, Inventory, CashFlowItem
 from .forms import (
     AccountForm, BeneficiaryForm, CategoryForm, SubcategoryForm, TransactionForm, SchedulerForm,
     MultipleTransactionForm, MultipleTransactionItemForm, MultipleTransactionItemFormSet,
     MultipleSchedulerForm, MultipleSchedulerItemForm, MultipleSchedulerItemFormSet,
-    MultipleSchedulerRegisterItemFormSet, AssetForm, AssetTransactionForm, AssetPositionForm, InventoryForm
+    MultipleSchedulerRegisterItemFormSet, AssetForm, AssetTransactionForm, AssetPositionForm, InventoryForm,
+    CashFlowItemForm, CashFlowCalculationRuleFormSet
 )
 
 
@@ -2125,3 +2126,287 @@ def inventory_delete(request, pk):
         messages.success(request, 'Item do inventário deletado com sucesso!')
         return redirect('finance:inventory_list')
     return render(request, 'finance/inventory_confirm_delete.html', {'inventory': inventory})
+
+
+# Cash Flow Item Views
+def cash_flow_item_list(request):
+    """Lista de itens do fluxo de caixa"""
+    all_items = CashFlowItem.objects.all().order_by('order', 'code')
+    
+    # Construir estrutura hierárquica com informações de nível
+    items_data = []
+    for item in all_items:
+        # Determinar nível hierárquico
+        level = item.code.count('.')
+        
+        # Verificar se tem filhos para mostrar botão expandir/recolher
+        has_children = item.get_children().exists()
+        parent_code = item.get_parent_code()
+        
+        items_data.append({
+            'item': item,
+            'level': level,
+            'parent_code': parent_code,
+            'has_children': has_children,
+        })
+    
+    return render(request, 'finance/cash_flow_item_list.html', {'items': items_data})
+
+
+def cash_flow_item_create(request):
+    """Criar novo item do fluxo de caixa"""
+    if request.method == 'POST':
+        form = CashFlowItemForm(request.POST)
+        rules_formset = CashFlowCalculationRuleFormSet(request.POST, prefix='rules')
+        
+        # Validar form primeiro
+        if form.is_valid():
+            calculation_type = form.cleaned_data.get('calculation_type')
+            new_code = form.cleaned_data.get('code')
+            
+            # Verificar se código já existe e renumerar se necessário
+            if CashFlowItem.objects.filter(code=new_code).exists():
+                # Encontrar próximo código disponível
+                next_available_code = CashFlowItem.find_next_available_code(new_code)
+                # Renumerar item existente e seus descendentes
+                CashFlowItem.renumber_code_and_descendants(new_code, next_available_code)
+            
+            # Se for SUBTOTAL, não precisa validar formset (pode estar vazio)
+            if calculation_type == 'SUBTOTAL':
+                form.rules_formset = rules_formset
+                new_item = form.save()
+                
+                # Reorganizar ordens após criar novo item
+                CashFlowItem.reorganize_orders()
+                
+                messages.success(request, 'Item do fluxo de caixa criado com sucesso!')
+                return redirect('finance:cash_flow_item_list')
+            
+            # Se for RULES, validar formset
+            elif calculation_type == 'RULES':
+                if rules_formset.is_valid():
+                    # Verificar se há pelo menos uma regra válida
+                    has_valid_rule = False
+                    for rule_form in rules_formset:
+                        if rule_form.cleaned_data and not rule_form.cleaned_data.get('DELETE', False):
+                            has_valid_rule = True
+                            break
+                    
+                    if not has_valid_rule:
+                        messages.error(request, 'Itens com tipo "Calcula por regras" devem ter pelo menos uma regra configurada.')
+                        return render(request, 'finance/cash_flow_item_form.html', {
+                            'form': form,
+                            'rules_formset': rules_formset,
+                        })
+                    
+                    form.rules_formset = rules_formset
+                    new_item = form.save()
+                    
+                    # Reorganizar ordens após criar novo item
+                    CashFlowItem.reorganize_orders()
+                    
+                    messages.success(request, 'Item do fluxo de caixa criado com sucesso!')
+                    return redirect('finance:cash_flow_item_list')
+    else:
+        # Verificar se há parâmetros para pré-preencher
+        parent_id = request.GET.get('parent_id')
+        action = request.GET.get('action')  # 'sibling' ou 'child'
+        
+        initial_data = {}
+        if parent_id and action:
+            try:
+                parent_item = CashFlowItem.objects.get(pk=parent_id)
+                
+                if action == 'sibling':
+                    # Criar irmão: usar get_next_sibling_code()
+                    next_code = parent_item.get_next_sibling_code()
+                    initial_data['code'] = next_code
+                    # Irmão acumula no mesmo lugar que o irmão existente
+                    if parent_item.accumulates_in:
+                        initial_data['accumulates_in'] = parent_item.accumulates_in
+                elif action == 'child':
+                    # Criar filho: usar get_next_child_code()
+                    next_code = parent_item.get_next_child_code()
+                    initial_data['code'] = next_code
+                    # Filho acumula no pai
+                    initial_data['accumulates_in'] = parent_item
+                
+                # Calcular ordem apropriada
+                initial_data['order'] = CashFlowItem.get_next_order_for_code(initial_data['code'])
+                
+            except CashFlowItem.DoesNotExist:
+                pass
+        
+        form = CashFlowItemForm(initial=initial_data)
+        rules_formset = CashFlowCalculationRuleFormSet(prefix='rules')
+    
+    return render(request, 'finance/cash_flow_item_form.html', {
+        'form': form,
+        'rules_formset': rules_formset,
+    })
+
+
+def cash_flow_item_update(request, pk):
+    """Editar item do fluxo de caixa existente"""
+    item = get_object_or_404(CashFlowItem, pk=pk)
+    
+    if request.method == 'POST':
+        form = CashFlowItemForm(request.POST, instance=item)
+        rules_formset = CashFlowCalculationRuleFormSet(request.POST, prefix='rules')
+        
+        # Validar form primeiro
+        if form.is_valid():
+            calculation_type = form.cleaned_data.get('calculation_type')
+            
+            # Se for SUBTOTAL, não precisa validar formset (pode estar vazio)
+            if calculation_type == 'SUBTOTAL':
+                form.rules_formset = rules_formset
+                form.save()
+                messages.success(request, 'Item do fluxo de caixa atualizado com sucesso!')
+                return redirect('finance:cash_flow_item_list')
+            
+            # Se for RULES, validar formset
+            elif calculation_type == 'RULES':
+                if rules_formset.is_valid():
+                    # Verificar se há pelo menos uma regra válida
+                    has_valid_rule = False
+                    for rule_form in rules_formset:
+                        if rule_form.cleaned_data and not rule_form.cleaned_data.get('DELETE', False):
+                            has_valid_rule = True
+                            break
+                    
+                    if not has_valid_rule:
+                        messages.error(request, 'Itens com tipo "Calcula por regras" devem ter pelo menos uma regra configurada.')
+                        return render(request, 'finance/cash_flow_item_form.html', {
+                            'form': form,
+                            'rules_formset': rules_formset,
+                            'item': item,
+                        })
+                    
+                    form.rules_formset = rules_formset
+                    form.save()
+                    messages.success(request, 'Item do fluxo de caixa atualizado com sucesso!')
+                    return redirect('finance:cash_flow_item_list')
+    else:
+        form = CashFlowItemForm(instance=item)
+        
+        # Popular formset com regras existentes
+        initial_data = []
+        for rule in item.calculation_rules:
+            rule_data = {'rule_type': rule.get('type')}
+            if rule.get('type') == 'subcategory':
+                rule_data['subcategory'] = rule.get('subcategory_id')
+            elif rule.get('type') == 'asset_operation':
+                rule_data['asset_operation_type'] = rule.get('operation_type')
+                rule_data['asset_type'] = rule.get('asset_type', '')
+            initial_data.append(rule_data)
+        
+        rules_formset = CashFlowCalculationRuleFormSet(prefix='rules', initial=initial_data)
+    
+    return render(request, 'finance/cash_flow_item_form.html', {
+        'form': form,
+        'rules_formset': rules_formset,
+        'item': item,
+    })
+
+
+def cash_flow_item_delete(request, pk):
+    """Deletar item do fluxo de caixa"""
+    item = get_object_or_404(CashFlowItem, pk=pk)
+    if request.method == 'POST':
+        item.delete()
+        messages.success(request, 'Item do fluxo de caixa deletado com sucesso!')
+        return redirect('finance:cash_flow_item_list')
+    return render(request, 'finance/cash_flow_item_confirm_delete.html', {'item': item})
+
+
+def cash_flow_report(request):
+    """Relatório de fluxo de caixa"""
+    from decimal import Decimal
+    
+    # Filtros
+    start_date = request.GET.get('start_date')
+    end_date = request.GET.get('end_date')
+    account_id = request.GET.get('account')
+    
+    # Valores padrão
+    if not start_date:
+        today = date.today()
+        start_date = date(today.year, today.month, 1).isoformat()
+    if not end_date:
+        end_date = date.today().isoformat()
+    
+    # Converter para date objects
+    try:
+        start_date = datetime.strptime(start_date, '%Y-%m-%d').date()
+        end_date = datetime.strptime(end_date, '%Y-%m-%d').date()
+    except (ValueError, TypeError):
+        start_date = date.today().replace(day=1)
+        end_date = date.today()
+    
+    account = None
+    if account_id and account_id != 'all':
+        try:
+            account = Account.objects.get(pk=account_id)
+        except Account.DoesNotExist:
+            account = None
+    
+    # Buscar todos os itens ordenados por código
+    all_items = CashFlowItem.objects.all().order_by('order', 'code')
+    
+    # Construir estrutura hierárquica com valores calculados
+    report_data = []
+    for item in all_items:
+        value = item.calculate_value(start_date, end_date, account)
+        
+        # Se acumula em outro item, marcar
+        accumulates_in_code = None
+        if item.accumulates_in:
+            accumulates_in_code = item.accumulates_in.code
+        
+        # Determinar nível hierárquico
+        level = item.code.count('.')
+        
+        # Verificar se tem filhos para mostrar botão expandir/recolher
+        has_children = item.get_children().exists()
+        parent_code = item.get_parent_code()
+        
+        report_data.append({
+            'item': item,
+            'code': item.code,
+            'description': item.description,
+            'value': value,
+            'accumulates_in_code': accumulates_in_code,
+            'level': level,
+            'has_children': has_children,
+            'parent_code': parent_code,
+        })
+    
+    # Adicionar valores acumulados aos dados
+    # Para itens SUBTOTAL que acumulam valores de outros itens, o valor já foi calculado
+    # Para itens que acumulam em outros, precisamos adicionar ao item de destino
+    for data in report_data:
+        # O valor calculado já inclui a lógica de SUBTOTAL (soma filhos ou itens que acumulam)
+        data['accumulated_value'] = data['value']
+    
+    # Total geral (último item de nível raiz, geralmente o "Caixa Líquido")
+    total_general = Decimal('0')
+    root_items = [d for d in report_data if d['level'] == 0]
+    if root_items:
+        # Pegar o último item de nível raiz (geralmente o "Caixa Líquido")
+        total_general = root_items[-1]['accumulated_value']
+    else:
+        # Fallback: somar todos os valores
+        for data in report_data:
+            total_general += data['value']
+    
+    accounts = Account.objects.all()
+    
+    return render(request, 'finance/cash_flow_report.html', {
+        'report_data': report_data,
+        'start_date': start_date,
+        'end_date': end_date,
+        'selected_account': account,
+        'accounts': accounts,
+        'total_general': total_general,
+    })

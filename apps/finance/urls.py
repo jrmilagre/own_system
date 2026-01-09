@@ -66,6 +66,7 @@ urlpatterns = [
     path('reports/', views.reports_index, name='reports_index'),
     path('reports/account-statement/', views.account_statement, name='account_statement'),
     path('reports/asset-stock-position/', views.asset_stock_position_report, name='asset_stock_position_report'),
+    path('reports/cash-flow/', views.cash_flow_report, name='cash_flow_report'),
     # Budget URLs
     path('budgets/', views.budget_manage, name='budget_manage'),
     # Inventory URLs
@@ -73,5 +74,10 @@ urlpatterns = [
     path('inventory/create/', views.inventory_create, name='inventory_create'),
     path('inventory/<int:pk>/update/', views.inventory_update, name='inventory_update'),
     path('inventory/<int:pk>/delete/', views.inventory_delete, name='inventory_delete'),
+    # Cash Flow Item URLs
+    path('cash-flow-items/', views.cash_flow_item_list, name='cash_flow_item_list'),
+    path('cash-flow-items/create/', views.cash_flow_item_create, name='cash_flow_item_create'),
+    path('cash-flow-items/<int:pk>/update/', views.cash_flow_item_update, name='cash_flow_item_update'),
+    path('cash-flow-items/<int:pk>/delete/', views.cash_flow_item_delete, name='cash_flow_item_delete'),
 ]
 

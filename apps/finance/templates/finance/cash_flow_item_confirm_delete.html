@@ -1,0 +1,15 @@
+{% extends 'finance/base.html' %}
+
+{% block title %}Deletar Item do Fluxo de Caixa{% endblock %}
+
+{% block content %}
+<h1>Deletar Item do Fluxo de Caixa</h1>
+
+<p>Tem certeza que deseja deletar o item <strong>{{ item.code }} - {{ item.description }}</strong>?</p>
+
+<form method="post">
+    {% csrf_token %}
+    <button type="submit">Confirmar Deletar</button>
+    <a href="{% url 'finance:cash_flow_item_list' %}">Cancelar</a>
+</form>
+{% endblock %}

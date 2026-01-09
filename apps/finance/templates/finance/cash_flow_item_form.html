@@ -1,0 +1,267 @@
+{% extends 'finance/base.html' %}
+
+{% block title %}{% if item %}Editar{% else %}Criar{% endif %} Item do Fluxo de Caixa{% endblock %}
+
+{% block content %}
+<h1>{% if item %}Editar{% else %}Criar{% endif %} Item do Fluxo de Caixa</h1>
+
+<form method="post">
+    {% csrf_token %}
+    
+    {% if form.non_field_errors %}
+    <div style="color: red; padding: 10px; background-color: #ffe6e6; border: 1px solid red; margin-bottom: 10px;">
+        <strong>Erros no formulário:</strong>
+        <ul>
+            {% for error in form.non_field_errors %}
+            <li>{{ error }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+    
+    <h2>Dados do Item</h2>
+    <table>
+        <tr>
+            <td>{{ form.code.label_tag }}</td>
+            <td>{{ form.code }}</td>
+            {% if form.code.errors %}
+            <td>{{ form.code.errors }}</td>
+            {% endif %}
+        </tr>
+        <tr>
+            <td>{{ form.description.label_tag }}</td>
+            <td>{{ form.description }}</td>
+            {% if form.description.errors %}
+            <td>{{ form.description.errors }}</td>
+            {% endif %}
+        </tr>
+        <tr>
+            <td>{{ form.calculation_type.label_tag }}</td>
+            <td>{{ form.calculation_type }}</td>
+            {% if form.calculation_type.errors %}
+            <td>{{ form.calculation_type.errors }}</td>
+            {% endif %}
+        </tr>
+        <tr id="accumulates-in-row" style="display: none;">
+            <td>{{ form.accumulates_in.label_tag }}</td>
+            <td>{{ form.accumulates_in }}</td>
+            {% if form.accumulates_in.errors %}
+            <td>{{ form.accumulates_in.errors }}</td>
+            {% endif %}
+        </tr>
+        <tr>
+            <td>{{ form.order.label_tag }}</td>
+            <td>{{ form.order }}</td>
+            {% if form.order.errors %}
+            <td>{{ form.order.errors }}</td>
+            {% endif %}
+        </tr>
+        <tr id="rules-section" style="display: none;">
+            <td colspan="2">
+                <h3>Regras de Cálculo</h3>
+                {{ rules_formset.management_form }}
+                {% if rules_formset.non_form_errors %}
+                <div style="color: red; padding: 10px; background-color: #ffe6e6; border: 1px solid red; margin-bottom: 10px;">
+                    <strong>Erros nas regras:</strong>
+                    <ul>
+                        {% for error in rules_formset.non_form_errors %}
+                        <li>{{ error }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+                <div id="rules-container">
+                    {% for rule_form in rules_formset %}
+                    <div class="rule-form" data-form-index="{{ forloop.counter0 }}">
+                        <h4>Regra {{ forloop.counter }}
+                            <button type="button" class="remove-rule">Remover</button>
+                        </h4>
+                        {% if rule_form.DELETE %}
+                        <div style="display: none;">{{ rule_form.DELETE }}</div>
+                        {% endif %}
+                        <table>
+                            <tr>
+                                <td>{{ rule_form.rule_type.label_tag }}</td>
+                                <td>{{ rule_form.rule_type }}</td>
+                                {% if rule_form.rule_type.errors %}
+                                <td>{{ rule_form.rule_type.errors }}</td>
+                                {% endif %}
+                            </tr>
+                            <tr class="subcategory-fields" style="display: none;">
+                                <td>{{ rule_form.subcategory.label_tag }}</td>
+                                <td>{{ rule_form.subcategory }}</td>
+                                {% if rule_form.subcategory.errors %}
+                                <td>{{ rule_form.subcategory.errors }}</td>
+                                {% endif %}
+                            </tr>
+                            <tr class="asset-operation-fields" style="display: none;">
+                                <td>{{ rule_form.asset_operation_type.label_tag }}</td>
+                                <td>{{ rule_form.asset_operation_type }}</td>
+                                {% if rule_form.asset_operation_type.errors %}
+                                <td>{{ rule_form.asset_operation_type.errors }}</td>
+                                {% endif %}
+                            </tr>
+                            <tr class="asset-operation-fields" style="display: none;">
+                                <td>{{ rule_form.asset_type.label_tag }}</td>
+                                <td>{{ rule_form.asset_type }}</td>
+                                {% if rule_form.asset_type.errors %}
+                                <td>{{ rule_form.asset_type.errors }}</td>
+                                {% endif %}
+                            </tr>
+                        </table>
+                    </div>
+                    {% endfor %}
+                </div>
+                <button type="button" id="add-rule">Adicionar Regra</button>
+            </td>
+        </tr>
+    </table>
+    
+    <button type="submit">Salvar</button>
+    <a href="{% url 'finance:cash_flow_item_list' %}">Cancelar</a>
+</form>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Debug: verificar se o formulário está sendo submetido
+    const form = document.querySelector('form');
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            console.log('Formulário sendo submetido...');
+            // Não prevenir o submit, deixar o comportamento padrão
+        });
+    }
+    
+    const calculationType = document.getElementById('id_calculation_type');
+    const rulesSection = document.getElementById('rules-section');
+    const accumulatesInRow = document.getElementById('accumulates-in-row');
+    
+    // Mostrar/ocultar seções baseado no tipo de cálculo
+    function updateFormVisibility() {
+        const type = calculationType.value;
+        if (type === 'RULES') {
+            rulesSection.style.display = 'table-row';
+        } else {
+            rulesSection.style.display = 'none';
+        }
+        
+        if (type === 'SUBTOTAL' || type === 'RULES') {
+            accumulatesInRow.style.display = 'table-row';
+        } else {
+            accumulatesInRow.style.display = 'none';
+        }
+    }
+    
+    calculationType.addEventListener('change', updateFormVisibility);
+    updateFormVisibility();
+    
+    // Mostrar/ocultar campos baseado no tipo de regra
+    function setupRuleTypeListeners() {
+        document.querySelectorAll('.rule-type-select').forEach(select => {
+            select.addEventListener('change', function() {
+                const ruleForm = this.closest('.rule-form');
+                const ruleType = this.value;
+                
+                // Ocultar todos os campos
+                ruleForm.querySelectorAll('.subcategory-fields, .asset-operation-fields')
+                    .forEach(field => field.style.display = 'none');
+                
+                // Mostrar campos relevantes
+                if (ruleType === 'subcategory') {
+                    ruleForm.querySelectorAll('.subcategory-fields')
+                        .forEach(field => field.style.display = 'table-row');
+                } else if (ruleType === 'asset_operation') {
+                    ruleForm.querySelectorAll('.asset-operation-fields')
+                        .forEach(field => field.style.display = 'table-row');
+                }
+            });
+            
+            // Trigger inicial
+            select.dispatchEvent(new Event('change'));
+        });
+    }
+    
+    setupRuleTypeListeners();
+    
+    // Adicionar nova regra
+    const addRuleButton = document.getElementById('add-rule');
+    if (addRuleButton) {
+        addRuleButton.addEventListener('click', function() {
+            const container = document.getElementById('rules-container');
+            const existingForms = container.querySelectorAll('.rule-form');
+            if (existingForms.length === 0) return;
+            
+            const lastForm = existingForms[existingForms.length - 1];
+            const newForm = lastForm.cloneNode(true);
+            
+            // Atualizar índices
+            const totalForms = document.getElementById('id_rules-TOTAL_FORMS');
+            const newIndex = parseInt(totalForms.value);
+            
+            newForm.querySelectorAll('input, select, textarea, label').forEach(element => {
+                if (element.id) {
+                    element.id = element.id.replace(/-\d+-/, '-' + newIndex + '-');
+                }
+                if (element.name) {
+                    element.name = element.name.replace(/-\d+-/, '-' + newIndex + '-');
+                }
+                if (element.htmlFor) {
+                    element.htmlFor = element.htmlFor.replace(/-\d+-/, '-' + newIndex + '-');
+                }
+            });
+            
+            // Limpar valores
+            newForm.querySelectorAll('input[type="text"], input[type="number"], select').forEach(element => {
+                if (element.type !== 'checkbox' && element.type !== 'hidden') {
+                    element.value = '';
+                } else if (element.type === 'checkbox') {
+                    element.checked = false;
+                }
+            });
+            
+            // Atualizar título
+            const title = newForm.querySelector('h4');
+            if (title) {
+                title.innerHTML = 'Regra ' + (newIndex + 1) + ' <button type="button" class="remove-rule">Remover</button>';
+            }
+            
+            // Atualizar contador
+            totalForms.value = newIndex + 1;
+            
+            container.appendChild(newForm);
+            
+            // Re-aplicar event listeners
+            setupRuleTypeListeners();
+            
+            // Adicionar listener de remoção
+            newForm.querySelector('.remove-rule')?.addEventListener('click', function() {
+                const deleteCheckbox = newForm.querySelector('input[name$="-DELETE"]');
+                if (deleteCheckbox) {
+                    deleteCheckbox.checked = true;
+                    newForm.style.display = 'none';
+                } else {
+                    newForm.remove();
+                    totalForms.value = parseInt(totalForms.value) - 1;
+                }
+            });
+        });
+    }
+    
+    // Remover regra
+    document.querySelectorAll('.remove-rule').forEach(button => {
+        button.addEventListener('click', function() {
+            const ruleForm = this.closest('.rule-form');
+            const deleteCheckbox = ruleForm.querySelector('input[name$="-DELETE"]');
+            if (deleteCheckbox) {
+                deleteCheckbox.checked = true;
+                ruleForm.style.display = 'none';
+            } else {
+                ruleForm.remove();
+                const totalForms = document.getElementById('id_rules-TOTAL_FORMS');
+                totalForms.value = parseInt(totalForms.value) - 1;
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

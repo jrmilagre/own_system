@@ -1291,3 +1291,423 @@ class Inventory(BaseModel):
         if not self.sale_price or not self.buy_price:
             return None
         return self.sale_price - self.buy_price
+
+
+class CashFlowItem(BaseModel):
+    """Modelo para itens do fluxo de caixa gerencial"""
+    
+    CALCULATION_TYPE_CHOICES = [
+        ('SUBTOTAL', 'Totaliza subníveis'),
+        ('RULES', 'Calcula por regras'),
+    ]
+    
+    code = models.CharField(
+        'Código',
+        max_length=50,
+        unique=True,
+        help_text='Código hierárquico (ex: 1.01, 1.01.1, 1.01.1.01)'
+    )
+    description = models.CharField(
+        'Descrição',
+        max_length=200
+    )
+    calculation_type = models.CharField(
+        'Tipo de cálculo',
+        max_length=20,
+        choices=CALCULATION_TYPE_CHOICES,
+        default='RULES',
+        help_text='SUBTOTAL: totaliza filhos ou itens que acumulam. RULES: calcula por regras configuradas.'
+    )
+    accumulates_in = models.ForeignKey(
+        'self',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='accumulated_items',
+        verbose_name='Acumula em',
+        help_text='Item onde este valor será acumulado (pode ser diferente do pai estrutural)'
+    )
+    calculation_rules = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="""
+        Lista de regras de cálculo. Exemplos:
+        
+        Por subcategoria:
+        [{"type": "subcategory", "subcategory_id": 5}]
+        
+        Por operação de ativo:
+        [{"type": "asset_operation", "operation_type": "DIVIDEND"}]
+        
+        Por operação + tipo de ativo:
+        [{"type": "asset_operation", "operation_type": "BUY", "asset_type": "STOCK"}]
+        
+        Múltiplas regras (soma todas):
+        [
+            {"type": "subcategory", "subcategory_id": 5},
+            {"type": "asset_operation", "operation_type": "DIVIDEND"}
+        ]
+        """
+    )
+    order = models.IntegerField(
+        'Ordem',
+        default=0,
+        help_text='Ordem de exibição'
+    )
+    
+    class Meta:
+        verbose_name = 'Item do Fluxo de Caixa'
+        verbose_name_plural = 'Itens do Fluxo de Caixa'
+        ordering = ('order', 'code')
+        indexes = [
+            models.Index(fields=['code']),
+            models.Index(fields=['calculation_type']),
+            models.Index(fields=['accumulates_in']),
+        ]
+    
+    def __str__(self):
+        return f"{self.code} - {self.description}"
+    
+    def get_parent_code(self):
+        """Retorna o código do pai baseado na hierarquia do código"""
+        parts = self.code.split('.')
+        if len(parts) > 1:
+            return '.'.join(parts[:-1])
+        return None
+    
+    def get_parent(self):
+        """Retorna o item pai baseado no código"""
+        parent_code = self.get_parent_code()
+        if parent_code:
+            try:
+                return CashFlowItem.objects.get(code=parent_code)
+            except CashFlowItem.DoesNotExist:
+                return None
+        return None
+    
+    def get_children(self):
+        """Retorna todos os filhos diretos baseado no código"""
+        # Filhos diretos: códigos que começam com self.code + "."
+        # Mas não são netos (não têm mais pontos após)
+        prefix = self.code + "."
+        
+        all_children = CashFlowItem.objects.filter(code__startswith=prefix)
+        
+        # Filtrar apenas filhos diretos (sem mais pontos após o prefix)
+        direct_children = []
+        for item in all_children:
+            remaining = item.code[len(prefix):]
+            if '.' not in remaining:  # Filho direto
+                direct_children.append(item.code)
+        
+        return CashFlowItem.objects.filter(code__in=direct_children).order_by('code')
+    
+    def get_siblings(self):
+        """Retorna todos os irmãos (mesmo pai hierárquico)"""
+        parent_code = self.get_parent_code()
+        if not parent_code:
+            # Se não tem pai, retorna todos os itens de nível raiz
+            return CashFlowItem.objects.filter(code__regex=r'^\d+$').exclude(pk=self.pk).order_by('code')
+        
+        # Buscar todos os filhos do mesmo pai
+        siblings = CashFlowItem.objects.filter(
+            code__startswith=parent_code + "."
+        ).exclude(pk=self.pk)
+        
+        # Filtrar apenas irmãos diretos (mesmo nível)
+        parent_level = parent_code.count('.')
+        direct_siblings = []
+        for item in siblings:
+            if item.code.count('.') == parent_level + 1:
+                direct_siblings.append(item.code)
+        
+        return CashFlowItem.objects.filter(code__in=direct_siblings).order_by('code')
+    
+    def get_next_sibling_code(self):
+        """Calcula o próximo código irmão sequencial"""
+        siblings = self.get_siblings()
+        
+        if not siblings.exists():
+            # Se não tem irmãos, retorna próximo código sequencial
+            parts = self.code.split('.')
+            last_part = int(parts[-1])
+            next_part = last_part + 1
+            parts[-1] = str(next_part).zfill(len(parts[-1]))
+            return '.'.join(parts)
+        
+        # Encontrar o maior código irmão
+        max_code = None
+        max_last_part = -1
+        for sibling in siblings:
+            sibling_parts = sibling.code.split('.')
+            sibling_last_part = int(sibling_parts[-1])
+            if sibling_last_part > max_last_part:
+                max_last_part = sibling_last_part
+                max_code = sibling.code
+        
+        # Incrementar o último número
+        parts = max_code.split('.')
+        last_part = int(parts[-1])
+        next_part = last_part + 1
+        parts[-1] = str(next_part).zfill(len(parts[-1]))
+        return '.'.join(parts)
+    
+    def get_next_child_code(self):
+        """Calcula o próximo código filho"""
+        children = self.get_children()
+        
+        if not children.exists():
+            # Se não tem filhos, retorna primeiro código filho
+            return self.code + ".01"
+        
+        # Encontrar o maior código filho
+        max_code = None
+        max_last_part = -1
+        for child in children:
+            child_parts = child.code.split('.')
+            child_last_part = int(child_parts[-1])
+            if child_last_part > max_last_part:
+                max_last_part = child_last_part
+                max_code = child.code
+        
+        # Incrementar o último número
+        parts = max_code.split('.')
+        last_part = int(parts[-1])
+        next_part = last_part + 1
+        parts[-1] = str(next_part).zfill(2)  # Sempre 2 dígitos para filhos
+        return '.'.join(parts)
+    
+    @classmethod
+    def get_next_order_for_code(cls, code):
+        """Calcula a ordem apropriada para um código baseado na posição hierárquica"""
+        # Buscar todos os itens ordenados por ordem atual
+        all_items = cls.objects.all().order_by('order', 'code')
+        
+        # Encontrar a maior ordem entre itens do mesmo nível ou anteriores
+        parent_code = None
+        parts = code.split('.')
+        if len(parts) > 1:
+            parent_code = '.'.join(parts[:-1])
+        
+        max_order = 0
+        for item in all_items:
+            # Se o item é do mesmo nível ou anterior na hierarquia
+            item_level = item.code.count('.')
+            code_level = code.count('.')
+            
+            if item_level <= code_level:
+                if item.order > max_order:
+                    max_order = item.order
+        
+        return max_order + 1
+    
+    @classmethod
+    def find_next_available_code(cls, desired_code):
+        """Encontra o próximo código disponível quando o código desejado já existe"""
+        # Verificar se código já existe
+        if not cls.objects.filter(code=desired_code).exists():
+            return desired_code
+        
+        # Código existe, encontrar próximo disponível
+        parts = desired_code.split('.')
+        
+        if len(parts) > 1:
+            # Tem pai: encontrar próximo código irmão
+            parent_code = '.'.join(parts[:-1])
+            try:
+                parent_item = cls.objects.get(code=parent_code)
+                # Buscar todos os irmãos (filhos do mesmo pai)
+                siblings = parent_item.get_children()
+                
+                # Encontrar maior número do último segmento
+                max_last_part = int(parts[-1])
+                for sibling in siblings:
+                    sibling_parts = sibling.code.split('.')
+                    sibling_last_part = int(sibling_parts[-1])
+                    if sibling_last_part > max_last_part:
+                        max_last_part = sibling_last_part
+                
+                # Próximo código disponível
+                next_part = max_last_part + 1
+                parts[-1] = str(next_part).zfill(len(parts[-1]))
+                return '.'.join(parts)
+            except cls.DoesNotExist:
+                # Pai não existe, incrementar último segmento
+                last_part = int(parts[-1])
+                next_part = last_part + 1
+                parts[-1] = str(next_part).zfill(len(parts[-1]))
+                return '.'.join(parts)
+        else:
+            # Nível raiz: encontrar próximo código raiz disponível
+            root_items = cls.objects.filter(code__regex=r'^\d+$')
+            max_code = int(desired_code)
+            for item in root_items:
+                try:
+                    item_code = int(item.code)
+                    if item_code > max_code:
+                        max_code = item_code
+                except ValueError:
+                    pass
+            return str(max_code + 1)
+    
+    @classmethod
+    def renumber_code_and_descendants(cls, old_code, new_code):
+        """Renumerar item e todos os descendentes, atualizando também accumulates_in"""
+        from django.db import transaction as db_transaction
+        
+        with db_transaction.atomic():
+            # Buscar item a ser renumerado
+            try:
+                item = cls.objects.get(code=old_code)
+            except cls.DoesNotExist:
+                return
+            
+            # Buscar todos os descendentes (códigos que começam com old_code + ".")
+            all_descendants = list(cls.objects.filter(code__startswith=old_code + "."))
+            
+            # Renumerar item principal
+            item.code = new_code
+            item.save()
+            
+            # Nota: accumulates_in é um ForeignKey (por ID), então itens que já referenciam
+            # este item continuam referenciando corretamente mesmo após renumerar o código.
+            # Não precisamos atualizar accumulates_in para o item principal.
+            
+            # Renumerar descendentes
+            for descendant in all_descendants:
+                # Substituir prefixo old_code por new_code
+                old_descendant_code = descendant.code
+                new_descendant_code = old_descendant_code.replace(old_code, new_code, 1)
+                
+                # Renumerar o descendente
+                descendant.code = new_descendant_code
+                descendant.save()
+                
+                # Nota: accumulates_in é um ForeignKey (por ID), então itens que já referenciam
+                # este descendente continuam referenciando corretamente mesmo após renumerar.
+                # Não precisamos atualizar accumulates_in para descendentes.
+    
+    @classmethod
+    def reorganize_orders(cls):
+        """Reorganizar ordens automaticamente para evitar conflitos"""
+        from django.db import transaction as db_transaction
+        
+        with db_transaction.atomic():
+            # Buscar todos os itens ordenados por código (hierarquia)
+            all_items = cls.objects.all().order_by('code')
+            
+            # Atribuir ordens sequenciais baseado na posição
+            order = 1
+            for item in all_items:
+                item.order = order
+                item.save(update_fields=['order'])
+                order += 1
+    
+    def calculate_value(self, start_date, end_date, account=None):
+        """Calcula o valor deste item baseado nas regras"""
+        from decimal import Decimal
+        
+        if self.calculation_type == 'SUBTOTAL':
+            total = Decimal('0')
+            
+            # Cenário 1: Totaliza filhos hierárquicos (se existirem)
+            # Mas apenas filhos que não têm accumulates_in definido ou que acumulam no próprio pai
+            children = self.get_children()
+            children_codes = set()
+            if children.exists():
+                for child in children:
+                    # Só somar se o filho não tem accumulates_in OU se acumula no próprio pai
+                    if not child.accumulates_in or child.accumulates_in == self:
+                        children_codes.add(child.code)
+                        total += child.calculate_value(start_date, end_date, account)
+            
+            # Cenário 2: Acumula valores de itens que apontam para este
+            # Buscar itens que têm accumulates_in apontando para este item
+            # MAS excluir filhos hierárquicos que já foram somados (para evitar duplicação)
+            accumulated_items = CashFlowItem.objects.filter(
+                accumulates_in=self
+            ).exclude(code__in=children_codes)
+            
+            for item in accumulated_items:
+                # Calcular valor do item que acumula aqui
+                item_value = item.calculate_value(start_date, end_date, account)
+                total += item_value
+            
+            return total
+        
+        elif self.calculation_type == 'RULES':
+            # Calcula por regras
+            total = Decimal('0')
+            for rule in self.calculation_rules:
+                rule_type = rule.get('type')
+                
+                if rule_type == 'subcategory':
+                    subcategory_id = rule.get('subcategory_id')
+                    value = self._calculate_by_subcategory(
+                        subcategory_id, start_date, end_date, account
+                    )
+                    total += value
+                
+                elif rule_type == 'asset_operation':
+                    value = self._calculate_by_asset_operation(
+                        rule, start_date, end_date, account
+                    )
+                    total += value
+            
+            return total
+        
+        return Decimal('0')
+    
+    def _calculate_by_subcategory(self, subcategory_id, start_date, end_date, account):
+        """Calcula valor por subcategoria"""
+        from django.db.models import Q
+        from decimal import Decimal
+        
+        filters = {
+            'subcategory_id': subcategory_id,
+        }
+        
+        date_filter = Q(
+            Q(transaction_date__gte=start_date, transaction_date__lte=end_date) |
+            Q(transaction_date__isnull=True, due_date__gte=start_date, due_date__lte=end_date)
+        )
+        
+        if account:
+            filters['account'] = account
+        
+        transactions = Transaction.objects.filter(**filters).filter(date_filter)
+        
+        total = Decimal('0')
+        for trans in transactions:
+            if trans.transaction_type == 'CR':
+                total += trans.value
+            elif trans.transaction_type == 'DB':
+                total -= trans.value
+        
+        return total
+    
+    def _calculate_by_asset_operation(self, rule, start_date, end_date, account):
+        """Calcula valor por operação de ativo"""
+        from decimal import Decimal
+        
+        filters = {
+            'date__gte': start_date,
+            'date__lte': end_date,
+        }
+        
+        if 'operation_type' in rule:
+            filters['operation_type'] = rule['operation_type']
+        
+        if 'asset_type' in rule:
+            filters['asset__asset_type'] = rule['asset_type']
+        
+        if account:
+            filters['account'] = account
+        
+        transactions = AssetTransaction.objects.filter(**filters)
+        
+        total = Decimal('0')
+        for trans in transactions:
+            total += trans.get_net_value()  # Já tem sinal correto
+        
+        return total

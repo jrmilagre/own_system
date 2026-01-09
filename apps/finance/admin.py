@@ -223,3 +223,27 @@ class InventoryAdmin(admin.ModelAdmin):
             'fields': ('notes',)
         }),
     )
+
+
+@admin.register(CashFlowItem)
+class CashFlowItemAdmin(admin.ModelAdmin):
+    list_display = (
+        'code',
+        'description',
+        'calculation_type',
+        'accumulates_in',
+        'order',
+        'created_at',
+        'updated_at',
+    )
+    search_fields = ('code', 'description')
+    list_filter = ('calculation_type', 'accumulates_in', 'created_at')
+    ordering = ('order', 'code')
+    fieldsets = (
+        ('Informações Básicas', {
+            'fields': ('code', 'description', 'order')
+        }),
+        ('Cálculo', {
+            'fields': ('calculation_type', 'accumulates_in', 'calculation_rules')
+        }),
+    )

@@ -1,0 +1,147 @@
+{% extends 'finance/base.html' %}
+
+{% block title %}Relatório de Fluxo de Caixa{% endblock %}
+
+{% block content %}
+<h1>Relatório de Fluxo de Caixa</h1>
+
+<!-- Formulário de Filtros -->
+<form method="get" action="{% url 'finance:cash_flow_report' %}">
+    <table>
+        <tr>
+            <td><label for="start_date">Data inicial:</label></td>
+            <td><input type="date" name="start_date" id="start_date" value="{{ start_date|date:'Y-m-d' }}" required></td>
+        </tr>
+        <tr>
+            <td><label for="end_date">Data final:</label></td>
+            <td><input type="date" name="end_date" id="end_date" value="{{ end_date|date:'Y-m-d' }}" required></td>
+        </tr>
+        <tr>
+            <td><label for="account">Conta:</label></td>
+            <td>
+                <select name="account" id="account">
+                    <option value="all" {% if not selected_account %}selected{% endif %}>Todas</option>
+                    {% for account in accounts %}
+                    <option value="{{ account.pk }}" {% if selected_account and selected_account.pk == account.pk %}selected{% endif %}>
+                        {{ account.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </td>
+        </tr>
+        <tr>
+            <td></td>
+            <td><button type="submit">Filtrar</button></td>
+        </tr>
+    </table>
+</form>
+
+<!-- Relatório -->
+{% if report_data %}
+<h2>Período: {{ start_date|date:"d/m/Y" }} a {{ end_date|date:"d/m/Y" }}</h2>
+{% if selected_account %}
+<p><strong>Conta:</strong> {{ selected_account.name }}</p>
+{% else %}
+<p><strong>Conta:</strong> Todas</p>
+{% endif %}
+
+<table style="border-collapse: collapse; margin-top: 20px; line-height: 1.2;">
+    <thead>
+        <tr style="background-color: #f0f0f0;">
+            <th style="text-align: left; padding: 2px 8px; border: 1px solid #ddd;">Código : Descrição</th>
+            <th style="text-align: right; padding: 2px 8px; border: 1px solid #ddd;">Valor</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for data in report_data %}
+        <tr class="level-{{ data.level }}" data-code="{{ data.code }}" data-parent-code="{{ data.parent_code|default:'' }}">
+            <td class="code-cell" style="padding: 2px 8px; border: 1px solid #ddd; font-family: monospace;">
+                <span class="expand-toggle" style="cursor: pointer; margin-right: 5px; display: inline-block; width: 12px; text-align: center;">{% if data.has_children %}+{% else %}&nbsp;{% endif %}</span>
+                {{ data.code }} : {{ data.description }}
+            </td>
+            <td style="text-align: right; padding: 2px 8px; border: 1px solid #ddd; font-weight: {% if data.level == 0 %}bold{% else %}normal{% endif %}; font-family: monospace;">
+                R$ {{ data.accumulated_value|floatformat:2 }}
+                {% if data.accumulates_in_code and data.value != data.accumulated_value %}
+                    <br><small style="color: #666;">(próprio: R$ {{ data.value|floatformat:2 }})</small>
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+        <tr style="background-color: #e0e0e0; font-weight: bold;">
+            <td style="padding: 2px 8px; border: 1px solid #ddd; text-align: right;">TOTAL GERAL:</td>
+            <td style="text-align: right; padding: 2px 8px; border: 1px solid #ddd; font-family: monospace;">R$ {{ total_general|floatformat:2 }}</td>
+        </tr>
+    </tbody>
+</table>
+{% else %}
+<p>Nenhum item do fluxo de caixa cadastrado.</p>
+{% endif %}
+
+<style>
+.code-cell {
+    padding-left: 0;
+}
+</style>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const codeCells = document.querySelectorAll('.code-cell');
+    const rows = document.querySelectorAll('tbody tr[data-code]');
+    
+    // Aplicar indentação baseada no nível hierárquico
+    codeCells.forEach(function(cell) {
+        const row = cell.closest('tr');
+        const level = parseInt(row.className.match(/level-(\d+)/)?.[1] || '0');
+        const padding = level * 20;
+        cell.style.paddingLeft = (padding + 20) + 'px'; // +20 para o botão expandir
+    });
+    
+    // Inicialmente, ocultar todos os filhos (nível > 0)
+    rows.forEach(function(row) {
+        const level = parseInt(row.className.match(/level-(\d+)/)?.[1] || '0');
+        if (level > 0) {
+            row.style.display = 'none';
+        }
+    });
+    
+    // Função para mostrar/ocultar filhos
+    function toggleChildren(parentCode, show) {
+        rows.forEach(function(row) {
+            const rowParentCode = row.getAttribute('data-parent-code');
+            if (rowParentCode === parentCode) {
+                row.style.display = show ? '' : 'none';
+                // Se estiver ocultando, também ocultar todos os descendentes
+                if (!show) {
+                    const rowCode = row.getAttribute('data-code');
+                    toggleChildren(rowCode, false);
+                    // Atualizar botão do item filho
+                    const toggleBtn = row.querySelector('.expand-toggle');
+                    if (toggleBtn && row.querySelector('.expand-toggle').textContent.trim() !== '') {
+                        toggleBtn.textContent = '+';
+                    }
+                }
+            }
+        });
+    }
+    
+    // Adicionar event listeners aos botões de expandir/recolher
+    document.querySelectorAll('.expand-toggle').forEach(function(btn) {
+        btn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            const row = this.closest('tr');
+            const code = row.getAttribute('data-code');
+            const isExpanded = this.textContent === '-';
+            
+            if (isExpanded) {
+                // Recolher
+                this.textContent = '+';
+                toggleChildren(code, false);
+            } else {
+                // Expandir
+                this.textContent = '-';
+                toggleChildren(code, true);
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

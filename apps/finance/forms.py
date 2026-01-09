@@ -1,6 +1,6 @@
 from django import forms
 from django.forms import formset_factory, inlineformset_factory, BaseFormSet
-from .models import Account, Beneficiary, Category, Subcategory, Transaction, Scheduler, Asset, AssetTransaction, AssetPosition, Inventory
+from .models import Account, Beneficiary, Category, Subcategory, Transaction, Scheduler, Asset, AssetTransaction, AssetPosition, Inventory, CashFlowItem
 
 
 class AccountForm(forms.ModelForm):
@@ -694,3 +694,123 @@ class InventoryForm(forms.ModelForm):
             'purchase_transaction': forms.Select(attrs={'required': False}),
             'notes': forms.Textarea(attrs={'rows': 4, 'required': False}),
         }
+
+
+class CashFlowCalculationRuleForm(forms.Form):
+    """Formulário para cada regra de cálculo"""
+    RULE_TYPE_CHOICES = [
+        ('subcategory', 'Por Subcategoria'),
+        ('asset_operation', 'Por Operação de Ativo'),
+    ]
+    
+    rule_type = forms.ChoiceField(
+        choices=RULE_TYPE_CHOICES,
+        label='Tipo de Regra',
+        required=True,
+        widget=forms.Select(attrs={'class': 'rule-type-select'})
+    )
+    
+    # Campos para regra de subcategoria
+    subcategory = forms.ModelChoiceField(
+        queryset=Subcategory.objects.all(),
+        label='Subcategoria',
+        required=False,
+        widget=forms.Select(attrs={'class': 'subcategory-field'})
+    )
+    
+    # Campos para regra de operação de ativo
+    asset_operation_type = forms.ChoiceField(
+        choices=AssetTransaction.OPERATION_TYPE_CHOICES,
+        label='Tipo de Operação',
+        required=False,
+        widget=forms.Select(attrs={'class': 'asset-operation-field'})
+    )
+    
+    asset_type = forms.ChoiceField(
+        choices=Asset.ASSET_TYPE_CHOICES,
+        label='Tipo de Ativo (opcional)',
+        required=False,
+        widget=forms.Select(attrs={'class': 'asset-type-field'})
+    )
+    
+    def clean(self):
+        cleaned_data = super().clean()
+        rule_type = cleaned_data.get('rule_type')
+        
+        if rule_type == 'subcategory':
+            if not cleaned_data.get('subcategory'):
+                raise forms.ValidationError({
+                    'subcategory': 'Subcategoria é obrigatória para este tipo de regra.'
+                })
+        elif rule_type == 'asset_operation':
+            if not cleaned_data.get('asset_operation_type'):
+                raise forms.ValidationError({
+                    'asset_operation_type': 'Tipo de operação é obrigatório para este tipo de regra.'
+                })
+        
+        return cleaned_data
+
+
+CashFlowCalculationRuleFormSet = formset_factory(
+    CashFlowCalculationRuleForm,
+    extra=1,
+    can_delete=True,
+    min_num=0
+)
+
+
+class CashFlowItemForm(forms.ModelForm):
+    class Meta:
+        model = CashFlowItem
+        fields = ['code', 'description', 'calculation_type', 'accumulates_in', 'order']
+        widgets = {
+            'code': forms.TextInput(attrs={'required': True}),
+            'description': forms.TextInput(attrs={'required': True}),
+            'calculation_type': forms.Select(attrs={'id': 'id_calculation_type'}),
+            'accumulates_in': forms.Select(attrs={'required': False}),
+            'order': forms.NumberInput(attrs={'min': 0}),
+        }
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Filtrar accumulates_in para não incluir o próprio item
+        if self.instance and self.instance.pk:
+            self.fields['accumulates_in'].queryset = CashFlowItem.objects.exclude(
+                pk=self.instance.pk
+            )
+    
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        
+        # Converter formset em JSON
+        if hasattr(self, 'rules_formset'):
+            rules_data = []
+            for form in self.rules_formset:
+                # Verificar se o form tem dados válidos e não foi deletado
+                if form.is_valid() and form.cleaned_data and not form.cleaned_data.get('DELETE', False):
+                    rule_type = form.cleaned_data.get('rule_type')
+                    if rule_type:  # Só adicionar se tiver tipo
+                        rule_dict = {'type': rule_type}
+                        
+                        if rule_type == 'subcategory':
+                            subcategory = form.cleaned_data.get('subcategory')
+                            if subcategory:
+                                rule_dict['subcategory_id'] = subcategory.id
+                        elif rule_type == 'asset_operation':
+                            operation_type = form.cleaned_data.get('asset_operation_type')
+                            if operation_type:
+                                rule_dict['operation_type'] = operation_type
+                            asset_type = form.cleaned_data.get('asset_type')
+                            if asset_type:
+                                rule_dict['asset_type'] = asset_type
+                        
+                        # Só adicionar se tiver dados válidos
+                        if len(rule_dict) > 1:  # Mais que apenas 'type'
+                            rules_data.append(rule_dict)
+            
+            instance.calculation_rules = rules_data
+        
+        if commit:
+            instance.save()
+        
+        return instance

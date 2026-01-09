@@ -1,0 +1,124 @@
+{% extends 'finance/base.html' %}
+
+{% block title %}{% if form.instance.pk %}Editar Plano de Contas{% else %}Criar Plano de Contas{% endif %}{% endblock %}
+
+{% block content %}
+<h1>{% if form.instance.pk %}Editar Plano de Contas{% else %}Criar Novo Plano de Contas{% endif %}</h1>
+
+<form method="post" id="chartAccountForm">
+    {% csrf_token %}
+    <table>
+        <tr>
+            <td><label for="{{ form.code.id_for_label }}">Código:</label></td>
+            <td>{{ form.code }}</td>
+            {% if form.code.errors %}
+            <td>{{ form.code.errors }}</td>
+            {% endif %}
+            {% if form.code.help_text %}
+            <td><small>{{ form.code.help_text }}</small></td>
+            {% endif %}
+        </tr>
+        <tr>
+            <td><label for="{{ form.description.id_for_label }}">Descrição:</label></td>
+            <td>{{ form.description }}</td>
+            {% if form.description.errors %}
+            <td>{{ form.description.errors }}</td>
+            {% endif %}
+        </tr>
+        <tr>
+            <td><label for="{{ form.parent.id_for_label }}">Plano pai:</label></td>
+            <td>{{ form.parent }}</td>
+            {% if form.parent.errors %}
+            <td>{{ form.parent.errors }}</td>
+            {% endif %}
+            {% if form.parent.help_text %}
+            <td><small>{{ form.parent.help_text }}</small></td>
+            {% endif %}
+        </tr>
+        <tr>
+            <td><label for="{{ form.accumulates_in.id_for_label }}">Acumula no plano:</label></td>
+            <td>{{ form.accumulates_in }}</td>
+            {% if form.accumulates_in.errors %}
+            <td>{{ form.accumulates_in.errors }}</td>
+            {% endif %}
+            {% if form.accumulates_in.help_text %}
+            <td><small>{{ form.accumulates_in.help_text }}</small></td>
+            {% endif %}
+        </tr>
+        <tr>
+            <td><label for="{{ form.subcategory.id_for_label }}">Subcategoria:</label></td>
+            <td>{{ form.subcategory }}</td>
+            {% if form.subcategory.errors %}
+            <td>{{ form.subcategory.errors }}</td>
+            {% endif %}
+            {% if form.subcategory.help_text %}
+            <td><small>{{ form.subcategory.help_text }}</small></td>
+            {% endif %}
+        </tr>
+        <tr>
+            <td><label for="{{ form.asset_type.id_for_label }}">Tipo de operação de ativo:</label></td>
+            <td>{{ form.asset_type }}</td>
+            {% if form.asset_type.errors %}
+            <td>{{ form.asset_type.errors }}</td>
+            {% endif %}
+            {% if form.asset_type.help_text %}
+            <td><small>{{ form.asset_type.help_text }}</small></td>
+            {% endif %}
+        </tr>
+    </table>
+    {% if form.non_field_errors %}
+    <div class="error">
+        {{ form.non_field_errors }}
+    </div>
+    {% endif %}
+    <button type="submit">Salvar</button>
+    <a href="{% url 'finance:chart_account_list' %}">Cancelar</a>
+</form>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const codeField = document.getElementById('{{ form.code.id_for_label }}');
+    const parentField = document.getElementById('{{ form.parent.id_for_label }}');
+    
+    // Dados dos planos de contas para busca
+    const chartAccounts = [
+        {% for account in form.parent.field.queryset %}
+        {code: '{{ account.code }}', id: {{ account.pk }}, description: '{{ account.description|escapejs }}'}{% if not forloop.last %},{% endif %}
+        {% endfor %}
+    ];
+    
+    function getParentCodeFromCode(code) {
+        if (!code) return null;
+        const parts = code.split('.');
+        if (parts.length <= 1) return null;
+        parts.pop();
+        return parts.join('.');
+    }
+    
+    function suggestParent() {
+        const code = codeField.value.trim();
+        if (!code) {
+            return;
+        }
+        
+        const parentCode = getParentCodeFromCode(code);
+        if (!parentCode) {
+            return;
+        }
+        
+        // Buscar plano com o código do parent
+        const parentAccount = chartAccounts.find(acc => acc.code === parentCode);
+        if (parentAccount && parentField.value === '') {
+            parentField.value = parentAccount.id;
+            // Disparar evento change para atualizar o select
+            const event = new Event('change', { bubbles: true });
+            parentField.dispatchEvent(event);
+        }
+    }
+    
+    // Sugerir parent quando o código mudar
+    codeField.addEventListener('blur', suggestParent);
+    codeField.addEventListener('change', suggestParent);
+});
+</script>
+{% endblock %}

@@ -1,0 +1,16 @@
+{% extends 'finance/base.html' %}
+
+{% block title %}Deletar Plano de Contas{% endblock %}
+
+{% block content %}
+<h1>Deletar Plano de Contas</h1>
+<p>Tem certeza que deseja deletar o plano de contas "{{ chart_account.code }} - {{ chart_account.description }}"?</p>
+{% if chart_account.get_children %}
+<p><strong>Atenção:</strong> Este plano possui {{ chart_account.get_children.count }} plano(s) filho(s). Ao deletar, os filhos ficarão sem parent.</p>
+{% endif %}
+<form method="post">
+    {% csrf_token %}
+    <button type="submit">Confirmar Exclusão</button>
+    <a href="{% url 'finance:chart_account_list' %}">Cancelar</a>
+</form>
+{% endblock %}
