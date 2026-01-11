@@ -49,7 +49,8 @@
     <thead>
         <tr style="background-color: #f0f0f0;">
             <th style="text-align: left; padding: 2px 8px; border: 1px solid #ddd;">Código : Descrição</th>
-            <th style="text-align: right; padding: 2px 8px; border: 1px solid #ddd;">Valor</th>
+            <th style="text-align: right; padding: 2px 8px; border: 1px solid #ddd;">Orçado</th>
+            <th style="text-align: right; padding: 2px 8px; border: 1px solid #ddd;">Realizado</th>
         </tr>
     </thead>
     <tbody>
@@ -58,6 +59,12 @@
             <td class="code-cell" style="padding: 2px 8px; border: 1px solid #ddd; font-family: monospace;">
                 <span class="expand-toggle" style="cursor: pointer; margin-right: 5px; display: inline-block; width: 12px; text-align: center;">{% if data.has_children %}+{% else %}&nbsp;{% endif %}</span>
                 {{ data.code }} : {{ data.description }}
+            </td>
+            <td style="text-align: right; padding: 2px 8px; border: 1px solid #ddd; font-weight: {% if data.level == 0 %}bold{% else %}normal{% endif %}; font-family: monospace;">
+                R$ {{ data.budget_accumulated_value|floatformat:2 }}
+                {% if data.accumulates_in_code and data.budget_value != data.budget_accumulated_value %}
+                    <br><small style="color: #666;">(próprio: R$ {{ data.budget_value|floatformat:2 }})</small>
+                {% endif %}
             </td>
             <td style="text-align: right; padding: 2px 8px; border: 1px solid #ddd; font-weight: {% if data.level == 0 %}bold{% else %}normal{% endif %}; font-family: monospace;">
                 R$ {{ data.accumulated_value|floatformat:2 }}
@@ -69,6 +76,7 @@
         {% endfor %}
         <tr style="background-color: #e0e0e0; font-weight: bold;">
             <td style="padding: 2px 8px; border: 1px solid #ddd; text-align: right;">TOTAL GERAL:</td>
+            <td style="text-align: right; padding: 2px 8px; border: 1px solid #ddd; font-family: monospace;">R$ {{ total_budget_general|floatformat:2 }}</td>
             <td style="text-align: right; padding: 2px 8px; border: 1px solid #ddd; font-family: monospace;">R$ {{ total_general|floatformat:2 }}</td>
         </tr>
     </tbody>

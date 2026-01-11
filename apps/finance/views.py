@@ -2063,6 +2063,31 @@ def budget_manage(request):
     # Obter todas as subcategorias ordenadas por categoria/subcategoria
     subcategories = Subcategory.objects.all().select_related('category').order_by('category', 'subcategory')
     
+    # #region agent log
+    import json
+    log_path = r'c:\Users\jafonseca\projects\django\own_system\.cursor\debug.log'
+    try:
+        subcategories_count = subcategories.count()
+        with open(log_path, 'a', encoding='utf-8') as f:
+            f.write(json.dumps({
+                'sessionId': 'debug-session',
+                'runId': 'run1',
+                'hypothesisId': 'A',
+                'location': 'views.py:2064',
+                'message': 'Subcategories loaded',
+                'data': {
+                    'subcategories_count': subcategories_count,
+                    'expected_budget_fields': subcategories_count * 12,
+                    'additional_fields': 2,  # csrf_token, year
+                    'total_expected_fields': subcategories_count * 12 + 2,
+                    'django_default_limit': 1000
+                },
+                'timestamp': int(datetime.now().timestamp() * 1000)
+            }) + '\n')
+    except Exception:
+        pass
+    # #endregion
+    
     # Buscar orçamentos do ano selecionado
     budgets = Budget.objects.filter(
         budget_date__year=selected_year
@@ -2105,7 +2130,48 @@ def budget_manage(request):
     
     # Processar POST (salvar orçamento)
     if request.method == 'POST':
+        # #region agent log
+        import json
+        log_path = r'c:\Users\jafonseca\projects\django\own_system\.cursor\debug.log'
+        try:
+            with open(log_path, 'a', encoding='utf-8') as f:
+                f.write(json.dumps({
+                    'sessionId': 'debug-session',
+                    'runId': 'post-fix',
+                    'hypothesisId': 'A',
+                    'location': 'views.py:2107',
+                    'message': 'POST request received - counting fields',
+                    'data': {
+                        'post_keys_count': len(request.POST.keys()),
+                        'post_keys_sample': list(request.POST.keys())[:10] if len(request.POST.keys()) > 0 else []
+                    },
+                    'timestamp': int(datetime.now().timestamp() * 1000)
+                }) + '\n')
+        except Exception:
+            pass
+        # #endregion
+        
         year = int(request.POST.get('year', selected_year))
+        
+        # #region agent log
+        try:
+            with open(log_path, 'a', encoding='utf-8') as f:
+                f.write(json.dumps({
+                    'sessionId': 'debug-session',
+                    'runId': 'post-fix',
+                    'hypothesisId': 'B',
+                    'location': 'views.py:2112',
+                    'message': 'Before processing - subcategories count',
+                    'data': {
+                        'subcategories_count': subcategories.count() if hasattr(subcategories, 'count') else len(list(subcategories)),
+                        'expected_fields': subcategories.count() * 12 if hasattr(subcategories, 'count') else len(list(subcategories)) * 12,
+                        'year': year
+                    },
+                    'timestamp': int(datetime.now().timestamp() * 1000)
+                }) + '\n')
+        except Exception:
+            pass
+        # #endregion
         
         with db_transaction.atomic():
             # Processar cada subcategoria
@@ -2138,6 +2204,25 @@ def budget_manage(request):
                             subcategory=subcategory,
                             budget_date=budget_date
                         ).delete()
+            
+            # #region agent log
+            try:
+                with open(log_path, 'a', encoding='utf-8') as f:
+                    f.write(json.dumps({
+                        'sessionId': 'debug-session',
+                        'runId': 'post-fix',
+                        'hypothesisId': 'C',
+                        'location': 'views.py:2142',
+                        'message': 'Budget saved successfully',
+                        'data': {
+                            'year': year,
+                            'status': 'success'
+                        },
+                        'timestamp': int(datetime.now().timestamp() * 1000)
+                    }) + '\n')
+            except Exception:
+                pass
+            # #endregion
             
             messages.success(request, f'Orçamento de {year} salvo com sucesso!')
             return redirect(f"{reverse('finance:budget_manage')}?year={year}")
@@ -2439,6 +2524,7 @@ def cash_flow_report(request):
     report_data = []
     for item in all_items:
         value = item.calculate_value(start_date, end_date, account)
+        budget_value = item.calculate_budget_value(start_date, end_date, account)
         
         # Se acumula em outro item, marcar
         accumulates_in_code = None
@@ -2457,6 +2543,7 @@ def cash_flow_report(request):
             'code': item.code,
             'description': item.description,
             'value': value,
+            'budget_value': budget_value,
             'accumulates_in_code': accumulates_in_code,
             'level': level,
             'has_children': has_children,
@@ -2469,17 +2556,21 @@ def cash_flow_report(request):
     for data in report_data:
         # O valor calculado já inclui a lógica de SUBTOTAL (soma filhos ou itens que acumulam)
         data['accumulated_value'] = data['value']
+        data['budget_accumulated_value'] = data['budget_value']
     
     # Total geral (último item de nível raiz, geralmente o "Caixa Líquido")
     total_general = Decimal('0')
+    total_budget_general = Decimal('0')
     root_items = [d for d in report_data if d['level'] == 0]
     if root_items:
         # Pegar o último item de nível raiz (geralmente o "Caixa Líquido")
         total_general = root_items[-1]['accumulated_value']
+        total_budget_general = root_items[-1]['budget_accumulated_value']
     else:
         # Fallback: somar todos os valores
         for data in report_data:
             total_general += data['value']
+            total_budget_general += data['budget_value']
     
     accounts = Account.objects.all()
     
@@ -2490,4 +2581,5 @@ def cash_flow_report(request):
         'selected_account': account,
         'accounts': accounts,
         'total_general': total_general,
+        'total_budget_general': total_budget_general,
     })

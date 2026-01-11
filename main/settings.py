@@ -122,3 +122,7 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Increase max number of form fields to support budget form with many subcategories
+# Budget form has: subcategories * 12 months + csrf_token + year = 334 * 12 + 2 = 4010 fields
+DATA_UPLOAD_MAX_NUMBER_FIELDS = 5000

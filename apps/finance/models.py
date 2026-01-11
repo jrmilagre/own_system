@@ -1711,3 +1711,95 @@ class CashFlowItem(BaseModel):
             total += trans.get_net_value()  # Já tem sinal correto
         
         return total
+    
+    def calculate_budget_value(self, start_date, end_date, account=None):
+        """Calcula o valor orçado deste item baseado nas regras"""
+        from decimal import Decimal
+        
+        if self.calculation_type == 'SUBTOTAL':
+            total = Decimal('0')
+            
+            # Cenário 1: Totaliza filhos hierárquicos (se existirem)
+            # Mas apenas filhos que não têm accumulates_in definido ou que acumulam no próprio pai
+            children = self.get_children()
+            children_codes = set()
+            if children.exists():
+                for child in children:
+                    # Só somar se o filho não tem accumulates_in OU se acumula no próprio pai
+                    if not child.accumulates_in or child.accumulates_in == self:
+                        children_codes.add(child.code)
+                        total += child.calculate_budget_value(start_date, end_date, account)
+            
+            # Cenário 2: Acumula valores de itens que apontam para este
+            # Buscar itens que têm accumulates_in apontando para este item
+            # MAS excluir filhos hierárquicos que já foram somados (para evitar duplicação)
+            accumulated_items = CashFlowItem.objects.filter(
+                accumulates_in=self
+            ).exclude(code__in=children_codes)
+            
+            for item in accumulated_items:
+                # Calcular valor do item que acumula aqui
+                item_value = item.calculate_budget_value(start_date, end_date, account)
+                total += item_value
+            
+            return total
+        
+        elif self.calculation_type == 'RULES':
+            # Calcula por regras
+            total = Decimal('0')
+            for rule in self.calculation_rules:
+                rule_type = rule.get('type')
+                
+                if rule_type == 'subcategory':
+                    subcategory_id = rule.get('subcategory_id')
+                    value = self._calculate_budget_by_subcategory(
+                        subcategory_id, start_date, end_date, account
+                    )
+                    total += value
+                
+                # Nota: asset_operation não se aplica a budgets
+                # elif rule_type == 'asset_operation':
+                #     Não há orçamento para operações de ativo
+            
+            return total
+        
+        return Decimal('0')
+    
+    def _calculate_budget_by_subcategory(self, subcategory_id, start_date, end_date, account):
+        """Calcula valor orçado por subcategoria"""
+        from decimal import Decimal
+        
+        try:
+            subcategory = Subcategory.objects.get(pk=subcategory_id)
+        except Subcategory.DoesNotExist:
+            return Decimal('0')
+        
+        # Budgets são armazenados por mês/ano (sempre dia 1)
+        # Precisamos buscar todos os budgets cujo budget_date está dentro do período
+        # budget_date está sempre no dia 1 do mês, então precisamos verificar se o mês/ano
+        # está dentro do range de datas
+        
+        # Calcular o primeiro e último mês/ano do período
+        start_year = start_date.year
+        start_month = start_date.month
+        end_year = end_date.year
+        end_month = end_date.month
+        
+        # Buscar budgets da subcategoria no período
+        # Usar Q objects para filtrar por range de datas
+        from django.db.models import Q
+        budgets = Budget.objects.filter(
+            subcategory_id=subcategory_id,
+            budget_date__gte=start_date.replace(day=1),
+            budget_date__lte=end_date.replace(day=1)
+        )
+        
+        total = Decimal('0')
+        for budget in budgets:
+            # Aplicar sinal baseado no tipo de transação padrão da subcategoria
+            if subcategory.default_transaction_type == 'CR':
+                total += budget.amount
+            elif subcategory.default_transaction_type == 'DB':
+                total -= budget.amount
+        
+        return total
