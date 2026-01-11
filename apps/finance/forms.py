@@ -814,3 +814,41 @@ class CashFlowItemForm(forms.ModelForm):
             instance.save()
         
         return instance
+
+
+class TransactionFilterForm(forms.Form):
+    """Formulário de filtros para a lista de transações"""
+    account = forms.ModelChoiceField(
+        queryset=Account.objects.all().order_by('name'),
+        required=False,
+        label='Conta',
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    beneficiary = forms.ModelChoiceField(
+        queryset=Beneficiary.objects.all().order_by('full_name'),
+        required=False,
+        label='Beneficiário',
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    category = forms.ModelChoiceField(
+        queryset=Category.objects.all().order_by('category'),
+        required=False,
+        label='Categoria',
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    subcategory = forms.ModelChoiceField(
+        queryset=Subcategory.objects.all().order_by('category__category', 'subcategory'),
+        required=False,
+        label='Subcategoria',
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    date_start = forms.DateField(
+        required=False,
+        label='Data início',
+        widget=forms.DateInput(attrs={'type': 'date', 'class': 'form-control'})
+    )
+    date_end = forms.DateField(
+        required=False,
+        label='Data fim',
+        widget=forms.DateInput(attrs={'type': 'date', 'class': 'form-control'})
+    )

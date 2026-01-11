@@ -7,6 +7,41 @@
 <a href="{% url 'finance:transaction_create' %}"><button>Criar Nova Transação</button></a>
 <a href="{% url 'finance:multiple_transaction_create' %}"><button>Criar Transação Múltipla</button></a>
 
+<!-- Formulário de Filtros -->
+<div style="margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; background-color: #f9f9f9;">
+    <h3>Filtros</h3>
+    <form method="get" action="{% url 'finance:transaction_list' %}" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; align-items: end;">
+        <div>
+            <label for="{{ filter_form.account.id_for_label }}">{{ filter_form.account.label }}</label>
+            {{ filter_form.account }}
+        </div>
+        <div>
+            <label for="{{ filter_form.beneficiary.id_for_label }}">{{ filter_form.beneficiary.label }}</label>
+            {{ filter_form.beneficiary }}
+        </div>
+        <div>
+            <label for="{{ filter_form.category.id_for_label }}">{{ filter_form.category.label }}</label>
+            {{ filter_form.category }}
+        </div>
+        <div>
+            <label for="{{ filter_form.subcategory.id_for_label }}">{{ filter_form.subcategory.label }}</label>
+            {{ filter_form.subcategory }}
+        </div>
+        <div>
+            <label for="{{ filter_form.date_start.id_for_label }}">{{ filter_form.date_start.label }}</label>
+            {{ filter_form.date_start }}
+        </div>
+        <div>
+            <label for="{{ filter_form.date_end.id_for_label }}">{{ filter_form.date_end.label }}</label>
+            {{ filter_form.date_end }}
+        </div>
+        <div>
+            <button type="submit" style="padding: 8px 16px; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">Filtrar</button>
+            <a href="{% url 'finance:transaction_list' %}" style="padding: 8px 16px; background-color: #6c757d; color: white; text-decoration: none; border-radius: 4px; display: inline-block; margin-left: 5px;">Limpar</a>
+        </div>
+    </form>
+</div>
+
 {% if multiple_groups or transactions %}
     <table>
         <thead>
@@ -17,6 +52,7 @@
                 <th>Subcategoria</th>
                 <th>Tipo Transação</th>
                 <th>Valor</th>
+                <th>Anotações</th>
                 <th>Data do Vencimento</th>
                 <th>Data da Transação</th>
                 <th>Data da Compra</th>
@@ -26,13 +62,13 @@
         <tbody>
             {% for group in multiple_groups %}
             <tr class="multiple-group-header" data-group-id="{{ group.group_id }}">
-                <td colspan="10">
+                <td colspan="11">
                     <strong>Transação Múltipla</strong> ({{ group.count }} transação(ões), Total: R$ {{ group.total_value|floatformat:2 }})
                     <button type="button" class="toggle-group" data-group-id="{{ group.group_id }}">Expandir/Colapsar</button>
                 </td>
             </tr>
             <tr class="multiple-group-details" data-group-id="{{ group.group_id }}" style="display: none;">
-                <td colspan="10">
+                <td colspan="11">
                     <table style="width: 100%; margin-left: 20px;">
                         <thead>
                             <tr>
@@ -42,6 +78,7 @@
                                 <th>Subcategoria</th>
                                 <th>Tipo Transação</th>
                                 <th>Valor</th>
+                                <th>Anotações</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -64,7 +101,8 @@
                                     {% endif %}
                                 </td>
                                 <td>{{ transaction.get_transaction_type_display }}</td>
-                                <td>{{ transaction.value }}</td>
+                                <td style="font-family: monospace;">{{ transaction.value }}</td>
+                                <td>{{ transaction.notes|default:"-" }}</td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -99,9 +137,16 @@
                     {% endif %}
                 </td>
                 <td>{{ transaction.get_transaction_type_display }}</td>
-                <td>{{ transaction.value }}</td>
+                <td style="font-family: monospace;">{{ transaction.value }}</td>
+                <td>{{ transaction.notes|default:"-" }}</td>
                 <td>{{ transaction.due_date|default:"-" }}</td>
-                <td>{{ transaction.transaction_date|default:"-" }}</td>
+                <td>
+                    {% if transaction.transaction_date %}
+                        {{ transaction.transaction_date|date:"d-m-Y" }}
+                    {% else %}
+                        -
+                    {% endif %}
+                </td>
                 <td>{{ transaction.purchase_date|default:"-" }}</td>
                 <td>
                     <a href="{% url 'finance:transaction_update' transaction.pk %}"><button>Editar</button></a>
@@ -110,9 +155,40 @@
             </tr>
             {% endfor %}
         </tbody>
+        <tfoot>
+            <tr style="background-color: #f0f0f0; font-weight: bold;">
+                <td colspan="5" style="text-align: right;">Subtotal (página):</td>
+                <td style="text-align: right; font-family: monospace;">R$ {{ subtotal|floatformat:2 }}</td>
+                <td colspan="5"></td>
+            </tr>
+        </tfoot>
     </table>
 {% else %}
     <p>Nenhuma transação cadastrada.</p>
+{% endif %}
+
+<!-- Paginação -->
+{% if page_obj.has_other_pages %}
+<div style="margin-top: 20px; padding: 15px; text-align: center;">
+    <div style="display: inline-block;">
+        {% if page_obj.has_previous %}
+            <a href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page=1" style="padding: 8px 12px; margin: 0 2px; background-color: #007bff; color: white; text-decoration: none; border-radius: 4px;">« Primeira</a>
+            <a href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ page_obj.previous_page_number }}" style="padding: 8px 12px; margin: 0 2px; background-color: #007bff; color: white; text-decoration: none; border-radius: 4px;">‹ Anterior</a>
+        {% endif %}
+        
+        <span style="padding: 8px 12px; margin: 0 2px; background-color: #6c757d; color: white; border-radius: 4px;">
+            Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}
+        </span>
+        
+        {% if page_obj.has_next %}
+            <a href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ page_obj.next_page_number }}" style="padding: 8px 12px; margin: 0 2px; background-color: #007bff; color: white; text-decoration: none; border-radius: 4px;">Próxima ›</a>
+            <a href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ page_obj.paginator.num_pages }}" style="padding: 8px 12px; margin: 0 2px; background-color: #007bff; color: white; text-decoration: none; border-radius: 4px;">Última »</a>
+        {% endif %}
+    </div>
+    <div style="margin-top: 10px; color: #6c757d;">
+        Mostrando {{ page_obj.start_index }} a {{ page_obj.end_index }} de {{ page_obj.paginator.count }} transação(ões)
+    </div>
+</div>
 {% endif %}
 
 <script>

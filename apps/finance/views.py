@@ -3,6 +3,8 @@ from django.urls import reverse
 from django.contrib import messages
 from django.http import JsonResponse
 from django.db import transaction as db_transaction
+from django.core.paginator import Paginator
+from django.db.models import Q
 from datetime import datetime, date
 import uuid
 from .models import Account, Beneficiary, Category, Subcategory, Transaction, Scheduler, Asset, AssetTransaction, AssetPosition, Budget, Inventory, CashFlowItem
@@ -11,7 +13,7 @@ from .forms import (
     MultipleTransactionForm, MultipleTransactionItemForm, MultipleTransactionItemFormSet,
     MultipleSchedulerForm, MultipleSchedulerItemForm, MultipleSchedulerItemFormSet,
     MultipleSchedulerRegisterItemFormSet, AssetForm, AssetTransactionForm, AssetPositionForm, InventoryForm,
-    CashFlowItemForm, CashFlowCalculationRuleFormSet
+    CashFlowItemForm, CashFlowCalculationRuleFormSet, TransactionFilterForm
 )
 
 
@@ -223,14 +225,63 @@ def subcategory_delete(request, category_pk, pk):
 
 # Transaction Views
 def transaction_list(request):
-    """Lista de transações"""
+    """Lista de transações com filtros e paginação"""
+    # Inicializar formulário de filtros
+    filter_form = TransactionFilterForm(request.GET)
+    
+    # Query base
     transactions = Transaction.objects.all().select_related('account', 'beneficiary', 'subcategory')
+    
+    # Aplicar filtros
+    if filter_form.is_valid():
+        account = filter_form.cleaned_data.get('account')
+        beneficiary = filter_form.cleaned_data.get('beneficiary')
+        category = filter_form.cleaned_data.get('category')
+        subcategory = filter_form.cleaned_data.get('subcategory')
+        date_start = filter_form.cleaned_data.get('date_start')
+        date_end = filter_form.cleaned_data.get('date_end')
+        
+        if account:
+            transactions = transactions.filter(account=account)
+        
+        if beneficiary:
+            transactions = transactions.filter(beneficiary=beneficiary)
+        
+        if category:
+            transactions = transactions.filter(subcategory__category=category)
+        
+        if subcategory:
+            transactions = transactions.filter(subcategory=subcategory)
+        
+        if date_start or date_end:
+            date_filter = Q()
+            if date_start and date_end:
+                # Ambos definidos: transaction_date ou due_date devem estar no intervalo
+                date_filter = (
+                    (Q(transaction_date__gte=date_start) & Q(transaction_date__lte=date_end)) |
+                    (Q(transaction_date__isnull=True) & Q(due_date__gte=date_start) & Q(due_date__lte=date_end))
+                )
+            elif date_start:
+                # Apenas date_start: transaction_date >= date_start OU (transaction_date é null E due_date >= date_start)
+                date_filter = Q(transaction_date__gte=date_start) | Q(transaction_date__isnull=True, due_date__gte=date_start)
+            elif date_end:
+                # Apenas date_end: transaction_date <= date_end OU (transaction_date é null E due_date <= date_end)
+                date_filter = Q(transaction_date__lte=date_end) | Q(transaction_date__isnull=True, due_date__lte=date_end)
+            transactions = transactions.filter(date_filter)
+    
+    # Ordenar
+    transactions = transactions.order_by('-transaction_date', '-due_date', '-created_at')
+    
+    # Paginação
+    paginator = Paginator(transactions, 50)  # 50 transações por página
+    page_number = request.GET.get('page', 1)
+    page_obj = paginator.get_page(page_number)
     
     # Agrupar transações múltiplas
     multiple_groups = {}
     single_transactions = []
     
-    for transaction in transactions:
+    for transaction in page_obj:
         if transaction.is_multiple and transaction.multiple_transaction_group_id:
             group_id = str(transaction.multiple_transaction_group_id)
             if group_id not in multiple_groups:
@@ -267,9 +318,39 @@ def transaction_list(request):
         group_data['total_value'] = total_value
         group_data['count'] = len(group_data['transactions'])
     
+    # Ordenar grupos múltiplos por data de transação decrescente
+    multiple_groups_list = list(multiple_groups.values())
+    multiple_groups_list.sort(
+        key=lambda x: (
+            x['representative'].transaction_date or 
+            x['representative'].due_date or 
+            x['representative'].created_at or 
+            date.min
+        ),
+        reverse=True
+    )
+    
+    # Calcular subtotal da página
+    from decimal import Decimal
+    subtotal = Decimal('0')
+    
+    # Somar transações simples
+    for transaction in single_transactions:
+        if transaction.transaction_type == 'CR':
+            subtotal += transaction.value
+        elif transaction.transaction_type == 'DB':
+            subtotal -= transaction.value
+    
+    # Somar grupos múltiplos
+    for group_data in multiple_groups_list:
+        subtotal += Decimal(str(group_data['total_value']))
+    
     return render(request, 'finance/transaction_list.html', {
         'transactions': single_transactions,
-        'multiple_groups': list(multiple_groups.values())
+        'multiple_groups': multiple_groups_list,
+        'filter_form': filter_form,
+        'page_obj': page_obj,
+        'subtotal': subtotal
     })
 
 

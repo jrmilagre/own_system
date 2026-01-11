@@ -115,7 +115,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     toggleChildren(rowCode, false);
                     // Atualizar botão do item filho
                     const toggleBtn = row.querySelector('.expand-toggle');
-                    if (toggleBtn && row.querySelector('.expand-toggle').textContent.trim() !== '') {
+                    if (toggleBtn && toggleBtn.textContent.trim() !== '') {
                         toggleBtn.textContent = '+';
                     }
                 }
