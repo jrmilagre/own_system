@@ -2060,8 +2060,23 @@ def budget_manage(request):
     # Obter ano selecionado (query param ou ano atual)
     selected_year = int(request.GET.get('year', date.today().year))
     
+    # Obter categoria selecionada (query param)
+    selected_category_id_str = request.GET.get('category', '')
+    selected_category_id = None
+    
+    # Obter todas as categorias para o dropdown
+    categories = Category.objects.all().order_by('category')
+    
     # Obter todas as subcategorias ordenadas por categoria/subcategoria
     subcategories = Subcategory.objects.all().select_related('category').order_by('category', 'subcategory')
+    
+    # Filtrar por categoria se selecionada
+    if selected_category_id_str:
+        try:
+            selected_category_id = int(selected_category_id_str)
+            subcategories = subcategories.filter(category_id=selected_category_id)
+        except (ValueError, TypeError):
+            selected_category_id = None  # Se category_id for inválido, mostrar todas
     
     # #region agent log
     import json
@@ -2225,7 +2240,14 @@ def budget_manage(request):
             # #endregion
             
             messages.success(request, f'Orçamento de {year} salvo com sucesso!')
-            return redirect(f"{reverse('finance:budget_manage')}?year={year}")
+            
+            # Preservar filtro de categoria no redirect
+            redirect_url = f"{reverse('finance:budget_manage')}?year={year}"
+            selected_category_id_post = request.POST.get('category', '')
+            if selected_category_id_post:
+                redirect_url += f"&category={selected_category_id_post}"
+            
+            return redirect(redirect_url)
     
     # Anos disponíveis (últimos 5 anos + próximos 2)
     current_year = date.today().year
@@ -2242,6 +2264,8 @@ def budget_manage(request):
     context = {
         'budget_data': budget_data,
         'selected_year': selected_year,
+        'selected_category_id': selected_category_id,
+        'categories': categories,
         'years': years,
         'months': months,
         'totals_by_type': totals_by_type,

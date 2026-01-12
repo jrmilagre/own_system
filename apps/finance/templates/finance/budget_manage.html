@@ -14,11 +14,24 @@
             </option>
         {% endfor %}
     </select>
+    
+    <label for="category" style="margin-left: 20px;">Categoria:</label>
+    <select name="category" id="category" onchange="this.form.submit()" style="padding: 5px; margin-left: 10px;">
+        <option value="">Todas</option>
+        {% for category in categories %}
+            <option value="{{ category.id }}" {% if selected_category_id == category.id %}selected{% endif %}>
+                {{ category.category }}
+            </option>
+        {% endfor %}
+    </select>
 </form>
 
 <form method="post" id="budgetForm">
     {% csrf_token %}
     <input type="hidden" name="year" value="{{ selected_year }}">
+    {% if selected_category_id %}
+    <input type="hidden" name="category" value="{{ selected_category_id }}">
+    {% endif %}
     
     <div style="overflow-x: auto;">
         <table id="budgetTable" style="width: 100%; border-collapse: collapse; border: 1px solid #ddd;">
