@@ -1,4 +1,5 @@
 from django.contrib import admin
+from django.utils.html import format_html
 from .models import *
 
 @admin.register(Account)
@@ -35,18 +36,79 @@ class CategoryAdmin(admin.ModelAdmin):
     ordering = ('category',)
 
 
+class CashFlowMappingFilter(admin.SimpleListFilter):
+    """Filtro customizado para status de mapeamento no fluxo de caixa"""
+    title = 'Status no Fluxo de Caixa'
+    parameter_name = 'cash_flow_mapping'
+
+    def lookups(self, request, model_admin):
+        return (
+            ('not_mapped', 'Não mapeadas'),
+            ('mapped', 'Mapeadas'),
+            ('duplicate', 'Duplicadas'),
+        )
+
+    def queryset(self, request, queryset):
+        if self.value() == 'not_mapped':
+            # Subcategorias não mapeadas
+            mapping_count = CashFlowItem.get_subcategory_mapping_count()
+            mapped_ids = set(mapping_count.keys())
+            return queryset.exclude(id__in=mapped_ids)
+        elif self.value() == 'mapped':
+            # Subcategorias mapeadas uma vez
+            mapping_count = CashFlowItem.get_subcategory_mapping_count()
+            mapped_once_ids = [sid for sid, count in mapping_count.items() if count == 1]
+            return queryset.filter(id__in=mapped_once_ids)
+        elif self.value() == 'duplicate':
+            # Subcategorias duplicadas
+            mapping_count = CashFlowItem.get_subcategory_mapping_count()
+            duplicate_ids = [sid for sid, count in mapping_count.items() if count > 1]
+            return queryset.filter(id__in=duplicate_ids)
+        return queryset
+
+
 @admin.register(Subcategory)
 class SubcategoryAdmin(admin.ModelAdmin):
     list_display = (
         'category',
         'subcategory',
         'default_transaction_type',
+        'get_mapping_status',
+        'get_mapping_count',
         'created_at',
         'updated_at',
     )
     search_fields = ('category__category', 'subcategory')
-    list_filter = ('default_transaction_type', 'category', 'created_at')
+    list_filter = ('default_transaction_type', 'category', CashFlowMappingFilter, 'created_at')
     ordering = ('category', 'subcategory')
+    
+    def get_mapping_status(self, obj):
+        """Retorna o status de mapeamento formatado com cores"""
+        count = obj.get_cash_flow_mapping_count()
+        if count == 0:
+            return format_html(
+                '<span style="background-color: #ffebee; color: #c62828; padding: 4px 8px; border-radius: 4px; font-weight: bold;">✗ Não mapeada</span>'
+            )
+        elif count == 1:
+            return format_html(
+                '<span style="background-color: #e8f5e9; color: #2e7d32; padding: 4px 8px; border-radius: 4px; font-weight: bold;">✓ Mapeada</span>'
+            )
+        else:
+            return format_html(
+                '<span style="background-color: #fff3e0; color: #e65100; padding: 4px 8px; border-radius: 4px; font-weight: bold;">⚠ Duplicada</span>'
+            )
+    get_mapping_status.short_description = 'Status no Fluxo de Caixa'
+    
+    def get_mapping_count(self, obj):
+        """Retorna o número de mapeamentos"""
+        count = obj.get_cash_flow_mapping_count()
+        if count == 0:
+            return format_html('<span style="color: #c62828;">0</span>')
+        elif count == 1:
+            return format_html('<span style="color: #2e7d32;">1</span>')
+        else:
+            return format_html('<span style="color: #e65100; font-weight: bold;">{}</span>', count)
+    get_mapping_count.short_description = 'Mapeamentos'
 
 
 @admin.register(Transaction)

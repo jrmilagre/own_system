@@ -3,6 +3,31 @@
 {% block title %}Categorias{% endblock %}
 
 {% block content %}
+<style>
+    .mapping-summary {
+        font-size: 0.9em;
+        margin-top: 4px;
+    }
+    .mapping-summary span {
+        margin-right: 8px;
+        padding: 2px 6px;
+        border-radius: 3px;
+        font-weight: bold;
+    }
+    .mapping-not-mapped {
+        background-color: #ffebee;
+        color: #c62828;
+    }
+    .mapping-mapped {
+        background-color: #e8f5e9;
+        color: #2e7d32;
+    }
+    .mapping-duplicate {
+        background-color: #fff3e0;
+        color: #e65100;
+    }
+</style>
+
 <h1>Categorias</h1>
 <a href="{% url 'finance:category_create' %}"><button>Criar Nova Categoria</button></a>
 {% if categories %}
@@ -11,6 +36,7 @@
             <tr>
                 <th>Categoria</th>
                 <th>Subcategorias</th>
+                <th>Status no Fluxo de Caixa</th>
                 <th>Ações</th>
             </tr>
         </thead>
@@ -22,6 +48,33 @@
                     <a href="{% url 'finance:subcategory_list' category.pk %}">
                         Ver Subcategorias ({{ category.subcategory_count }})
                     </a>
+                    {% if category.subcategory_count > 0 %}
+                    <div class="mapping-summary">
+                        {% if category.mapped_count > 0 %}
+                            <span class="mapping-mapped">✓ {{ category.mapped_count }} mapeada{{ category.mapped_count|pluralize }}</span>
+                        {% endif %}
+                        {% if category.not_mapped_count > 0 %}
+                            <span class="mapping-not-mapped">✗ {{ category.not_mapped_count }} não mapeada{{ category.not_mapped_count|pluralize }}</span>
+                        {% endif %}
+                        {% if category.duplicate_count > 0 %}
+                            <span class="mapping-duplicate">⚠ {{ category.duplicate_count }} duplicada{{ category.duplicate_count|pluralize }}</span>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if category.subcategory_count > 0 %}
+                        Total: {{ category.subcategory_count }}
+                        {% if category.not_mapped_count > 0 or category.duplicate_count > 0 %}
+                            <br><small style="color: #d32f2f;">
+                                ⚠ Atenção: {{ category.not_mapped_count|add:category.duplicate_count }} com problemas
+                            </small>
+                        {% else %}
+                            <br><small style="color: #2e7d32;">✓ Todas mapeadas corretamente</small>
+                        {% endif %}
+                    {% else %}
+                        <small style="color: #757575;">Sem subcategorias</small>
+                    {% endif %}
                 </td>
                 <td>
                     <a href="{% url 'finance:category_update' category.pk %}"><button>Editar</button></a>

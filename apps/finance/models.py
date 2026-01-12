@@ -223,6 +223,27 @@ class Subcategory(BaseModel):
 
     def __str__(self):
         return f"{self.category.category} - {self.subcategory}"
+    
+    def is_mapped_to_cash_flow(self):
+        """Verifica se esta subcategoria está mapeada em algum item do fluxo de caixa"""
+        return self.get_cash_flow_mapping_count() > 0
+    
+    def get_cash_flow_mapping_count(self):
+        """Conta quantas vezes esta subcategoria aparece nas regras de CashFlowItem"""
+        count = 0
+        cash_flow_items = CashFlowItem.objects.filter(calculation_type='RULES')
+        
+        for item in cash_flow_items:
+            if item.calculation_rules:
+                for rule in item.calculation_rules:
+                    if rule.get('type') == 'subcategory' and rule.get('subcategory_id') == self.id:
+                        count += 1
+        
+        return count
+    
+    def has_duplicate_mapping(self):
+        """Retorna True se esta subcategoria está mapeada mais de uma vez"""
+        return self.get_cash_flow_mapping_count() > 1
 
 
 class Budget(BaseModel):
@@ -1602,6 +1623,38 @@ class CashFlowItem(BaseModel):
                 item.order = order
                 item.save(update_fields=['order'])
                 order += 1
+    
+    @classmethod
+    def get_all_mapped_subcategory_ids(cls):
+        """Retorna um set com todos os IDs de subcategorias mapeadas em CashFlowItem"""
+        mapped_ids = set()
+        cash_flow_items = cls.objects.filter(calculation_type='RULES')
+        
+        for item in cash_flow_items:
+            if item.calculation_rules:
+                for rule in item.calculation_rules:
+                    if rule.get('type') == 'subcategory':
+                        subcategory_id = rule.get('subcategory_id')
+                        if subcategory_id:
+                            mapped_ids.add(subcategory_id)
+        
+        return mapped_ids
+    
+    @classmethod
+    def get_subcategory_mapping_count(cls):
+        """Retorna um dicionário {subcategory_id: count} com a contagem de mapeamentos por subcategoria"""
+        mapping_count = {}
+        cash_flow_items = cls.objects.filter(calculation_type='RULES')
+        
+        for item in cash_flow_items:
+            if item.calculation_rules:
+                for rule in item.calculation_rules:
+                    if rule.get('type') == 'subcategory':
+                        subcategory_id = rule.get('subcategory_id')
+                        if subcategory_id:
+                            mapping_count[subcategory_id] = mapping_count.get(subcategory_id, 0) + 1
+        
+        return mapping_count
     
     def calculate_value(self, start_date, end_date, account=None):
         """Calcula o valor deste item baseado nas regras"""

@@ -1,0 +1,11 @@
+{
+  "name": "own_system",
+  "version": "1.0.0",
+  "description": "Django finance system with Tailwind CSS",
+  "scripts": {
+    "build-css": "tailwindcss -i ./static/css/input.css -o ./static/css/output.css --watch"
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.4.0"
+  }
+}

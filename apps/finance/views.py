@@ -122,10 +122,31 @@ def beneficiary_delete(request, pk):
 # Category Views
 def category_list(request):
     """Lista de categorias"""
+    from .models import CashFlowItem
+    
     categories = Category.objects.all()
-    # Adicionar contagem de subcategorias para cada categoria
+    # Obter contagem de mapeamentos de uma vez para otimização
+    mapping_count = CashFlowItem.get_subcategory_mapping_count()
+    
+    # Adicionar contagem de subcategorias e status de mapeamento para cada categoria
     for category in categories:
-        category.subcategory_count = Subcategory.objects.filter(category=category).count()
+        subcategories = Subcategory.objects.filter(category=category)
+        category.subcategory_count = subcategories.count()
+        
+        # Contar subcategorias por status
+        category.mapped_count = 0
+        category.not_mapped_count = 0
+        category.duplicate_count = 0
+        
+        for subcategory in subcategories:
+            count = mapping_count.get(subcategory.id, 0)
+            if count == 0:
+                category.not_mapped_count += 1
+            elif count == 1:
+                category.mapped_count += 1
+            else:
+                category.duplicate_count += 1
+    
     return render(request, 'finance/category_list.html', {'categories': categories})
 
 
@@ -168,6 +189,13 @@ def subcategory_list(request, category_pk):
     """Lista de subcategorias de uma categoria"""
     category = get_object_or_404(Category, pk=category_pk)
     subcategories = Subcategory.objects.filter(category=category)
+    
+    # Adicionar informações de mapeamento para cada subcategoria
+    for subcategory in subcategories:
+        subcategory.mapping_count = subcategory.get_cash_flow_mapping_count()
+        subcategory.is_mapped = subcategory.is_mapped_to_cash_flow()
+        subcategory.has_duplicate = subcategory.has_duplicate_mapping()
+    
     return render(request, 'finance/subcategory_list.html', {
         'category': category,
         'subcategories': subcategories
