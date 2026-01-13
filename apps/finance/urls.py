@@ -10,6 +10,7 @@ urlpatterns = [
     path('accounts/create/', views.account_create, name='account_create'),
     path('accounts/<int:pk>/update/', views.account_update, name='account_update'),
     path('accounts/<int:pk>/delete/', views.account_delete, name='account_delete'),
+    path('accounts/<int:account_id>/historico/', views.account_statement, name='historico'),
     # Beneficiary URLs
     path('beneficiaries/', views.beneficiary_list, name='beneficiary_list'),
     path('beneficiaries/create/', views.beneficiary_create, name='beneficiary_create'),
@@ -48,6 +49,10 @@ urlpatterns = [
     path('schedulers/multiple/<uuid:group_id>/register/', views.multiple_scheduler_register, name='multiple_scheduler_register'),
     # API endpoint for JavaScript
     path('api/subcategory/<int:subcategory_id>/default-transaction-type/', views.get_subcategory_default_transaction_type, name='subcategory_default_transaction_type'),
+    # Quick create endpoints (AJAX)
+    path('api/quick-create/account/', views.quick_create_account, name='quick_create_account'),
+    path('api/quick-create/beneficiary/', views.quick_create_beneficiary, name='quick_create_beneficiary'),
+    path('api/quick-create/subcategory/', views.quick_create_subcategory, name='quick_create_subcategory'),
     # Asset URLs
     path('assets/', views.asset_list, name='asset_list'),
     path('assets/create/', views.asset_create, name='asset_create'),
@@ -68,7 +73,11 @@ urlpatterns = [
     path('reports/asset-stock-position/', views.asset_stock_position_report, name='asset_stock_position_report'),
     path('reports/cash-flow/', views.cash_flow_report, name='cash_flow_report'),
     # Budget URLs
-    path('budgets/', views.budget_manage, name='budget_manage'),
+    path('budgets/', views.budget_list, name='budget_list'),
+    path('budgets/create/', views.budget_create, name='budget_create'),
+    path('budgets/<int:pk>/update/', views.budget_update, name='budget_update'),
+    path('budgets/<int:pk>/delete/', views.budget_delete, name='budget_delete'),
+    path('budgets/manage/', views.budget_manage, name='budget_manage'),
     # Inventory URLs
     path('inventory/', views.inventory_list, name='inventory_list'),
     path('inventory/create/', views.inventory_create, name='inventory_create'),

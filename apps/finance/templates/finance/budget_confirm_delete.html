@@ -1,8 +1,8 @@
 {% extends 'finance/base.html' %}
 
-{% block section_name %}Deletar Beneficiário{% endblock %}
+{% block section_name %}Deletar Orçamento{% endblock %}
 
-{% block title %}Deletar Beneficiário{% endblock %}
+{% block title %}Deletar Orçamento{% endblock %}
 
 {% block content %}
 <div class="card shadow-sm border-0">
@@ -12,7 +12,7 @@
         </h5>
     </div>
     <div class="card-body">
-        <p class="mb-3">Tem certeza que deseja deletar o beneficiário <strong>"{{ beneficiary.full_name }}"</strong>?</p>
+        <p class="mb-3">Tem certeza que deseja deletar o orçamento de <strong>"{{ budget.subcategory.subcategory }}"</strong> para <strong>{{ budget.budget_date|date:"m/Y" }}</strong>?</p>
         <p class="text-danger small mb-4">
             <i class="fas fa-info-circle me-1"></i>Esta ação não pode ser desfeita.
         </p>
@@ -20,7 +20,7 @@
         <form method="post">
             {% csrf_token %}
             <div class="d-flex gap-2">
-                <a href="{% url 'finance:beneficiary_list' %}" class="btn btn-secondary">
+                <a href="{% url 'finance:budget_list' %}" class="btn btn-secondary">
                     <i class="fas fa-times me-1"></i>Cancelar
                 </a>
                 <button type="submit" class="btn btn-danger">

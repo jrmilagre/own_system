@@ -1,25 +1,35 @@
 {% extends 'finance/base.html' %}
 
+{% block section_name %}Relatório de Fluxo de Caixa{% endblock %}
+
 {% block title %}Relatório de Fluxo de Caixa{% endblock %}
 
 {% block content %}
-<h1>Relatório de Fluxo de Caixa</h1>
-
-<!-- Formulário de Filtros -->
-<form method="get" action="{% url 'finance:cash_flow_report' %}">
-    <table>
-        <tr>
-            <td><label for="start_date">Data inicial:</label></td>
-            <td><input type="date" name="start_date" id="start_date" value="{{ start_date|date:'Y-m-d' }}" required></td>
-        </tr>
-        <tr>
-            <td><label for="end_date">Data final:</label></td>
-            <td><input type="date" name="end_date" id="end_date" value="{{ end_date|date:'Y-m-d' }}" required></td>
-        </tr>
-        <tr>
-            <td><label for="account">Conta:</label></td>
-            <td>
-                <select name="account" id="account">
+<div class="card shadow-sm border-0 mb-3">
+    <div class="card-header bg-light">
+        <h5 class="mb-0">
+            <i class="fas fa-filter me-2"></i>Filtros
+        </h5>
+    </div>
+    <div class="card-body" style="background-color: #f8f9fa;">
+        <form method="get" action="{% url 'finance:cash_flow_report' %}" class="row g-3 align-items-end">
+            <div class="col-md-3">
+                <label for="start_date" class="form-label">
+                    <i class="fas fa-calendar-alt me-1 text-primary"></i>Data inicial <span class="text-danger">*</span>
+                </label>
+                <input type="date" name="start_date" id="start_date" class="form-control" value="{{ start_date|date:'Y-m-d' }}" required>
+            </div>
+            <div class="col-md-3">
+                <label for="end_date" class="form-label">
+                    <i class="fas fa-calendar-check me-1 text-info"></i>Data final <span class="text-danger">*</span>
+                </label>
+                <input type="date" name="end_date" id="end_date" class="form-control" value="{{ end_date|date:'Y-m-d' }}" required>
+            </div>
+            <div class="col-md-4">
+                <label for="account" class="form-label">
+                    <i class="fas fa-university me-1 text-secondary"></i>Conta
+                </label>
+                <select name="account" id="account" class="form-select">
                     <option value="all" {% if not selected_account %}selected{% endif %}>Todas</option>
                     {% for account in accounts %}
                     <option value="{{ account.pk }}" {% if selected_account and selected_account.pk == account.pk %}selected{% endif %}>
@@ -27,81 +37,227 @@
                     </option>
                     {% endfor %}
                 </select>
-            </td>
-        </tr>
-        <tr>
-            <td></td>
-            <td><button type="submit">Filtrar</button></td>
-        </tr>
-    </table>
-</form>
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-primary w-100">
+                    <i class="fas fa-search me-1"></i>Filtrar
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
 
 <!-- Relatório -->
 {% if report_data %}
-<h2>Período: {{ start_date|date:"d/m/Y" }} a {{ end_date|date:"d/m/Y" }}</h2>
-{% if selected_account %}
-<p><strong>Conta:</strong> {{ selected_account.name }}</p>
+<div class="card shadow-sm border-0">
+    <div class="card-header bg-light">
+        <h5 class="mb-0">
+            <i class="fas fa-chart-line me-2"></i>Relatório de Fluxo de Caixa
+        </h5>
+    </div>
+    <div class="card-body p-0">
+        <div class="px-3 py-2 border-bottom bg-light">
+            <p class="mb-1"><strong>Período:</strong> {{ start_date|date:"d-m-Y" }} a {{ end_date|date:"d-m-Y" }}</p>
+            <p class="mb-0"><strong>Conta:</strong> {% if selected_account %}{{ selected_account.name }}{% else %}Todas{% endif %}</p>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover table-sm mb-0" style="font-size: 0.9rem;">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ps-3">Código : Descrição</th>
+                        <th class="text-end">Orçado</th>
+                        <th class="text-end pe-3">Realizado</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for data in report_data %}
+                    <tr class="level-{{ data.level }} tree-row" data-code="{{ data.code }}" data-parent-code="{{ data.parent_code|default:'' }}" data-level="{{ data.level }}">
+                        <td class="code-cell ps-3">
+                            <div class="d-flex align-items-center tree-content-wrapper" data-level="{{ data.level }}">
+                                <span class="expand-toggle" style="cursor: pointer; min-width: 24px; text-align: center; flex-shrink: 0;">
+                                    {% if data.has_children %}
+                                        <i class="fas fa-chevron-right expand-icon text-muted" style="font-size: 0.75rem; transition: transform 0.2s;"></i>
+                                    {% else %}
+                                        <span style="display: inline-block; width: 20px; height: 20px; position: relative;">
+                                            <span style="position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 4px; height: 4px; background-color: #6c757d; border-radius: 50%;"></span>
+                                        </span>
+                                    {% endif %}
+                                </span>
+                                <span class="font-monospace" style="font-size: 0.85rem;">{{ data.code }}</span>
+                                <span style="margin: 0 8px; color: #6c757d;">:</span>
+                                <span style="font-weight: 500;">{{ data.description }}</span>
+                            </div>
+                        </td>
+                        <td class="text-end">
+                            <div>
+                                <span class="fw-bold" style="font-size: 0.95rem;">R$ {{ data.budget_accumulated_value|floatformat:2 }}</span>
+                                {% if data.accumulates_in_code and data.budget_value != data.budget_accumulated_value %}
+                                    <br><small class="text-muted">(próprio: R$ {{ data.budget_value|floatformat:2 }})</small>
+                                {% endif %}
+                            </div>
+                        </td>
+                        <td class="text-end pe-3">
+                            <div>
+                                <span class="fw-bold {% if data.accumulated_value < 0 %}text-danger{% else %}text-dark{% endif %}" style="font-size: 0.95rem;">R$ {{ data.accumulated_value|floatformat:2 }}</span>
+                                {% if data.accumulates_in_code and data.value != data.accumulated_value %}
+                                    <br><small class="text-muted">(próprio: R$ {{ data.value|floatformat:2 }})</small>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot class="table-light">
+                    <tr>
+                        <td class="ps-3 fw-bold">TOTAL GERAL</td>
+                        <td class="text-end fw-bold" style="font-size: 0.95rem;">R$ {{ total_budget_general|floatformat:2 }}</td>
+                        <td class="text-end pe-3 fw-bold {% if total_general < 0 %}text-danger{% else %}text-dark{% endif %}" style="font-size: 0.95rem;">R$ {{ total_general|floatformat:2 }}</td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+</div>
 {% else %}
-<p><strong>Conta:</strong> Todas</p>
+<div class="alert alert-info">
+    <i class="fas fa-info-circle me-2"></i>Nenhum item do fluxo de caixa cadastrado.
+</div>
 {% endif %}
 
-<table style="border-collapse: collapse; margin-top: 20px; line-height: 1.2;">
-    <thead>
-        <tr style="background-color: #f0f0f0;">
-            <th style="text-align: left; padding: 2px 8px; border: 1px solid #ddd;">Código : Descrição</th>
-            <th style="text-align: right; padding: 2px 8px; border: 1px solid #ddd;">Orçado</th>
-            <th style="text-align: right; padding: 2px 8px; border: 1px solid #ddd;">Realizado</th>
-        </tr>
-    </thead>
-    <tbody>
-        {% for data in report_data %}
-        <tr class="level-{{ data.level }}" data-code="{{ data.code }}" data-parent-code="{{ data.parent_code|default:'' }}">
-            <td class="code-cell" style="padding: 2px 8px; border: 1px solid #ddd; font-family: monospace;">
-                <span class="expand-toggle" style="cursor: pointer; margin-right: 5px; display: inline-block; width: 12px; text-align: center;">{% if data.has_children %}+{% else %}&nbsp;{% endif %}</span>
-                {{ data.code }} : {{ data.description }}
-            </td>
-            <td style="text-align: right; padding: 2px 8px; border: 1px solid #ddd; font-weight: {% if data.level == 0 %}bold{% else %}normal{% endif %}; font-family: monospace;">
-                R$ {{ data.budget_accumulated_value|floatformat:2 }}
-                {% if data.accumulates_in_code and data.budget_value != data.budget_accumulated_value %}
-                    <br><small style="color: #666;">(próprio: R$ {{ data.budget_value|floatformat:2 }})</small>
-                {% endif %}
-            </td>
-            <td style="text-align: right; padding: 2px 8px; border: 1px solid #ddd; font-weight: {% if data.level == 0 %}bold{% else %}normal{% endif %}; font-family: monospace;">
-                R$ {{ data.accumulated_value|floatformat:2 }}
-                {% if data.accumulates_in_code and data.value != data.accumulated_value %}
-                    <br><small style="color: #666;">(próprio: R$ {{ data.value|floatformat:2 }})</small>
-                {% endif %}
-            </td>
-        </tr>
-        {% endfor %}
-        <tr style="background-color: #e0e0e0; font-weight: bold;">
-            <td style="padding: 2px 8px; border: 1px solid #ddd; text-align: right;">TOTAL GERAL:</td>
-            <td style="text-align: right; padding: 2px 8px; border: 1px solid #ddd; font-family: monospace;">R$ {{ total_budget_general|floatformat:2 }}</td>
-            <td style="text-align: right; padding: 2px 8px; border: 1px solid #ddd; font-family: monospace;">R$ {{ total_general|floatformat:2 }}</td>
-        </tr>
-    </tbody>
-</table>
-{% else %}
-<p>Nenhum item do fluxo de caixa cadastrado.</p>
-{% endif %}
+{% endblock %}
 
+{% block extra_css %}
 <style>
+.form-label {
+    font-weight: 500;
+    font-size: 0.9rem;
+    margin-bottom: 0.5rem;
+    color: #495057;
+}
+
+.form-control, .form-select {
+    font-size: 0.9rem;
+    border-radius: 0.375rem;
+    border: 1px solid #dee2e6;
+    background-color: #fff;
+    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+}
+
+.form-control:focus, .form-select:focus {
+    border-color: #86b7fe;
+    box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+    background-color: #fff;
+}
+
+.form-control:hover, .form-select:hover {
+    border-color: #adb5bd;
+}
+
+.tree-row {
+    transition: background-color 0.15s ease;
+}
+
+.tree-row:hover {
+    background-color: #f8f9fa;
+}
+
 .code-cell {
-    padding-left: 0;
+    padding-left: 0 !important;
+    position: relative;
+}
+
+.tree-content-wrapper {
+    position: relative;
+    min-height: 32px;
+}
+
+.expand-toggle {
+    user-select: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #fff;
+    border-radius: 3px;
+    padding: 2px;
+}
+
+.expand-toggle:hover {
+    background-color: #f0f0f0;
+}
+
+.expand-toggle:hover .expand-icon {
+    color: #0d6efd !important;
+}
+
+.expand-icon.expanded {
+    transform: rotate(90deg);
+}
+
+.level-0 {
+    font-weight: 600;
+    border-left: 4px solid #0d6efd;
+}
+
+.level-0 .tree-content-wrapper {
+    padding-left: 12px;
+}
+
+.level-1 {
+    font-weight: 500;
+    border-left: 4px solid #198754;
+    background-color: #f8f9fa;
+}
+
+.level-1 .tree-content-wrapper {
+    padding-left: 36px;
+}
+
+.level-2 {
+    font-weight: 500;
+    border-left: 4px solid #ffc107;
+    background-color: #fffbf0;
+}
+
+.level-2 .tree-content-wrapper {
+    padding-left: 60px;
+}
+
+.level-3 {
+    font-weight: 400;
+    border-left: 4px solid #dc3545;
+    background-color: #fff5f5;
+}
+
+.level-3 .tree-content-wrapper {
+    padding-left: 84px;
+}
+
+.level-4 {
+    font-weight: 400;
+    border-left: 4px solid #6c757d;
+    background-color: #f8f9fa;
+}
+
+.level-4 .tree-content-wrapper {
+    padding-left: 108px;
+}
+
+.level-5 {
+    font-weight: 400;
+    border-left: 4px solid #0dcaf0;
+    background-color: #f0f9ff;
+}
+
+.level-5 .tree-content-wrapper {
+    padding-left: 132px;
 }
 </style>
+{% endblock %}
+
+{% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const codeCells = document.querySelectorAll('.code-cell');
     const rows = document.querySelectorAll('tbody tr[data-code]');
-    
-    // Aplicar indentação baseada no nível hierárquico
-    codeCells.forEach(function(cell) {
-        const row = cell.closest('tr');
-        const level = parseInt(row.className.match(/level-(\d+)/)?.[1] || '0');
-        const padding = level * 20;
-        cell.style.paddingLeft = (padding + 20) + 'px'; // +20 para o botão expandir
-    });
     
     // Inicialmente, ocultar todos os filhos (nível > 0)
     rows.forEach(function(row) {
@@ -121,10 +277,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (!show) {
                     const rowCode = row.getAttribute('data-code');
                     toggleChildren(rowCode, false);
-                    // Atualizar botão do item filho
+                    // Atualizar ícone do item filho
                     const toggleBtn = row.querySelector('.expand-toggle');
-                    if (toggleBtn && toggleBtn.textContent.trim() !== '') {
-                        toggleBtn.textContent = '+';
+                    const icon = toggleBtn ? toggleBtn.querySelector('.expand-icon') : null;
+                    if (icon) {
+                        icon.classList.remove('expanded');
                     }
                 }
             }
@@ -137,16 +294,32 @@ document.addEventListener('DOMContentLoaded', function() {
             e.stopPropagation();
             const row = this.closest('tr');
             const code = row.getAttribute('data-code');
-            const isExpanded = this.textContent === '-';
+            const icon = this.querySelector('.expand-icon');
+            const isExpanded = icon && icon.classList.contains('expanded');
             
             if (isExpanded) {
                 // Recolher
-                this.textContent = '+';
+                icon.classList.remove('expanded');
                 toggleChildren(code, false);
             } else {
                 // Expandir
-                this.textContent = '-';
+                icon.classList.add('expanded');
                 toggleChildren(code, true);
+            }
+        });
+        
+        // Adicionar hover effect
+        btn.addEventListener('mouseenter', function() {
+            const icon = this.querySelector('.expand-icon');
+            if (icon) {
+                icon.style.transform = icon.classList.contains('expanded') ? 'rotate(90deg) scale(1.1)' : 'scale(1.1)';
+            }
+        });
+        
+        btn.addEventListener('mouseleave', function() {
+            const icon = this.querySelector('.expand-icon');
+            if (icon) {
+                icon.style.transform = icon.classList.contains('expanded') ? 'rotate(90deg)' : 'rotate(0deg)';
             }
         });
     });

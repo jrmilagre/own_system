@@ -31,7 +31,7 @@
                 <td>{{ inventory.model|default:"-" }}</td>
                 <td>R$ {{ inventory.buy_price }}</td>
                 <td>{% if inventory.actual_price %}R$ {{ inventory.actual_price }}{% else %}-{% endif %}</td>
-                <td>{{ inventory.buy_date|date:"d/m/Y" }}</td>
+                <td>{{ inventory.buy_date|date:"d-m-Y" }}</td>
                 <td>{{ inventory.get_condition_display }}</td>
                 <td>{{ inventory.get_status_display }}</td>
                 <td>{{ inventory.location|default:"-" }}</td>

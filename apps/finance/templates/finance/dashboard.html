@@ -67,7 +67,7 @@
                     </div>
                     <div class="flex justify-between items-center">
                         <p class="text-xs text-gray-500">
-                            Vence em: {{ bill.due_date|date:"d/m/Y" }}
+                            Vence em: {{ bill.due_date|date:"d-m-Y" }}
                         </p>
                         <span class="px-2 py-1 text-xs rounded {% if bill.due_date <= today %}bg-rose-100 text-rose-700{% else %}bg-yellow-100 text-yellow-700{% endif %}">
                             {{ bill.get_recurrence_type_display }}

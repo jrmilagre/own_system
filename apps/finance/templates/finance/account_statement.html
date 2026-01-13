@@ -1,78 +1,122 @@
-{% extends 'finance/base.html' %}
+{% extends "finance/base.html" %}
 
-{% block title %}Extrato de Contas{% endblock %}
+{% block section_name %}{% if account %}{{ account.name }} ({{ account.get_account_type_display }}){% else %}Extrato de Contas{% endif %}{% endblock %}
 
 {% block content %}
-<h1>Extrato de Contas</h1>
+{% if account %}
+<div class="mb-3" style="height: 150px; background: #fdfdfd; border: 1px solid #eee;">
+    <canvas id="balanceChart"></canvas> 
+</div>
 
-<form method="get">
-    <table>
-        <tr>
-            <td><label for="account">Conta:</label></td>
-            <td>
-                <select name="account" id="account" required>
-                    <option value="">Selecione uma conta</option>
-                    {% for acc in accounts %}
-                    <option value="{{ acc.pk }}" {% if selected_account and selected_account.pk == acc.pk %}selected{% endif %}>
-                        {{ acc.name }}
-                    </option>
+<div class="card shadow-sm border-0 mb-3">
+    <div class="card-body p-0">
+        <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+            <table class="table table-sm table-striped mb-0" style="font-size: 0.85rem;">
+                <thead class="bg-dark text-white sticky-top">
+                    <tr>
+                        <th class="ps-2">Núm.</th>
+                        <th>Data</th>
+                        <th>Favorecido</th>
+                        <th class="text-end">Pagamento</th>
+                        <th class="text-end">Depósito</th>
+                        <th class="pe-2 text-end">Saldo</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for trans in transactions %}
+                    <tr>
+                        <td class="ps-2 text-muted">{{ trans.id|default:"---" }}</td>
+                        <td>{{ trans.date|date:"d-m-Y" }}</td>
+                        <td>{{ trans.description }}</td>
+                        <td class="text-end text-danger">
+                            {% if trans.amount < 0 %}
+                                <span class="fw-bold" style="font-size: 0.95rem;">R$ {{ trans.amount|floatformat:2 }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end text-success">
+                            {% if trans.amount > 0 %}
+                                <span class="fw-bold" style="font-size: 0.95rem;">R$ {{ trans.amount|floatformat:2 }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="pe-2 text-end fw-bold {% if trans.running_balance < 0 %}text-danger{% else %}text-dark{% endif %}" style="font-size: 0.95rem;">R$ {{ trans.running_balance|floatformat:2 }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="text-center text-muted py-3">Nenhuma movimentação encontrada no período.</td>
+                    </tr>
                     {% endfor %}
-                </select>
-            </td>
-        </tr>
-        <tr>
-            <td><label for="start_date">Data Inicial:</label></td>
-            <td><input type="date" name="start_date" id="start_date" value="{% if start_date %}{{ start_date|date:'Y-m-d' }}{% endif %}" required></td>
-        </tr>
-        <tr>
-            <td><label for="end_date">Data Final:</label></td>
-            <td><input type="date" name="end_date" id="end_date" value="{% if end_date %}{{ end_date|date:'Y-m-d' }}{% endif %}" required></td>
-        </tr>
-    </table>
-    <button type="submit">Gerar Extrato</button>
-</form>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
 
-{% if selected_account and start_date and end_date %}
-    <h2>Extrato - {{ selected_account.name }}</h2>
-    <p><strong>Período:</strong> {{ start_date|date:'d/m/Y' }} a {{ end_date|date:'d/m/Y' }}</p>
-    
-    {% if previous_balance is not None %}
-    <p><strong>Saldo Anterior:</strong> {{ previous_balance }}</p>
-    {% endif %}
-    
-    {% if movements %}
-    <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
-        <thead>
-            <tr style="background-color: #f0f0f0;">
-                <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Data</th>
-                <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Tipo</th>
-                <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Descrição</th>
-                <th style="border: 1px solid #ddd; padding: 8px; text-align: right;">Débito</th>
-                <th style="border: 1px solid #ddd; padding: 8px; text-align: right;">Crédito</th>
-                <th style="border: 1px solid #ddd; padding: 8px; text-align: right;">Saldo</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for movement in movements %}
-            <tr>
-                <td style="border: 1px solid #ddd; padding: 8px;">{{ movement.date|date:'d/m/Y' }}</td>
-                <td style="border: 1px solid #ddd; padding: 8px;">{{ movement.type }}</td>
-                <td style="border: 1px solid #ddd; padding: 8px;">{{ movement.description }}</td>
-                <td style="border: 1px solid #ddd; padding: 8px; text-align: right;">{% if movement.debit %}{{ movement.debit }}{% endif %}</td>
-                <td style="border: 1px solid #ddd; padding: 8px; text-align: right;">{% if movement.credit %}{{ movement.credit }}{% endif %}</td>
-                <td style="border: 1px solid #ddd; padding: 8px; text-align: right;">{{ movement.balance }}</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-        <tfoot style="background-color: #f0f0f0; font-weight: bold;">
-            <tr>
-                <td style="border: 1px solid #ddd; padding: 8px;" colspan="5"><strong>Saldo Final</strong></td>
-                <td style="border: 1px solid #ddd; padding: 8px; text-align: right;"><strong>{{ final_balance }}</strong></td>
-            </tr>
-        </tfoot>
-    </table>
-    {% else %}
-    <p>Nenhuma movimentação encontrada no período selecionado.</p>
-    {% endif %}
+<div class="card border-primary">
+    <div class="card-header bg-primary text-white py-1" style="font-size: 0.8rem;">
+        Nova Movimentação
+    </div>
+    <div class="card-body bg-light">
+        <div class="row g-2 align-items-end" style="font-size: 0.85rem;">
+            <div class="col-md-12 mb-2">
+                <a href="{% url 'finance:transaction_create' %}?account={{ account.id }}" class="btn btn-success btn-sm">
+                    <i class="fas fa-plus"></i> Criar Nova Transação para esta Conta
+                </a>
+            </div>
+        </div>
+        <small class="text-muted">
+            <i class="fas fa-info-circle me-1"></i>Use o botão acima para criar uma nova transação. O formulário completo de transação será aberto.
+        </small>
+    </div>
+</div>
+{% else %}
+<!-- Formulário para selecionar conta quando não há account_id na URL -->
+<div class="card shadow-sm border-0">
+    <div class="card-body">
+        <h5 class="card-title">Extrato de Contas</h5>
+        <form method="get" action="{% url 'finance:account_statement' %}">
+            <div class="row g-3 mb-3">
+                <div class="col-md-4">
+                    <label for="account" class="form-label">Conta:</label>
+                    <select name="account" id="account" class="form-select" required>
+                        <option value="">Selecione uma conta</option>
+                        {% for acc in accounts %}
+                        <option value="{{ acc.pk }}">{{ acc.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="start_date" class="form-label">Data Inicial:</label>
+                    <input type="date" name="start_date" id="start_date" class="form-control" value="{{ start_date|date:'Y-m-d' }}" required>
+                </div>
+                <div class="col-md-3">
+                    <label for="end_date" class="form-label">Data Final:</label>
+                    <input type="date" name="end_date" id="end_date" class="form-control" value="{{ end_date|date:'Y-m-d' }}" required>
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary w-100">Gerar Extrato</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
 {% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Placeholder para gráfico de saldo (Chart.js pode ser adicionado depois)
+document.addEventListener('DOMContentLoaded', function() {
+    const canvas = document.getElementById('balanceChart');
+    if (canvas) {
+        const ctx = canvas.getContext('2d');
+        // TODO: Implementar gráfico com Chart.js
+        ctx.fillStyle = '#f0f0f0';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#666';
+        ctx.font = '14px Segoe UI';
+        ctx.textAlign = 'center';
+        ctx.fillText('Gráfico de saldo (Chart.js será implementado)', canvas.width / 2, canvas.height / 2);
+    }
+});
+</script>
 {% endblock %}

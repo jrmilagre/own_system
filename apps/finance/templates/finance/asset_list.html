@@ -1,39 +1,75 @@
 {% extends 'finance/base.html' %}
 
+{% block section_name %}Ativos{% endblock %}
+
 {% block title %}Ativos{% endblock %}
 
 {% block content %}
-<h1>Ativos</h1>
-<a href="{% url 'finance:asset_create' %}"><button>Criar Novo Ativo</button></a>
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h1 class="h4 mb-0">Ativos</h1>
+    <a href="{% url 'finance:asset_create' %}" class="btn btn-primary btn-sm">
+        <i class="fas fa-plus"></i> Criar Novo Ativo
+    </a>
+</div>
+
 {% if assets %}
-    <table>
-        <thead>
-            <tr>
-                <th>Código</th>
-                <th>Nome</th>
-                <th>Tipo</th>
-                <th>Setor</th>
-                <th>Moeda</th>
-                <th>Ações</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for asset in assets %}
-            <tr>
-                <td>{{ asset.code }}</td>
-                <td>{{ asset.name }}</td>
-                <td>{{ asset.get_asset_type_display }}</td>
-                <td>{{ asset.sector|default:"-" }}</td>
-                <td>{{ asset.currency }}</td>
-                <td>
-                    <a href="{% url 'finance:asset_update' asset.pk %}"><button>Editar</button></a>
-                    <a href="{% url 'finance:asset_delete' asset.pk %}"><button>Deletar</button></a>
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+<div class="card shadow-sm border-0">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover table-sm mb-0" style="font-size: 0.9rem;">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ps-3">Código</th>
+                        <th>Nome</th>
+                        <th>Tipo</th>
+                        <th>Setor</th>
+                        <th>Moeda</th>
+                        <th class="pe-3">Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for asset in assets %}
+                    <tr>
+                        <td class="ps-3">
+                            <span class="font-monospace fw-bold" style="font-size: 0.85rem;">{{ asset.code }}</span>
+                        </td>
+                        <td>
+                            <span style="font-weight: 500;">{{ asset.name }}</span>
+                        </td>
+                        <td>
+                            <span class="badge bg-info">{{ asset.get_asset_type_display }}</span>
+                        </td>
+                        <td>
+                            {% if asset.sector %}
+                                <span class="text-muted">{{ asset.sector }}</span>
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="badge bg-secondary">{{ asset.currency }}</span>
+                        </td>
+                        <td class="pe-3">
+                            <div class="btn-group btn-group-sm" role="group">
+                                <a href="{% url 'finance:asset_update' asset.pk %}" class="btn btn-outline-primary" title="Editar">
+                                    <i class="fas fa-edit"></i>
+                                </a>
+                                <a href="{% url 'finance:asset_delete' asset.pk %}" class="btn btn-outline-danger" title="Deletar">
+                                    <i class="fas fa-trash"></i>
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
 {% else %}
-    <p>Nenhum ativo cadastrado.</p>
+<div class="alert alert-info">
+    <i class="fas fa-info-circle me-2"></i>Nenhum ativo cadastrado.
+</div>
 {% endif %}
+
 {% endblock %}

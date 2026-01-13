@@ -1,15 +1,15 @@
 {% extends 'finance/base.html' %}
 
-{% block section_name %}{% if form.instance.pk %}Editar Conta{% else %}Criar Nova Conta{% endif %}{% endblock %}
+{% block section_name %}{% if form.instance.pk %}Editar Orçamento{% else %}Criar Novo Orçamento{% endif %}{% endblock %}
 
-{% block title %}{% if form.instance.pk %}Editar Conta{% else %}Criar Conta{% endif %}{% endblock %}
+{% block title %}{% if form.instance.pk %}Editar Orçamento{% else %}Criar Orçamento{% endif %}{% endblock %}
 
 {% block content %}
 <div class="card shadow-sm border-0">
     <div class="card-header bg-light">
         <h5 class="mb-0">
-            <i class="fas fa-university me-2"></i>
-            {% if form.instance.pk %}Editar Conta{% else %}Criar Nova Conta{% endif %}
+            <i class="fas fa-chart-pie me-2"></i>
+            {% if form.instance.pk %}Editar Orçamento{% else %}Criar Novo Orçamento{% endif %}
         </h5>
     </div>
     <div class="card-body" style="background-color: #f8f9fa;">
@@ -17,50 +17,40 @@
             {% csrf_token %}
             
             <div class="row g-3">
-                <!-- Nome da Conta -->
+                <!-- Subcategoria -->
                 <div class="col-md-6">
-                    <label for="{{ form.name.id_for_label }}" class="form-label">
-                        <i class="fas fa-tag me-1 text-primary"></i>Nome da conta <span class="text-danger">*</span>
+                    <label for="{{ form.subcategory.id_for_label }}" class="form-label">
+                        <i class="fas fa-tags me-1 text-warning"></i>Subcategoria <span class="text-danger">*</span>
                     </label>
-                    {{ form.name }}
-                    {% if form.name.errors %}
-                        <div class="text-danger small mt-1">{{ form.name.errors }}</div>
+                    {{ form.subcategory }}
+                    {% if form.subcategory.errors %}
+                        <div class="text-danger small mt-1">{{ form.subcategory.errors }}</div>
                     {% endif %}
                 </div>
 
-                <!-- Tipo -->
+                <!-- Data do Orçamento -->
                 <div class="col-md-6">
-                    <label for="{{ form.account_type.id_for_label }}" class="form-label">
-                        <i class="fas fa-chart-pie me-1 text-info"></i>Tipo <span class="text-danger">*</span>
+                    <label for="{{ form.budget_date.id_for_label }}" class="form-label">
+                        <i class="fas fa-calendar-alt me-1 text-primary"></i>Data do orçamento <span class="text-danger">*</span>
                     </label>
-                    {{ form.account_type }}
-                    {% if form.account_type.errors %}
-                        <div class="text-danger small mt-1">{{ form.account_type.errors }}</div>
+                    {{ form.budget_date }}
+                    {% if form.budget_date.errors %}
+                        <div class="text-danger small mt-1">{{ form.budget_date.errors }}</div>
                     {% endif %}
+                    <small class="text-muted">A data será normalizada para o dia 1 do mês.</small>
                 </div>
 
-                <!-- Unidade Monetária -->
+                <!-- Valor -->
                 <div class="col-md-6">
-                    <label for="{{ form.currency.id_for_label }}" class="form-label">
-                        <i class="fas fa-coins me-1 text-warning"></i>Unidade monetária <span class="text-danger">*</span>
-                    </label>
-                    {{ form.currency }}
-                    {% if form.currency.errors %}
-                        <div class="text-danger small mt-1">{{ form.currency.errors }}</div>
-                    {% endif %}
-                </div>
-
-                <!-- Saldo de Abertura -->
-                <div class="col-md-6">
-                    <label for="{{ form.opening_balance.id_for_label }}" class="form-label">
-                        <i class="fas fa-money-bill-wave me-1 text-success"></i>Saldo de abertura <span class="text-danger">*</span>
+                    <label for="{{ form.amount.id_for_label }}" class="form-label">
+                        <i class="fas fa-money-bill-wave me-1 text-success"></i>Valor <span class="text-danger">*</span>
                     </label>
                     <div class="input-group">
                         <span class="input-group-text">R$</span>
-                        {{ form.opening_balance }}
+                        {{ form.amount }}
                     </div>
-                    {% if form.opening_balance.errors %}
-                        <div class="text-danger small mt-1">{{ form.opening_balance.errors }}</div>
+                    {% if form.amount.errors %}
+                        <div class="text-danger small mt-1">{{ form.amount.errors }}</div>
                     {% endif %}
                 </div>
             </div>
@@ -68,7 +58,7 @@
             <!-- Botões de ação -->
             <div class="mt-4 pt-3 border-top">
                 <div class="d-flex gap-2 justify-content-end">
-                    <a href="{% url 'finance:account_list' %}" class="btn btn-secondary">
+                    <a href="{% url 'finance:budget_list' %}" class="btn btn-secondary">
                         <i class="fas fa-times me-1"></i>Cancelar
                     </a>
                     <button type="submit" class="btn btn-primary">

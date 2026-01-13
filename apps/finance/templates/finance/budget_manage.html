@@ -1,149 +1,182 @@
 {% extends 'finance/base.html' %}
 
+{% block section_name %}Gerenciar Orçamento{% endblock %}
+
 {% block title %}Gerenciar Orçamento{% endblock %}
 
 {% block content %}
-<h1>Gerenciar Orçamento</h1>
-
-<form method="get" action="{% url 'finance:budget_manage' %}" style="margin-bottom: 20px;">
-    <label for="year">Ano:</label>
-    <select name="year" id="year" onchange="this.form.submit()" style="padding: 5px; margin-left: 10px;">
-        {% for year in years %}
-            <option value="{{ year }}" {% if year == selected_year %}selected{% endif %}>
-                {{ year }}
-            </option>
-        {% endfor %}
-    </select>
-    
-    <label for="category" style="margin-left: 20px;">Categoria:</label>
-    <select name="category" id="category" onchange="this.form.submit()" style="padding: 5px; margin-left: 10px;">
-        <option value="">Todas</option>
-        {% for category in categories %}
-            <option value="{{ category.id }}" {% if selected_category_id == category.id %}selected{% endif %}>
-                {{ category.category }}
-            </option>
-        {% endfor %}
-    </select>
-</form>
-
-<form method="post" id="budgetForm">
-    {% csrf_token %}
-    <input type="hidden" name="year" value="{{ selected_year }}">
-    {% if selected_category_id %}
-    <input type="hidden" name="category" value="{{ selected_category_id }}">
-    {% endif %}
-    
-    <div style="overflow-x: auto;">
-        <table id="budgetTable" style="width: 100%; border-collapse: collapse; border: 1px solid #ddd;">
-            <thead style="background-color: #333; color: white;">
-                <tr>
-                    <th rowspan="2" style="vertical-align: middle; padding: 10px; border: 1px solid #ddd;">Subcategoria</th>
-                    <th rowspan="2" style="vertical-align: middle; padding: 10px; border: 1px solid #ddd;">Tipo</th>
-                    <th rowspan="2" style="vertical-align: middle; padding: 10px; border: 1px solid #ddd;">Média<br>Ano Anterior</th>
-                    {% for month_num, month_name in months %}
-                        <th style="padding: 10px; border: 1px solid #ddd; text-align: center;">{{ month_name }}</th>
-                    {% endfor %}
-                    <th rowspan="2" style="vertical-align: middle; padding: 10px; border: 1px solid #ddd;">Total<br>Anual</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for item in budget_data %}
-                    <tr class="{% if item.default_transaction_type == 'CR' %}budget-credit{% else %}budget-debit{% endif %}">
-                        <td style="padding: 8px; border: 1px solid #ddd;"><strong>{{ item.subcategory }}</strong></td>
-                        <td style="padding: 8px; border: 1px solid #ddd; text-align: center;">
-                            {% if item.default_transaction_type == 'CR' %}
-                                <span style="background-color: #28a745; color: white; padding: 3px 8px; border-radius: 3px;">↑ Receita</span>
-                            {% else %}
-                                <span style="background-color: #dc3545; color: white; padding: 3px 8px; border-radius: 3px;">↓ Despesa</span>
-                            {% endif %}
-                        </td>
-                        <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">
-                            <span style="color: #666;">R$ {{ item.avg_previous_year|floatformat:2 }}</span>
-                        </td>
-                        {% for month in item.months %}
-                            <td style="padding: 5px; border: 1px solid #ddd;">
-                                <input type="text" 
-                                       name="budget_{{ item.subcategory.id }}_{{ month.month }}"
-                                       value="{% if month.amount %}{{ month.amount|floatformat:2 }}{% endif %}"
-                                       class="budget-input"
-                                       data-subcategory="{{ item.subcategory.id }}"
-                                       data-month="{{ month.month }}"
-                                       data-type="{{ item.default_transaction_type }}"
-                                       placeholder="0.00"
-                                       style="width: 100%; padding: 5px; text-align: right; box-sizing: border-box;">
-                            </td>
-                        {% endfor %}
-                        <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">
-                            <strong class="total-row" data-subcategory="{{ item.subcategory.id }}">
-                                R$ {{ item.total_year|floatformat:2 }}
-                            </strong>
-                        </td>
-                    </tr>
-                {% endfor %}
-            </tbody>
-            <tfoot style="background-color: #f0f0f0;">
-                <tr>
-                    <td colspan="2" style="padding: 8px; border: 1px solid #ddd;"><strong>Total Receitas</strong></td>
-                    <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">
-                        <strong id="totalAvgPreviousCredit">R$ 0.00</strong>
-                    </td>
-                    {% for month_num, month_name in months %}
-                        <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">
-                            <strong class="total-column-credit" data-month="{{ month_num }}">
-                                R$ 0.00
-                            </strong>
-                        </td>
-                    {% endfor %}
-                    <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">
-                        <strong id="totalCredit">R$ 0.00</strong>
-                    </td>
-                </tr>
-                <tr>
-                    <td colspan="2" style="padding: 8px; border: 1px solid #ddd;"><strong>Total Despesas</strong></td>
-                    <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">
-                        <strong id="totalAvgPreviousDebit">R$ 0.00</strong>
-                    </td>
-                    {% for month_num, month_name in months %}
-                        <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">
-                            <strong class="total-column-debit" data-month="{{ month_num }}">
-                                R$ 0.00
-                            </strong>
-                        </td>
-                    {% endfor %}
-                    <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">
-                        <strong id="totalDebit">R$ 0.00</strong>
-                    </td>
-                </tr>
-                <tr style="background-color: #e7f3ff;">
-                    <td colspan="2" style="padding: 8px; border: 1px solid #ddd;"><strong>Saldo (Receitas - Despesas)</strong></td>
-                    <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">
-                        <strong id="totalAvgPreviousBalance">R$ 0.00</strong>
-                    </td>
-                    {% for month_num, month_name in months %}
-                        <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">
-                            <strong class="total-column-balance" data-month="{{ month_num }}">
-                                R$ 0.00
-                            </strong>
-                        </td>
-                    {% endfor %}
-                    <td style="padding: 8px; border: 1px solid #ddd; text-align: right;">
-                        <strong id="grandTotal">R$ 0.00</strong>
-                    </td>
-                </tr>
-            </tfoot>
-        </table>
-    </div>
-    
-    <div style="margin-top: 20px;">
-        <button type="submit" style="padding: 10px 20px; background-color: #007bff; color: white; border: none; cursor: pointer; border-radius: 4px;">
-            Salvar Orçamento
-        </button>
-        <a href="{% url 'finance:index' %}" style="padding: 10px 20px; background-color: #6c757d; color: white; text-decoration: none; border-radius: 4px; display: inline-block; margin-left: 10px;">
-            Cancelar
+<div class="card shadow-sm border-0 mb-3">
+    <div class="card-header bg-light d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">
+            <i class="fas fa-table me-2"></i>Gerenciar Orçamento
+        </h5>
+        <a href="{% url 'finance:budget_list' %}" class="btn btn-outline-secondary btn-sm">
+            <i class="fas fa-list me-1"></i>Ver Lista
         </a>
     </div>
-</form>
+    <div class="card-body">
+        <form method="get" action="{% url 'finance:budget_manage' %}" class="row g-3">
+            <div class="col-md-4">
+                <label for="year" class="form-label">
+                    <i class="fas fa-calendar me-1"></i>Ano
+                </label>
+                <select name="year" id="year" class="form-select" onchange="this.form.submit()">
+                    {% for year in years %}
+                        <option value="{{ year }}" {% if year == selected_year %}selected{% endif %}>
+                            {{ year }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <div class="col-md-8">
+                <label for="category" class="form-label">
+                    <i class="fas fa-tags me-1"></i>Categoria
+                </label>
+                <select name="category" id="category" class="form-select" onchange="this.form.submit()">
+                    <option value="">Todas</option>
+                    {% for category in categories %}
+                        <option value="{{ category.id }}" {% if selected_category_id == category.id %}selected{% endif %}>
+                            {{ category.category }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+        </form>
+    </div>
+</div>
 
+<div class="card shadow-sm border-0">
+    <div class="card-body p-0">
+        <form method="post" id="budgetForm">
+            {% csrf_token %}
+            <input type="hidden" name="year" value="{{ selected_year }}">
+            {% if selected_category_id %}
+            <input type="hidden" name="category" value="{{ selected_category_id }}">
+            {% endif %}
+            
+            <div class="table-responsive">
+                <table id="budgetTable" class="table table-bordered table-sm mb-0" style="font-size: 0.9rem;">
+                    <thead class="table-dark">
+                        <tr>
+                            <th rowspan="2" class="align-middle text-center" style="min-width: 200px;">Subcategoria</th>
+                            <th rowspan="2" class="align-middle text-center" style="min-width: 100px;">Tipo</th>
+                            <th rowspan="2" class="align-middle text-center" style="min-width: 120px;">Média<br>Ano Anterior</th>
+                            {% for month_num, month_name in months %}
+                                <th class="text-center" style="min-width: 100px;">{{ month_name }}</th>
+                            {% endfor %}
+                            <th rowspan="2" class="align-middle text-center" style="min-width: 120px;">Total<br>Anual</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in budget_data %}
+                            <tr class="{% if item.default_transaction_type == 'CR' %}table-success{% else %}table-danger{% endif %}">
+                                <td class="ps-3">
+                                    <span class="badge bg-info bg-opacity-10 text-info rounded me-2" style="font-size: 0.75rem; padding: 4px 8px;">
+                                        {{ item.subcategory.category.category }}
+                                    </span>
+                                    <strong>{{ item.subcategory.subcategory }}</strong>
+                                </td>
+                                <td class="text-center">
+                                    {% if item.default_transaction_type == 'CR' %}
+                                        <span class="badge bg-success">↑ Receita</span>
+                                    {% else %}
+                                        <span class="badge bg-danger">↓ Despesa</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-end pe-3">
+                                    <span class="text-muted">R$ {{ item.avg_previous_year|floatformat:2 }}</span>
+                                </td>
+                                {% for month in item.months %}
+                                    <td class="p-2">
+                                        <input type="text" 
+                                               name="budget_{{ item.subcategory.id }}_{{ month.month }}"
+                                               value="{% if month.amount %}{{ month.amount|floatformat:2 }}{% endif %}"
+                                               class="form-control form-control-sm budget-input text-end"
+                                               data-subcategory="{{ item.subcategory.id }}"
+                                               data-month="{{ month.month }}"
+                                               data-type="{{ item.default_transaction_type }}"
+                                               placeholder="0.00">
+                                    </td>
+                                {% endfor %}
+                                <td class="text-end pe-3">
+                                    <strong class="total-row" data-subcategory="{{ item.subcategory.id }}">
+                                        R$ {{ item.total_year|floatformat:2 }}
+                                    </strong>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                    <tfoot class="table-light">
+                        <tr>
+                            <td colspan="2" class="ps-3"><strong>Total Receitas</strong></td>
+                            <td class="text-end pe-3">
+                                <strong id="totalAvgPreviousCredit">R$ 0.00</strong>
+                            </td>
+                            {% for month_num, month_name in months %}
+                                <td class="text-end pe-3">
+                                    <strong class="total-column-credit" data-month="{{ month_num }}">
+                                        R$ 0.00
+                                    </strong>
+                                </td>
+                            {% endfor %}
+                            <td class="text-end pe-3">
+                                <strong id="totalCredit">R$ 0.00</strong>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td colspan="2" class="ps-3"><strong>Total Despesas</strong></td>
+                            <td class="text-end pe-3">
+                                <strong id="totalAvgPreviousDebit">R$ 0.00</strong>
+                            </td>
+                            {% for month_num, month_name in months %}
+                                <td class="text-end pe-3">
+                                    <strong class="total-column-debit" data-month="{{ month_num }}">
+                                        R$ 0.00
+                                    </strong>
+                                </td>
+                            {% endfor %}
+                            <td class="text-end pe-3">
+                                <strong id="totalDebit">R$ 0.00</strong>
+                            </td>
+                        </tr>
+                        <tr class="table-info">
+                            <td colspan="2" class="ps-3"><strong>Saldo (Receitas - Despesas)</strong></td>
+                            <td class="text-end pe-3">
+                                <strong id="totalAvgPreviousBalance">R$ 0.00</strong>
+                            </td>
+                            {% for month_num, month_name in months %}
+                                <td class="text-end pe-3">
+                                    <strong class="total-column-balance" data-month="{{ month_num }}">
+                                        R$ 0.00
+                                    </strong>
+                                </td>
+                            {% endfor %}
+                            <td class="text-end pe-3">
+                                <strong id="grandTotal">R$ 0.00</strong>
+                            </td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+            
+            <div class="card-footer">
+                <div class="d-flex gap-2 justify-content-end">
+                    <a href="{% url 'finance:index' %}" class="btn btn-secondary">
+                        <i class="fas fa-times me-1"></i>Cancelar
+                    </a>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save me-1"></i>Salvar Orçamento
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     // Calcular totais ao carregar
@@ -170,7 +203,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Atualizar total da linha
         const totalRow = document.querySelector(`.total-row[data-subcategory="${subcategoryId}"]`);
         if (totalRow) {
-            totalRow.textContent = 'R$ ' + total.toFixed(2).replace('.', ',');
+            totalRow.textContent = 'R$ ' + total.toFixed(2);
         }
     }
     
@@ -192,18 +225,18 @@ document.addEventListener('DOMContentLoaded', function() {
             
             const totalCol{{ month_num }}Credit = document.querySelector(`.total-column-credit[data-month="{{ month_num }}"]`);
             if (totalCol{{ month_num }}Credit) {
-                totalCol{{ month_num }}Credit.textContent = 'R$ ' + totalMonth{{ month_num }}Credit.toFixed(2).replace('.', ',');
+                totalCol{{ month_num }}Credit.textContent = 'R$ ' + totalMonth{{ month_num }}Credit.toFixed(2);
             }
             
             const totalCol{{ month_num }}Debit = document.querySelector(`.total-column-debit[data-month="{{ month_num }}"]`);
             if (totalCol{{ month_num }}Debit) {
-                totalCol{{ month_num }}Debit.textContent = 'R$ ' + totalMonth{{ month_num }}Debit.toFixed(2).replace('.', ',');
+                totalCol{{ month_num }}Debit.textContent = 'R$ ' + totalMonth{{ month_num }}Debit.toFixed(2);
             }
             
             const totalCol{{ month_num }}Balance = document.querySelector(`.total-column-balance[data-month="{{ month_num }}"]`);
             if (totalCol{{ month_num }}Balance) {
                 const balance = totalMonth{{ month_num }}Credit - totalMonth{{ month_num }}Debit;
-                totalCol{{ month_num }}Balance.textContent = 'R$ ' + balance.toFixed(2).replace('.', ',');
+                totalCol{{ month_num }}Balance.textContent = 'R$ ' + balance.toFixed(2);
             }
         {% endfor %}
         
@@ -223,48 +256,20 @@ document.addEventListener('DOMContentLoaded', function() {
         
         const totalCreditEl = document.getElementById('totalCredit');
         if (totalCreditEl) {
-            totalCreditEl.textContent = 'R$ ' + totalCredit.toFixed(2).replace('.', ',');
+            totalCreditEl.textContent = 'R$ ' + totalCredit.toFixed(2);
         }
         
         const totalDebitEl = document.getElementById('totalDebit');
         if (totalDebitEl) {
-            totalDebitEl.textContent = 'R$ ' + totalDebit.toFixed(2).replace('.', ',');
+            totalDebitEl.textContent = 'R$ ' + totalDebit.toFixed(2);
         }
         
         const grandTotalEl = document.getElementById('grandTotal');
         if (grandTotalEl) {
             const balance = totalCredit - totalDebit;
-            grandTotalEl.textContent = 'R$ ' + balance.toFixed(2).replace('.', ',');
+            grandTotalEl.textContent = 'R$ ' + balance.toFixed(2);
         }
     }
 });
 </script>
-
-<style>
-.budget-input {
-    min-width: 100px;
-}
-#budgetTable {
-    font-size: 0.9rem;
-}
-#budgetTable th {
-    text-align: center;
-    white-space: nowrap;
-}
-#budgetTable td {
-    vertical-align: middle;
-}
-.budget-credit {
-    background-color: #d4edda !important;
-}
-.budget-debit {
-    background-color: #f8d7da !important;
-}
-.budget-credit:hover {
-    background-color: #c3e6cb !important;
-}
-.budget-debit:hover {
-    background-color: #f5c6cb !important;
-}
-</style>
 {% endblock %}

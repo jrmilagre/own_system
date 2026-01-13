@@ -1,24 +1,96 @@
 {% extends 'finance/base.html' %}
 
+{% block section_name %}{% if form.instance.pk %}Editar Categoria{% else %}Criar Nova Categoria{% endif %}{% endblock %}
+
 {% block title %}{% if form.instance.pk %}Editar Categoria{% else %}Criar Categoria{% endif %}{% endblock %}
 
 {% block content %}
-<h1>{% if form.instance.pk %}Editar Categoria{% else %}Criar Nova Categoria{% endif %}</h1>
+<div class="card shadow-sm border-0">
+    <div class="card-header bg-light">
+        <h5 class="mb-0">
+            <i class="fas fa-tags me-2"></i>
+            {% if form.instance.pk %}Editar Categoria{% else %}Criar Nova Categoria{% endif %}
+        </h5>
+    </div>
+    <div class="card-body" style="background-color: #f8f9fa;">
+        <form method="post" class="needs-validation" novalidate>
+            {% csrf_token %}
+            
+            <div class="row g-3">
+                <!-- Categoria -->
+                <div class="col-12">
+                    <label for="{{ form.category.id_for_label }}" class="form-label">
+                        <i class="fas fa-tag me-1 text-primary"></i>Categoria <span class="text-danger">*</span>
+                    </label>
+                    {{ form.category }}
+                    {% if form.category.errors %}
+                        <div class="text-danger small mt-1">{{ form.category.errors }}</div>
+                    {% endif %}
+                </div>
+            </div>
 
-<form method="post">
-    {% csrf_token %}
-    <table>
-        <tr>
-            <td><label for="{{ form.category.id_for_label }}">Categoria:</label></td>
-            <td>{{ form.category }}</td>
-            {% if form.category.errors %}
-            <td>{{ form.category.errors }}</td>
-            {% endif %}
-        </tr>
-    </table>
-    <button type="submit">Salvar</button>
-    <a href="{% url 'finance:category_list' %}">Cancelar</a>
-</form>
+            <!-- Botões de ação -->
+            <div class="mt-4 pt-3 border-top">
+                <div class="d-flex gap-2 justify-content-end">
+                    <a href="{% url 'finance:category_list' %}" class="btn btn-secondary">
+                        <i class="fas fa-times me-1"></i>Cancelar
+                    </a>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save me-1"></i>Salvar
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
 {% endblock %}
 
+{% block extra_css %}
+<style>
+.form-label {
+    font-weight: 500;
+    font-size: 0.9rem;
+    margin-bottom: 0.5rem;
+    color: #495057;
+}
 
+.form-control, .form-select {
+    font-size: 0.9rem;
+    border-radius: 0.375rem;
+    border: 1px solid #dee2e6;
+    background-color: #fff;
+    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+}
+
+.form-control:focus, .form-select:focus {
+    border-color: #86b7fe;
+    box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+    background-color: #fff;
+}
+
+.form-control:hover, .form-select:hover {
+    border-color: #adb5bd;
+    background-color: #fff;
+}
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Aplicar classes Bootstrap aos campos do formulário
+    document.querySelectorAll('input[type="text"], input[type="number"], input[type="date"], select, textarea').forEach(function(field) {
+        if (!field.classList.contains('form-control') && !field.classList.contains('form-select') && !field.classList.contains('form-check-input')) {
+            if (field.tagName === 'SELECT') {
+                field.classList.add('form-select');
+            } else if (field.tagName === 'TEXTAREA') {
+                field.classList.add('form-control');
+            } else {
+                field.classList.add('form-control');
+            }
+        }
+    });
+});
+</script>
+{% endblock %}

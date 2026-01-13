@@ -37,14 +37,14 @@
                         {% endfor %}
                     </ul>
                 </td>
-                <td>{{ scheduler.due_date|default:"-"|date:"d/m/Y" }}</td>
+                <td>{{ scheduler.due_date|default:"-"|date:"d-m-Y" }}</td>
                 <td>{{ scheduler.get_recurrence_type_display }} ({{ scheduler.recurrence_interval }})</td>
                 <td>{{ scheduler.get_status_display }}</td>
                 <td>
                     {% if scheduler.termination_type == 'INSTALLMENTS' %}
                         {{ scheduler.remaining_installments|default:"-" }}
                     {% elif scheduler.termination_type == 'FINAL_DATE' %}
-                        Até {{ scheduler.final_date|default:"-"|date:"d/m/Y" }}
+                        Até {{ scheduler.final_date|default:"-"|date:"d-m-Y" }}
                     {% else %}
                         Infinito
                     {% endif %}

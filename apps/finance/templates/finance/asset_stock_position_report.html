@@ -1,46 +1,70 @@
 {% extends 'finance/base.html' %}
 
+{% block section_name %}Relatório de Posição de Estoque de Ativos{% endblock %}
+
 {% block title %}Relatório de Posição de Estoque de Ativos{% endblock %}
 
 {% block content %}
-<h1>Relatório de Posição de Estoque de Ativos</h1>
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h1 class="h4 mb-0">Relatório de Posição de Estoque de Ativos</h1>
+    <a href="{% url 'finance:reports_index' %}" class="btn btn-secondary btn-sm">
+        <i class="fas fa-arrow-left me-1"></i>Voltar para Relatórios
+    </a>
+</div>
 
 {% if report_data %}
-    <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
-        <thead>
-            <tr style="background-color: #f0f0f0;">
-                <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Código</th>
-                <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Descrição</th>
-                <th style="border: 1px solid #ddd; padding: 8px; text-align: center;">Moeda</th>
-                <th style="border: 1px solid #ddd; padding: 8px; text-align: right;">Quantidade</th>
-                <th style="border: 1px solid #ddd; padding: 8px; text-align: right;">Valor Unitário</th>
-                <th style="border: 1px solid #ddd; padding: 8px; text-align: right;">Valor Total</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for item in report_data %}
-            <tr>
-                <td style="border: 1px solid #ddd; padding: 8px;"><strong>{{ item.code }}</strong></td>
-                <td style="border: 1px solid #ddd; padding: 8px;">{{ item.description }}</td>
-                <td style="border: 1px solid #ddd; padding: 8px; text-align: center;">{{ item.currency }}</td>
-                <td style="border: 1px solid #ddd; padding: 8px; text-align: right;">{{ item.quantity|floatformat:6 }}</td>
-                <td style="border: 1px solid #ddd; padding: 8px; text-align: right;">R$ {{ item.unit_value|floatformat:4 }}</td>
-                <td style="border: 1px solid #ddd; padding: 8px; text-align: right;">R$ {{ item.total_value|floatformat:2 }}</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-        <tfoot style="background-color: #f0f0f0; font-weight: bold;">
-            <tr>
-                <td style="border: 1px solid #ddd; padding: 8px;" colspan="5"><strong>TOTAL</strong></td>
-                <td style="border: 1px solid #ddd; padding: 8px; text-align: right;">R$ {{ total_value_all|floatformat:2 }}</td>
-            </tr>
-        </tfoot>
-    </table>
+<div class="card shadow-sm border-0">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover table-sm mb-0" style="font-size: 0.9rem;">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ps-3">Código</th>
+                        <th>Descrição</th>
+                        <th class="text-center">Moeda</th>
+                        <th class="text-end">Quantidade</th>
+                        <th class="text-end">Valor Unitário</th>
+                        <th class="text-end pe-3">Valor Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in report_data %}
+                    <tr>
+                        <td class="ps-3">
+                            <span class="font-monospace fw-bold" style="font-size: 0.85rem;">{{ item.code }}</span>
+                        </td>
+                        <td>
+                            <span style="font-weight: 500;">{{ item.description }}</span>
+                        </td>
+                        <td class="text-center">
+                            <span class="badge bg-secondary">{{ item.currency }}</span>
+                        </td>
+                        <td class="text-end">
+                            <span class="font-monospace" style="font-size: 0.9rem;">{{ item.quantity|floatformat:6 }}</span>
+                        </td>
+                        <td class="text-end">
+                            <span class="fw-bold" style="font-size: 0.95rem;">R$ {{ item.unit_value|floatformat:4 }}</span>
+                        </td>
+                        <td class="text-end pe-3">
+                            <span class="fw-bold" style="font-size: 0.95rem;">R$ {{ item.total_value|floatformat:2 }}</span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot class="table-light">
+                    <tr>
+                        <td class="ps-3 fw-bold" colspan="5">TOTAL</td>
+                        <td class="text-end pe-3 fw-bold" style="font-size: 0.95rem;">R$ {{ total_value_all|floatformat:2 }}</td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+</div>
 {% else %}
-    <p>Nenhum ativo com posição encontrado.</p>
+<div class="alert alert-info">
+    <i class="fas fa-info-circle me-2"></i>Nenhum ativo com posição encontrado.
+</div>
 {% endif %}
 
-<p style="margin-top: 20px;">
-    <a href="{% url 'finance:reports_index' %}">← Voltar para Relatórios</a>
-</p>
 {% endblock %}

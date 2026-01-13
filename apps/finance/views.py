@@ -13,7 +13,7 @@ from .forms import (
     MultipleTransactionForm, MultipleTransactionItemForm, MultipleTransactionItemFormSet,
     MultipleSchedulerForm, MultipleSchedulerItemForm, MultipleSchedulerItemFormSet,
     MultipleSchedulerRegisterItemFormSet, AssetForm, AssetTransactionForm, AssetPositionForm, InventoryForm,
-    CashFlowItemForm, CashFlowCalculationRuleFormSet, TransactionFilterForm
+    CashFlowItemForm, CashFlowCalculationRuleFormSet, TransactionFilterForm, BudgetForm
 )
 
 
@@ -30,6 +30,65 @@ def get_subcategory_default_transaction_type(request, subcategory_id):
     })
 
 
+# AJAX Views para criação rápida
+def quick_create_account(request):
+    """Cria uma conta rapidamente via AJAX"""
+    if request.method == 'POST':
+        form = AccountForm(request.POST)
+        if form.is_valid():
+            account = form.save()
+            return JsonResponse({
+                'success': True,
+                'id': account.id,
+                'name': account.name
+            })
+        else:
+            return JsonResponse({
+                'success': False,
+                'errors': form.errors
+            }, status=400)
+    return JsonResponse({'success': False, 'error': 'Method not allowed'}, status=405)
+
+
+def quick_create_beneficiary(request):
+    """Cria um beneficiário rapidamente via AJAX"""
+    if request.method == 'POST':
+        form = BeneficiaryForm(request.POST)
+        if form.is_valid():
+            beneficiary = form.save()
+            return JsonResponse({
+                'success': True,
+                'id': beneficiary.id,
+                'name': beneficiary.full_name
+            })
+        else:
+            return JsonResponse({
+                'success': False,
+                'errors': form.errors
+            }, status=400)
+    return JsonResponse({'success': False, 'error': 'Method not allowed'}, status=405)
+
+
+def quick_create_subcategory(request):
+    """Cria uma subcategoria rapidamente via AJAX"""
+    if request.method == 'POST':
+        form = SubcategoryForm(request.POST)
+        if form.is_valid():
+            subcategory = form.save()
+            return JsonResponse({
+                'success': True,
+                'id': subcategory.id,
+                'name': str(subcategory),
+                'category_id': subcategory.category.id
+            })
+        else:
+            return JsonResponse({
+                'success': False,
+                'errors': form.errors
+            }, status=400)
+    return JsonResponse({'success': False, 'error': 'Method not allowed'}, status=405)
+
+
 # Account Views
 def account_list(request):
     """Lista de contas"""
@@ -37,10 +96,13 @@ def account_list(request):
     # Calcular datas padrão para o botão de extrato
     today = date.today()
     first_day_of_month = date(today.year, today.month, 1)
+    # Calcular total de saldos
+    total_balance = sum(account.get_balance() for account in accounts)
     return render(request, 'finance/account_list.html', {
         'accounts': accounts,
         'default_start_date': first_day_of_month,
         'default_end_date': today,
+        'total_balance': total_balance,
     })
 
 
@@ -384,6 +446,7 @@ def transaction_list(request):
 
 def transaction_create(request):
     """Criar nova transação"""
+    categories = Category.objects.all().order_by('category')
     if request.method == 'POST':
         form = TransactionForm(request.POST)
         if form.is_valid():
@@ -444,9 +507,10 @@ def transaction_create(request):
         else:
             # Formulário inválido - mostrar erros
             messages.error(request, 'Por favor, corrija os erros abaixo.')
+            return render(request, 'finance/transaction_form.html', {'form': form, 'categories': categories})
     else:
         form = TransactionForm()
-    return render(request, 'finance/transaction_form.html', {'form': form})
+    return render(request, 'finance/transaction_form.html', {'form': form, 'categories': categories})
 
 
 def transaction_update(request, pk):
@@ -549,7 +613,8 @@ def transaction_update(request, pk):
         else:
             form = TransactionForm(instance=transaction)
     
-    return render(request, 'finance/transaction_form.html', {'form': form, 'transaction': transaction})
+    categories = Category.objects.all().order_by('category')
+    return render(request, 'finance/transaction_form.html', {'form': form, 'transaction': transaction, 'categories': categories})
 
 
 def transaction_delete(request, pk):
@@ -618,35 +683,57 @@ def scheduler_list(request):
 
 def scheduler_create(request):
     """Criar novo agendamento"""
+    categories = Category.objects.all().order_by('category')
     if request.method == 'POST':
         form = SchedulerForm(request.POST)
         if form.is_valid():
             scheduler = form.save(commit=False)
+            # Se não for recorrente (toggle desligado), definir como 'NONE'
+            is_recurring = request.POST.get('is_recurring') == 'on'
+            if not is_recurring:
+                scheduler.recurrence_type = 'NONE'
+                scheduler.recurrence_interval = 1
+                scheduler.termination_type = 'INFINITE'
+                scheduler.remaining_installments = None
+                scheduler.final_date = None
             # Garantir que original_due_date seja definido
             if scheduler.due_date and not scheduler.original_due_date:
                 scheduler.original_due_date = scheduler.due_date
             scheduler.save()
             return redirect('finance:scheduler_list')
+        else:
+            return render(request, 'finance/scheduler_form.html', {'form': form, 'categories': categories})
     else:
         form = SchedulerForm()
-    return render(request, 'finance/scheduler_form.html', {'form': form})
+    return render(request, 'finance/scheduler_form.html', {'form': form, 'categories': categories})
 
 
 def scheduler_update(request, pk):
     """Editar agendamento existente"""
     scheduler = get_object_or_404(Scheduler, pk=pk)
+    categories = Category.objects.all().order_by('category')
     if request.method == 'POST':
         form = SchedulerForm(request.POST, instance=scheduler)
         if form.is_valid():
             scheduler = form.save(commit=False)
+            # Se não for recorrente (toggle desligado), definir como 'NONE'
+            is_recurring = request.POST.get('is_recurring') == 'on'
+            if not is_recurring:
+                scheduler.recurrence_type = 'NONE'
+                scheduler.recurrence_interval = 1
+                scheduler.termination_type = 'INFINITE'
+                scheduler.remaining_installments = None
+                scheduler.final_date = None
             # Atualizar original_due_date se due_date mudou e original_due_date não está definido
             if scheduler.due_date and not scheduler.original_due_date:
                 scheduler.original_due_date = scheduler.due_date
             scheduler.save()
             return redirect('finance:scheduler_list')
+        else:
+            return render(request, 'finance/scheduler_form.html', {'form': form, 'scheduler': scheduler, 'categories': categories})
     else:
         form = SchedulerForm(instance=scheduler)
-    return render(request, 'finance/scheduler_form.html', {'form': form, 'scheduler': scheduler})
+    return render(request, 'finance/scheduler_form.html', {'form': form, 'scheduler': scheduler, 'categories': categories})
 
 
 def scheduler_delete(request, pk):
@@ -766,9 +853,11 @@ def multiple_transaction_create(request):
                         # Validar que destino é diferente da origem
                         if source_account == destination_account:
                             messages.error(request, 'A conta de destino deve ser diferente da conta de origem.')
+                            categories = Category.objects.all().order_by('category')
                             return render(request, 'finance/multiple_transaction_form.html', {
                                 'form': form,
-                                'formset': formset
+                                'formset': formset,
+                                'categories': categories
                             })
                         
                         transfer_group_id = uuid.uuid4()
@@ -833,9 +922,11 @@ def multiple_transaction_create(request):
         form = MultipleTransactionForm()
         formset = MultipleTransactionItemFormSet()
     
+    categories = Category.objects.all().order_by('category')
     return render(request, 'finance/multiple_transaction_form.html', {
         'form': form,
-        'formset': formset
+        'formset': formset,
+        'categories': categories
     })
 
 
@@ -921,10 +1012,12 @@ def multiple_transaction_update(request, group_id):
                         # Validar que destino é diferente da origem
                         if source_account == destination_account:
                             messages.error(request, 'A conta de destino deve ser diferente da conta de origem.')
+                            categories = Category.objects.all().order_by('category')
                             return render(request, 'finance/multiple_transaction_form.html', {
                                 'form': form,
                                 'formset': formset,
-                                'group_id': group_id
+                                'group_id': group_id,
+                                'categories': categories
                             })
                         
                         transfer_group_id = uuid.uuid4()
@@ -1042,10 +1135,12 @@ def multiple_transaction_update(request, group_id):
         )
         formset = MultipleTransactionItemFormSetEdit(initial=formset_data)
     
+    categories = Category.objects.all().order_by('category')
     return render(request, 'finance/multiple_transaction_form.html', {
         'form': form,
         'formset': formset,
-        'group_id': group_id
+        'group_id': group_id,
+        'categories': categories
     })
 
 
@@ -1136,9 +1231,11 @@ def multiple_scheduler_create(request):
                         destination_account = item_data.get('destination_account')
                         if destination_account and destination_account == account:
                             messages.error(request, 'A conta de destino deve ser diferente da conta de origem para transferências.')
+                            categories = Category.objects.all().order_by('category')
                             return render(request, 'finance/multiple_scheduler_form.html', {
                                 'form': form,
-                                'formset': formset
+                                'formset': formset,
+                                'categories': categories
                             })
             
             # Criar Scheduler para cada item válido
@@ -1247,9 +1344,11 @@ def multiple_scheduler_create(request):
                 
                 if not created_schedulers:
                     messages.error(request, 'É necessário pelo menos um item válido para criar o agendamento múltiplo.')
+                    categories = Category.objects.all().order_by('category')
                     return render(request, 'finance/multiple_scheduler_form.html', {
                         'form': form,
-                        'formset': formset
+                        'formset': formset,
+                        'categories': categories
                     })
             
             messages.success(request, f'Agendamento múltiplo criado com sucesso! {len(created_schedulers)} item(ns) criado(s).')
@@ -1260,9 +1359,11 @@ def multiple_scheduler_create(request):
         form = MultipleSchedulerForm()
         formset = MultipleSchedulerItemFormSet()
     
+    categories = Category.objects.all().order_by('category')
     return render(request, 'finance/multiple_scheduler_form.html', {
         'form': form,
-        'formset': formset
+        'formset': formset,
+        'categories': categories
     })
 
 
@@ -1334,10 +1435,12 @@ def multiple_scheduler_update(request, group_id):
                         destination_account = item_data.get('destination_account')
                         if destination_account and destination_account == account:
                             messages.error(request, 'A conta de destino deve ser diferente da conta de origem para transferências.')
+                            categories = Category.objects.all().order_by('category')
                             return render(request, 'finance/multiple_scheduler_form.html', {
                                 'form': form,
                                 'formset': formset,
-                                'group_id': group_id
+                                'group_id': group_id,
+                                'categories': categories
                             })
             
             # Deletar schedulers antigos e criar novos
@@ -1450,10 +1553,12 @@ def multiple_scheduler_update(request, group_id):
                 
                 if not created_schedulers:
                     messages.error(request, 'É necessário pelo menos um item válido para atualizar o agendamento múltiplo.')
+                    categories = Category.objects.all().order_by('category')
                     return render(request, 'finance/multiple_scheduler_form.html', {
                         'form': form,
                         'formset': formset,
-                        'group_id': group_id
+                        'group_id': group_id,
+                        'categories': categories
                     })
             
             messages.success(request, f'Agendamento múltiplo atualizado com sucesso! {len(created_schedulers)} item(ns) atualizado(s).')
@@ -1516,10 +1621,12 @@ def multiple_scheduler_update(request, group_id):
         )
         formset = MultipleSchedulerItemFormSetEdit(initial=formset_data)
     
+    categories = Category.objects.all().order_by('category')
     return render(request, 'finance/multiple_scheduler_form.html', {
         'form': form,
         'formset': formset,
-        'group_id': group_id
+        'group_id': group_id,
+        'categories': categories
     })
 
 
@@ -1948,7 +2055,7 @@ def reports_index(request):
     return render(request, 'finance/reports_index.html')
 
 
-def account_statement(request):
+def account_statement(request, account_id=None):
     """Exibe o extrato bancário da conta"""
     accounts = Account.objects.all()
     
@@ -1956,8 +2063,10 @@ def account_statement(request):
     today = date.today()
     first_day_of_month = date(today.year, today.month, 1)
     
-    # Obter parâmetros do GET
-    account_id = request.GET.get('account')
+    # Obter account_id da URL path ou do GET
+    if account_id is None:
+        account_id = request.GET.get('account')
+    
     start_date_str = request.GET.get('start_date')
     end_date_str = request.GET.get('end_date')
     
@@ -1966,6 +2075,7 @@ def account_statement(request):
     start_date = first_day_of_month
     end_date = today
     movements = []
+    transactions = []
     previous_balance = None
     final_balance = None
     
@@ -2004,15 +2114,39 @@ def account_statement(request):
                     final_balance = movements[-1]['balance']
                 else:
                     final_balance = previous_balance
+                
+                # Formatar transações para o template (com saldo acumulado)
+                # O saldo já vem calculado no movement['balance'], então podemos usar diretamente
+                for movement in movements:
+                    amount = 0
+                    if movement.get('debit'):
+                        amount = -float(movement['debit'])
+                    elif movement.get('credit'):
+                        amount = float(movement['credit'])
+                    
+                    transactions.append({
+                        'id': movement.get('transaction').id if movement.get('transaction') else (movement.get('asset_transaction').id if movement.get('asset_transaction') else None),
+                        'date': movement['date'],
+                        'description': movement['description'],
+                        'amount': amount,
+                        'running_balance': float(movement.get('balance', 0)),
+                    })
+    
+    # Buscar categorias para o formulário
+    categories = Subcategory.objects.all().select_related('category').order_by('category__category', 'subcategory')
     
     return render(request, 'finance/account_statement.html', {
         'accounts': accounts,
-        'selected_account': account,
+        'account': account,
+        'selected_account': account,  # Para compatibilidade
         'start_date': start_date,
         'end_date': end_date,
         'movements': movements,
+        'transactions': transactions,
         'previous_balance': previous_balance,
         'final_balance': final_balance,
+        'categories': categories,
+        'today': today,
     })
 
 
@@ -2300,6 +2434,101 @@ def budget_manage(request):
     }
     
     return render(request, 'finance/budget_manage.html', context)
+
+
+# Budget CRUD Views
+def budget_list(request):
+    """Lista de orçamentos"""
+    budgets = Budget.objects.all().select_related('subcategory__category').order_by('-budget_date', 'subcategory__category__category', 'subcategory__subcategory')
+    
+    # Filtros opcionais
+    year = request.GET.get('year')
+    category_id = request.GET.get('category')
+    subcategory_id = request.GET.get('subcategory')
+    
+    if year:
+        try:
+            year = int(year)
+            budgets = budgets.filter(budget_date__year=year)
+        except ValueError:
+            pass
+    
+    if category_id:
+        try:
+            category_id = int(category_id)
+            budgets = budgets.filter(subcategory__category_id=category_id)
+        except ValueError:
+            pass
+    
+    if subcategory_id:
+        try:
+            subcategory_id = int(subcategory_id)
+            budgets = budgets.filter(subcategory_id=subcategory_id)
+        except ValueError:
+            pass
+    
+    # Paginação
+    paginator = Paginator(budgets, 50)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+    
+    # Contexto para filtros
+    categories = Category.objects.all().order_by('category')
+    subcategories = Subcategory.objects.all().select_related('category').order_by('category__category', 'subcategory')
+    
+    return render(request, 'finance/budget_list.html', {
+        'page_obj': page_obj,
+        'categories': categories,
+        'subcategories': subcategories,
+        'selected_year': year,
+        'selected_category_id': category_id,
+        'selected_subcategory_id': subcategory_id,
+    })
+
+
+def budget_create(request):
+    """Criar novo orçamento"""
+    if request.method == 'POST':
+        form = BudgetForm(request.POST)
+        if form.is_valid():
+            budget = form.save(commit=False)
+            # Garantir que budget_date sempre tenha dia = 1
+            if budget.budget_date:
+                budget.budget_date = budget.budget_date.replace(day=1)
+            budget.save()
+            messages.success(request, 'Orçamento criado com sucesso!')
+            return redirect('finance:budget_list')
+    else:
+        form = BudgetForm()
+    return render(request, 'finance/budget_form.html', {'form': form})
+
+
+def budget_update(request, pk):
+    """Editar orçamento existente"""
+    budget = get_object_or_404(Budget, pk=pk)
+    if request.method == 'POST':
+        form = BudgetForm(request.POST, instance=budget)
+        if form.is_valid():
+            budget = form.save(commit=False)
+            # Garantir que budget_date sempre tenha dia = 1
+            if budget.budget_date:
+                budget.budget_date = budget.budget_date.replace(day=1)
+            budget.save()
+            messages.success(request, 'Orçamento atualizado com sucesso!')
+            return redirect('finance:budget_list')
+    else:
+        form = BudgetForm(instance=budget)
+    return render(request, 'finance/budget_form.html', {'form': form, 'budget': budget})
+
+
+def budget_delete(request, pk):
+    """Deletar orçamento"""
+    budget = get_object_or_404(Budget, pk=pk)
+    if request.method == 'POST':
+        budget.delete()
+        messages.success(request, 'Orçamento deletado com sucesso!')
+        return redirect('finance:budget_list')
+    return render(request, 'finance/budget_confirm_delete.html', {'budget': budget})
 
 
 # Inventory Views

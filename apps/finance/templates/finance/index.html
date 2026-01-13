@@ -1,19 +1,122 @@
-{% extends 'finance/base.html' %}
+{% extends "finance/base.html" %}
 
-{% block title %}Finanças - Início{% endblock %}
+{% block section_name %}Finanças - Início{% endblock %}
 
 {% block content %}
-<h1>Finanças</h1>
-<p>Bem-vindo à aplicação de Finanças.</p>
-<ul>
-    <li><a href="{% url 'finance:account_list' %}">Contas</a></li>
-    <li><a href="{% url 'finance:beneficiary_list' %}">Beneficiários</a></li>
-    <li><a href="{% url 'finance:category_list' %}">Categorias</a></li>
-    <li><a href="{% url 'finance:transaction_list' %}">Transações</a></li>
-    <li><a href="{% url 'finance:scheduler_list' %}">Agendamentos</a></li>
-    <li><a href="{% url 'finance:asset_list' %}">Ativos</a></li>
-    <li><a href="{% url 'finance:asset_transaction_list' %}">Transações de Ativos</a></li>
-</ul>
+<div class="card shadow-sm border-0">
+    <div class="card-body">
+        <h1 class="h4 mb-3">Bem-vindo à aplicação de Finanças</h1>
+        <p class="text-muted">Gerencie suas contas, transações, investimentos e muito mais.</p>
+        
+        <div class="row g-3 mt-3">
+            <div class="col-md-6 col-lg-4">
+                <div class="card border-primary h-100">
+                    <div class="card-body">
+                        <h5 class="card-title">
+                            <i class="fas fa-university text-primary me-2"></i>Contas
+                        </h5>
+                        <p class="card-text">Gerencie suas contas bancárias e de investimento.</p>
+                        <a href="{% url 'finance:account_list' %}" class="btn btn-primary btn-sm">Acessar</a>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-6 col-lg-4">
+                <div class="card border-success h-100">
+                    <div class="card-body">
+                        <h5 class="card-title">
+                            <i class="fas fa-exchange-alt text-success me-2"></i>Transações
+                        </h5>
+                        <p class="card-text">Registre e gerencie suas transações financeiras.</p>
+                        <a href="{% url 'finance:transaction_list' %}" class="btn btn-success btn-sm">Acessar</a>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-6 col-lg-4">
+                <div class="card border-info h-100">
+                    <div class="card-body">
+                        <h5 class="card-title">
+                            <i class="fas fa-tags text-info me-2"></i>Categorias
+                        </h5>
+                        <p class="card-text">Organize suas despesas por categorias e subcategorias.</p>
+                        <a href="{% url 'finance:category_list' %}" class="btn btn-info btn-sm">Acessar</a>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-6 col-lg-4">
+                <div class="card border-warning h-100">
+                    <div class="card-body">
+                        <h5 class="card-title">
+                            <i class="fas fa-users text-warning me-2"></i>Beneficiários
+                        </h5>
+                        <p class="card-text">Gerencie seus beneficiários e contatos.</p>
+                        <a href="{% url 'finance:beneficiary_list' %}" class="btn btn-warning btn-sm">Acessar</a>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-6 col-lg-4">
+                <div class="card border-danger h-100">
+                    <div class="card-body">
+                        <h5 class="card-title">
+                            <i class="fas fa-chart-line text-danger me-2"></i>Relatórios
+                        </h5>
+                        <p class="card-text">Visualize relatórios e análises financeiras.</p>
+                        <a href="{% url 'finance:reports_index' %}" class="btn btn-danger btn-sm">Acessar</a>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-6 col-lg-4">
+                <div class="card border-secondary h-100">
+                    <div class="card-body">
+                        <h5 class="card-title">
+                            <i class="fas fa-briefcase text-secondary me-2"></i>Investimentos
+                        </h5>
+                        <p class="card-text">Gerencie seus ativos e investimentos.</p>
+                        <a href="{% url 'finance:asset_list' %}" class="btn btn-secondary btn-sm">Acessar</a>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-6 col-lg-4">
+                <div class="card border-warning h-100">
+                    <div class="card-body">
+                        <h5 class="card-title">
+                            <i class="fas fa-calendar-alt text-warning me-2"></i>Agendamentos
+                        </h5>
+                        <p class="card-text">Configure transações recorrentes e agendadas.</p>
+                        <a href="{% url 'finance:scheduler_list' %}" class="btn btn-warning btn-sm">Acessar</a>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-6 col-lg-4">
+                <div class="card border-info h-100">
+                    <div class="card-body">
+                        <h5 class="card-title">
+                            <i class="fas fa-money-bill-wave text-info me-2"></i>Fluxo de Caixa
+                        </h5>
+                        <p class="card-text">Gerencie itens e relatórios de fluxo de caixa.</p>
+                        <a href="{% url 'finance:cash_flow_item_list' %}" class="btn btn-info btn-sm">Acessar</a>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-6 col-lg-4">
+                <div class="card border-success h-100">
+                    <div class="card-body">
+                        <h5 class="card-title">
+                            <i class="fas fa-chart-pie text-success me-2"></i>Orçamento
+                        </h5>
+                        <p class="card-text">Gerencie seus orçamentos por subcategoria e período.</p>
+                        <a href="{% url 'finance:budget_list' %}" class="btn btn-success btn-sm">Acessar</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
-
-

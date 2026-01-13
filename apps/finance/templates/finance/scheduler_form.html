@@ -1,121 +1,498 @@
 {% extends 'finance/base.html' %}
 
+{% block section_name %}{% if form.instance.pk %}Editar Agendamento{% else %}Criar Novo Agendamento{% endif %}{% endblock %}
+
 {% block title %}{% if form.instance.pk %}Editar Agendamento{% else %}Criar Agendamento{% endif %}{% endblock %}
 
 {% block content %}
-<h1>{% if form.instance.pk %}Editar Agendamento{% else %}Criar Novo Agendamento{% endif %}</h1>
+<div class="card shadow-sm border-0">
+    <div class="card-header bg-light">
+        <h5 class="mb-0">
+            <i class="fas fa-calendar-alt me-2"></i>
+            {% if form.instance.pk %}Editar Agendamento{% else %}Criar Novo Agendamento{% endif %}
+        </h5>
+    </div>
+    <div class="card-body" style="background-color: #f8f9fa;">
+        <form method="post" class="needs-validation" novalidate>
+            {% csrf_token %}
+            
+            <!-- Toggle Recorrência -->
+            <div class="mb-4">
+                <div class="form-check form-switch">
+                    <input type="checkbox" class="form-check-input" id="is_recurring" name="is_recurring">
+                    <label class="form-check-label" for="is_recurring">
+                        <strong>É um agendamento recorrente</strong>
+                    </label>
+                </div>
+            </div>
+            
+            <div class="row g-3">
+                <!-- Conta -->
+                <div class="col-md-6">
+                    <label for="{{ form.account.id_for_label }}" class="form-label">
+                        <i class="fas fa-university me-1 text-primary"></i>Conta <span class="text-danger">*</span>
+                    </label>
+                    <div class="input-group">
+                        {{ form.account }}
+                        <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#quickCreateAccountModal" title="Criar nova conta">
+                            <i class="fas fa-plus"></i>
+                        </button>
+                    </div>
+                    {% if form.account.errors %}
+                        <div class="text-danger small mt-1">{{ form.account.errors }}</div>
+                    {% endif %}
+                </div>
 
-<form method="post">
-    {% csrf_token %}
-    <table>
-        <tr>
-            <td><label for="{{ form.account.id_for_label }}">Conta:</label></td>
-            <td>{{ form.account }}</td>
-            {% if form.account.errors %}
-            <td>{{ form.account.errors }}</td>
-            {% endif %}
-        </tr>
-        <tr>
-            <td><label for="{{ form.beneficiary.id_for_label }}">Beneficiário:</label></td>
-            <td>{{ form.beneficiary }}</td>
-            {% if form.beneficiary.errors %}
-            <td>{{ form.beneficiary.errors }}</td>
-            {% endif %}
-        </tr>
-        <tr>
-            <td><label for="{{ form.subcategory.id_for_label }}">Subcategoria:</label></td>
-            <td>{{ form.subcategory }}</td>
-            {% if form.subcategory.errors %}
-            <td>{{ form.subcategory.errors }}</td>
-            {% endif %}
-        </tr>
-        <tr>
-            <td><label for="{{ form.transaction_type.id_for_label }}">Tipo de transação:</label></td>
-            <td>{{ form.transaction_type }}</td>
-            {% if form.transaction_type.errors %}
-            <td>{{ form.transaction_type.errors }}</td>
-            {% endif %}
-        </tr>
-        <tr>
-            <td><label for="{{ form.value.id_for_label }}">Valor:</label></td>
-            <td>{{ form.value }}</td>
-            {% if form.value.errors %}
-            <td>{{ form.value.errors }}</td>
-            {% endif %}
-        </tr>
-        <tr>
-            <td><label for="{{ form.due_date.id_for_label }}">Data do vencimento:</label></td>
-            <td>{{ form.due_date }}</td>
-            {% if form.due_date.errors %}
-            <td>{{ form.due_date.errors }}</td>
-            {% endif %}
-        </tr>
-        <tr>
-            <td><label for="{{ form.purchase_date.id_for_label }}">Data da compra:</label></td>
-            <td>{{ form.purchase_date }}</td>
-            {% if form.purchase_date.errors %}
-            <td>{{ form.purchase_date.errors }}</td>
-            {% endif %}
-        </tr>
-        <tr>
-            <td><label for="{{ form.notes.id_for_label }}">Anotações:</label></td>
-            <td>{{ form.notes }}</td>
-            {% if form.notes.errors %}
-            <td>{{ form.notes.errors }}</td>
-            {% endif %}
-        </tr>
-        <tr>
-            <td><label for="{{ form.recurrence_type.id_for_label }}">Tipo de recorrência:</label></td>
-            <td>{{ form.recurrence_type }}</td>
-            {% if form.recurrence_type.errors %}
-            <td>{{ form.recurrence_type.errors }}</td>
-            {% endif %}
-        </tr>
-        <tr>
-            <td><label for="{{ form.recurrence_interval.id_for_label }}">Intervalo da recorrência:</label></td>
-            <td>{{ form.recurrence_interval }}</td>
-            {% if form.recurrence_interval.errors %}
-            <td>{{ form.recurrence_interval.errors }}</td>
-            {% endif %}
-        </tr>
-        <tr>
-            <td><label for="{{ form.termination_type.id_for_label }}">Tipo de término:</label></td>
-            <td>{{ form.termination_type }}</td>
-            {% if form.termination_type.errors %}
-            <td>{{ form.termination_type.errors }}</td>
-            {% endif %}
-        </tr>
-        <tr>
-            <td><label for="{{ form.remaining_installments.id_for_label }}">Parcelas restantes:</label></td>
-            <td>{{ form.remaining_installments }}</td>
-            {% if form.remaining_installments.errors %}
-            <td>{{ form.remaining_installments.errors }}</td>
-            {% endif %}
-        </tr>
-        <tr>
-            <td><label for="{{ form.final_date.id_for_label }}">Data final:</label></td>
-            <td>{{ form.final_date }}</td>
-            {% if form.final_date.errors %}
-            <td>{{ form.final_date.errors }}</td>
-            {% endif %}
-        </tr>
-        <tr>
-            <td><label for="{{ form.status.id_for_label }}">Status:</label></td>
-            <td>{{ form.status }}</td>
-            {% if form.status.errors %}
-            <td>{{ form.status.errors }}</td>
-            {% endif %}
-        </tr>
-    </table>
-    <button type="submit">Salvar</button>
-    <a href="{% url 'finance:scheduler_list' %}">Cancelar</a>
-</form>
+                <!-- Beneficiário -->
+                <div class="col-md-6">
+                    <label for="{{ form.beneficiary.id_for_label }}" class="form-label">
+                        <i class="fas fa-user me-1 text-info"></i>Beneficiário
+                    </label>
+                    <div class="input-group">
+                        {{ form.beneficiary }}
+                        <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#quickCreateBeneficiaryModal" title="Criar novo beneficiário">
+                            <i class="fas fa-plus"></i>
+                        </button>
+                    </div>
+                    {% if form.beneficiary.errors %}
+                        <div class="text-danger small mt-1">{{ form.beneficiary.errors }}</div>
+                    {% endif %}
+                </div>
 
+                <!-- Subcategoria -->
+                <div class="col-md-6">
+                    <label for="{{ form.subcategory.id_for_label }}" class="form-label">
+                        <i class="fas fa-tags me-1 text-warning"></i>Subcategoria
+                    </label>
+                    <div class="input-group">
+                        {{ form.subcategory }}
+                        <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#quickCreateSubcategoryModal" title="Criar nova subcategoria">
+                            <i class="fas fa-plus"></i>
+                        </button>
+                    </div>
+                    {% if form.subcategory.errors %}
+                        <div class="text-danger small mt-1">{{ form.subcategory.errors }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Tipo de Transação -->
+                <div class="col-md-6">
+                    <label for="{{ form.transaction_type.id_for_label }}" class="form-label">
+                        <i class="fas fa-arrows-alt-v me-1 text-secondary"></i>Tipo de transação <span class="text-danger">*</span>
+                    </label>
+                    {{ form.transaction_type }}
+                    {% if form.transaction_type.errors %}
+                        <div class="text-danger small mt-1">{{ form.transaction_type.errors }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Valor -->
+                <div class="col-md-6">
+                    <label for="{{ form.value.id_for_label }}" class="form-label">
+                        <i class="fas fa-money-bill-wave me-1 text-success"></i>Valor <span class="text-danger">*</span>
+                    </label>
+                    <div class="input-group">
+                        <span class="input-group-text">R$</span>
+                        {{ form.value }}
+                    </div>
+                    {% if form.value.errors %}
+                        <div class="text-danger small mt-1">{{ form.value.errors }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Data do Vencimento -->
+                <div class="col-md-6">
+                    <label for="{{ form.due_date.id_for_label }}" class="form-label">
+                        <i class="fas fa-calendar-alt me-1 text-primary"></i>Data do vencimento <span class="text-danger">*</span>
+                    </label>
+                    {{ form.due_date }}
+                    {% if form.due_date.errors %}
+                        <div class="text-danger small mt-1">{{ form.due_date.errors }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Data da Compra -->
+                <div class="col-md-6">
+                    <label for="{{ form.purchase_date.id_for_label }}" class="form-label">
+                        <i class="fas fa-shopping-cart me-1 text-warning"></i>Data da compra
+                    </label>
+                    {{ form.purchase_date }}
+                    {% if form.purchase_date.errors %}
+                        <div class="text-danger small mt-1">{{ form.purchase_date.errors }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Tipo de Recorrência -->
+                <div class="col-md-6" id="recurrence-type-row" style="display: none;">
+                    <label for="{{ form.recurrence_type.id_for_label }}" class="form-label">
+                        <i class="fas fa-redo me-1 text-info"></i>Tipo de recorrência <span class="text-danger">*</span>
+                    </label>
+                    {{ form.recurrence_type }}
+                    {% if form.recurrence_type.errors %}
+                        <div class="text-danger small mt-1">{{ form.recurrence_type.errors }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Intervalo da Recorrência -->
+                <div class="col-md-6" id="recurrence-interval-row" style="display: none;">
+                    <label for="{{ form.recurrence_interval.id_for_label }}" class="form-label">
+                        <i class="fas fa-clock me-1 text-secondary"></i>Intervalo da recorrência <span class="text-danger">*</span>
+                    </label>
+                    {{ form.recurrence_interval }}
+                    {% if form.recurrence_interval.errors %}
+                        <div class="text-danger small mt-1">{{ form.recurrence_interval.errors }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Tipo de Término -->
+                <div class="col-md-6" id="termination-type-row" style="display: none;">
+                    <label for="{{ form.termination_type.id_for_label }}" class="form-label">
+                        <i class="fas fa-stop-circle me-1 text-danger"></i>Tipo de término <span class="text-danger">*</span>
+                    </label>
+                    {{ form.termination_type }}
+                    {% if form.termination_type.errors %}
+                        <div class="text-danger small mt-1">{{ form.termination_type.errors }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Parcelas Restantes -->
+                <div class="col-md-6" id="installments-row" style="display: none;">
+                    <label for="{{ form.remaining_installments.id_for_label }}" class="form-label">
+                        <i class="fas fa-list-ol me-1 text-primary"></i>Parcelas restantes
+                    </label>
+                    {{ form.remaining_installments }}
+                    {% if form.remaining_installments.errors %}
+                        <div class="text-danger small mt-1">{{ form.remaining_installments.errors }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Data Final -->
+                <div class="col-md-6" id="final-date-row" style="display: none;">
+                    <label for="{{ form.final_date.id_for_label }}" class="form-label">
+                        <i class="fas fa-calendar-times me-1 text-warning"></i>Data final
+                    </label>
+                    {{ form.final_date }}
+                    {% if form.final_date.errors %}
+                        <div class="text-danger small mt-1">{{ form.final_date.errors }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Status -->
+                <div class="col-md-6">
+                    <label for="{{ form.status.id_for_label }}" class="form-label">
+                        <i class="fas fa-toggle-on me-1 text-success"></i>Status
+                    </label>
+                    {{ form.status }}
+                    {% if form.status.errors %}
+                        <div class="text-danger small mt-1">{{ form.status.errors }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Anotações -->
+                <div class="col-12">
+                    <label for="{{ form.notes.id_for_label }}" class="form-label">
+                        <i class="fas fa-sticky-note me-1 text-muted"></i>Anotações
+                    </label>
+                    {{ form.notes }}
+                    {% if form.notes.errors %}
+                        <div class="text-danger small mt-1">{{ form.notes.errors }}</div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Botões de ação -->
+            <div class="mt-4 pt-3 border-top">
+                <div class="d-flex gap-2 justify-content-end">
+                    <a href="{% url 'finance:scheduler_list' %}" class="btn btn-secondary">
+                        <i class="fas fa-times me-1"></i>Cancelar
+                    </a>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save me-1"></i>Salvar
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal: Criar Conta Rápida -->
+<div class="modal fade" id="quickCreateAccountModal" tabindex="-1" aria-labelledby="quickCreateAccountModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="quickCreateAccountModalLabel">
+                    <i class="fas fa-university me-2"></i>Criar Nova Conta
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="quickCreateAccountForm">
+                    <div class="mb-3">
+                        <label for="account_name" class="form-label">Nome da Conta <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="account_name" name="name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="account_type" class="form-label">Tipo <span class="text-danger">*</span></label>
+                        <select class="form-select" id="account_type" name="account_type" required>
+                            <option value="BANK">Banco</option>
+                            <option value="CASH">Dinheiro</option>
+                            <option value="INVEST">Investimento</option>
+                            <option value="CREDCARD">Cartão de crédito</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="account_currency" class="form-label">Moeda <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="account_currency" name="currency" value="Real brasileiro" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="account_opening_balance" class="form-label">Saldo de Abertura <span class="text-danger">*</span></label>
+                        <input type="number" class="form-control" id="account_opening_balance" name="opening_balance" step="0.01" value="0" required>
+                    </div>
+                    <div id="accountErrorMsg" class="text-danger small mb-2" style="display: none;"></div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="saveAccountBtn">
+                    <i class="fas fa-save me-1"></i>Salvar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Criar Beneficiário Rápido -->
+<div class="modal fade" id="quickCreateBeneficiaryModal" tabindex="-1" aria-labelledby="quickCreateBeneficiaryModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="quickCreateBeneficiaryModalLabel">
+                    <i class="fas fa-user me-2"></i>Criar Novo Beneficiário
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="quickCreateBeneficiaryForm">
+                    <div class="mb-3">
+                        <label for="beneficiary_full_name" class="form-label">Nome Completo <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="beneficiary_full_name" name="full_name" required>
+                    </div>
+                    <div id="beneficiaryErrorMsg" class="text-danger small mb-2" style="display: none;"></div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="saveBeneficiaryBtn">
+                    <i class="fas fa-save me-1"></i>Salvar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Criar Subcategoria Rápida -->
+<div class="modal fade" id="quickCreateSubcategoryModal" tabindex="-1" aria-labelledby="quickCreateSubcategoryModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="quickCreateSubcategoryModalLabel">
+                    <i class="fas fa-tags me-2"></i>Criar Nova Subcategoria
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="quickCreateSubcategoryForm">
+                    <div class="mb-3">
+                        <label for="subcategory_category" class="form-label">Categoria <span class="text-danger">*</span></label>
+                        <select class="form-select" id="subcategory_category" name="category" required>
+                            <option value="">Selecione uma categoria</option>
+                            {% for category in categories %}
+                            <option value="{{ category.id }}">{{ category.category }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="subcategory_name" class="form-label">Nome da Subcategoria <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="subcategory_name" name="subcategory" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="subcategory_default_transaction_type" class="form-label">Tipo de Transação Padrão <span class="text-danger">*</span></label>
+                        <select class="form-select" id="subcategory_default_transaction_type" name="default_transaction_type" required>
+                            <option value="DB">Débito</option>
+                            <option value="CR">Crédito</option>
+                        </select>
+                    </div>
+                    <div id="subcategoryErrorMsg" class="text-danger small mb-2" style="display: none;"></div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="saveSubcategoryBtn">
+                    <i class="fas fa-save me-1"></i>Salvar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .form-label {
+        font-weight: 500;
+        font-size: 0.9rem;
+        margin-bottom: 0.5rem;
+        color: #495057;
+    }
+    
+    .form-control, .form-select {
+        font-size: 0.9rem;
+        border-radius: 0.375rem;
+        border: 1px solid #dee2e6;
+        background-color: #fff;
+        transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+    }
+    
+    .form-control:focus, .form-select:focus {
+        border-color: #86b7fe;
+        box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+        background-color: #fff;
+    }
+    
+    .form-control:hover, .form-select:hover {
+        border-color: #adb5bd;
+    }
+    
+    .input-group-text {
+        background-color: #f8f9fa;
+        border: 1px solid #dee2e6;
+        font-weight: 500;
+    }
+</style>
+{% endblock %}
+
+{% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    const isRecurringToggle = document.getElementById('is_recurring');
     const subcategorySelect = document.getElementById('id_subcategory');
     const transactionTypeSelect = document.getElementById('id_transaction_type');
+    const recurrenceTypeSelect = document.getElementById('id_recurrence_type');
+    const recurrenceTypeRow = document.getElementById('recurrence-type-row');
+    const recurrenceIntervalRow = document.getElementById('recurrence-interval-row');
+    const terminationTypeSelect = document.getElementById('id_termination_type');
+    const terminationTypeRow = document.getElementById('termination-type-row');
+    const installmentsRow = document.getElementById('installments-row');
+    const finalDateRow = document.getElementById('final-date-row');
     
+    // Aplicar classes Bootstrap aos campos do formulário
+    document.querySelectorAll('input[type="text"], input[type="number"], input[type="date"], select, textarea').forEach(function(field) {
+        if (!field.classList.contains('form-control') && !field.classList.contains('form-select') && !field.classList.contains('form-check-input')) {
+            if (field.tagName === 'SELECT') {
+                field.classList.add('form-select');
+            } else if (field.tagName === 'TEXTAREA') {
+                field.classList.add('form-control');
+            } else {
+                field.classList.add('form-control');
+            }
+        }
+    });
+    
+    // Toggle campos de recorrência baseado no switch
+    function toggleRecurrenceFields() {
+        const isRecurring = isRecurringToggle ? isRecurringToggle.checked : false;
+        
+        if (!isRecurring) {
+            // Ocultar todos os campos de recorrência
+            if (recurrenceTypeRow) recurrenceTypeRow.style.display = 'none';
+            if (recurrenceIntervalRow) recurrenceIntervalRow.style.display = 'none';
+            if (terminationTypeRow) terminationTypeRow.style.display = 'none';
+            if (installmentsRow) installmentsRow.style.display = 'none';
+            if (finalDateRow) finalDateRow.style.display = 'none';
+            // Definir recurrence_type como 'NONE' quando não for recorrente
+            if (recurrenceTypeSelect) {
+                // Verificar se a opção 'NONE' existe, se não, criar
+                if (!recurrenceTypeSelect.querySelector('option[value="NONE"]')) {
+                    const noneOption = document.createElement('option');
+                    noneOption.value = 'NONE';
+                    noneOption.textContent = 'Único (sem recorrência)';
+                    recurrenceTypeSelect.insertBefore(noneOption, recurrenceTypeSelect.firstChild);
+                }
+                recurrenceTypeSelect.value = 'NONE';
+            }
+        } else {
+            // Mostrar campos de recorrência
+            if (recurrenceTypeRow) recurrenceTypeRow.style.display = '';
+            if (recurrenceIntervalRow) recurrenceIntervalRow.style.display = '';
+            if (terminationTypeRow) terminationTypeRow.style.display = '';
+            // Se estiver em 'NONE', mudar para 'MONTHLY' como padrão
+            if (recurrenceTypeSelect && recurrenceTypeSelect.value === 'NONE') {
+                recurrenceTypeSelect.value = 'MONTHLY';
+            }
+            // Mostrar campos baseado no tipo de recorrência selecionado
+            toggleRecurrenceTypeFields();
+        }
+    }
+    
+    // Toggle campos baseado no tipo de recorrência selecionado
+    function toggleRecurrenceTypeFields() {
+        const recurrenceType = recurrenceTypeSelect ? recurrenceTypeSelect.value : '';
+        // Se for "NONE", ocultar campos relacionados
+        if (recurrenceType === 'NONE') {
+            if (recurrenceIntervalRow) recurrenceIntervalRow.style.display = 'none';
+            if (terminationTypeRow) terminationTypeRow.style.display = 'none';
+            if (installmentsRow) installmentsRow.style.display = 'none';
+            if (finalDateRow) finalDateRow.style.display = 'none';
+        } else {
+            if (recurrenceIntervalRow) recurrenceIntervalRow.style.display = '';
+            if (terminationTypeRow) terminationTypeRow.style.display = '';
+            toggleTerminationFields();
+        }
+    }
+    
+    // Toggle campos de término baseado no tipo de término
+    function toggleTerminationFields() {
+        const terminationType = terminationTypeSelect ? terminationTypeSelect.value : '';
+        if (terminationType === 'INSTALLMENTS') {
+            if (installmentsRow) installmentsRow.style.display = '';
+            if (finalDateRow) finalDateRow.style.display = 'none';
+        } else if (terminationType === 'FINAL_DATE') {
+            if (installmentsRow) installmentsRow.style.display = 'none';
+            if (finalDateRow) finalDateRow.style.display = '';
+        } else {
+            if (installmentsRow) installmentsRow.style.display = 'none';
+            if (finalDateRow) finalDateRow.style.display = 'none';
+        }
+    }
+    
+    // Listener para o toggle de recorrência
+    if (isRecurringToggle) {
+        // Por padrão, começar com toggle desligado (sem recorrência)
+        // Mas se estiver editando e já tiver recorrência, manter ligado
+        {% if form.instance.pk %}
+        if (recurrenceTypeSelect && recurrenceTypeSelect.value && recurrenceTypeSelect.value !== 'NONE') {
+            isRecurringToggle.checked = true;
+        } else {
+            isRecurringToggle.checked = false;
+        }
+        {% else %}
+        isRecurringToggle.checked = false;
+        {% endif %}
+        isRecurringToggle.addEventListener('change', toggleRecurrenceFields);
+        toggleRecurrenceFields(); // Executar uma vez ao carregar
+    }
+    
+    // Listener para o tipo de recorrência
+    if (recurrenceTypeSelect) {
+        recurrenceTypeSelect.addEventListener('change', toggleRecurrenceTypeFields);
+    }
+    
+    if (terminationTypeSelect) {
+        terminationTypeSelect.addEventListener('change', toggleTerminationFields);
+    }
+    
+    // Listener para subcategoria
     if (subcategorySelect && transactionTypeSelect) {
         subcategorySelect.addEventListener('change', function() {
             const subcategoryId = this.value;
@@ -129,8 +506,142 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
+    
+    // Quick Create Functions
+    function addOptionToSelect(selectId, value, text) {
+        const select = document.getElementById(selectId);
+        if (select) {
+            const option = document.createElement('option');
+            option.value = value;
+            option.textContent = text;
+            select.appendChild(option);
+            select.value = value;
+        }
+    }
+    
+    // Quick Create Account
+    document.getElementById('saveAccountBtn')?.addEventListener('click', function() {
+        const form = document.getElementById('quickCreateAccountForm');
+        const formData = new FormData(form);
+        const errorMsg = document.getElementById('accountErrorMsg');
+        const btn = this;
+        
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Salvando...';
+        errorMsg.style.display = 'none';
+        
+        fetch('{% url "finance:quick_create_account" %}', {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                addOptionToSelect('id_account', data.id, data.name);
+                const modal = bootstrap.Modal.getInstance(document.getElementById('quickCreateAccountModal'));
+                modal.hide();
+                form.reset();
+            } else {
+                errorMsg.textContent = Object.values(data.errors || {}).flat().join(', ') || 'Erro ao criar conta';
+                errorMsg.style.display = 'block';
+            }
+        })
+        .catch(error => {
+            errorMsg.textContent = 'Erro ao criar conta: ' + error.message;
+            errorMsg.style.display = 'block';
+        })
+        .finally(() => {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-save me-1"></i>Salvar';
+        });
+    });
+    
+    // Quick Create Beneficiary
+    document.getElementById('saveBeneficiaryBtn')?.addEventListener('click', function() {
+        const form = document.getElementById('quickCreateBeneficiaryForm');
+        const formData = new FormData(form);
+        const errorMsg = document.getElementById('beneficiaryErrorMsg');
+        const btn = this;
+        
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Salvando...';
+        errorMsg.style.display = 'none';
+        
+        fetch('{% url "finance:quick_create_beneficiary" %}', {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                addOptionToSelect('id_beneficiary', data.id, data.name);
+                const modal = bootstrap.Modal.getInstance(document.getElementById('quickCreateBeneficiaryModal'));
+                modal.hide();
+                form.reset();
+            } else {
+                errorMsg.textContent = Object.values(data.errors || {}).flat().join(', ') || 'Erro ao criar beneficiário';
+                errorMsg.style.display = 'block';
+            }
+        })
+        .catch(error => {
+            errorMsg.textContent = 'Erro ao criar beneficiário: ' + error.message;
+            errorMsg.style.display = 'block';
+        })
+        .finally(() => {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-save me-1"></i>Salvar';
+        });
+    });
+    
+    // Quick Create Subcategory
+    document.getElementById('saveSubcategoryBtn')?.addEventListener('click', function() {
+        const form = document.getElementById('quickCreateSubcategoryForm');
+        const formData = new FormData(form);
+        const errorMsg = document.getElementById('subcategoryErrorMsg');
+        const btn = this;
+        
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Salvando...';
+        errorMsg.style.display = 'none';
+        
+        fetch('{% url "finance:quick_create_subcategory" %}', {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                addOptionToSelect('id_subcategory', data.id, data.name);
+                // Se houver um listener de subcategoria, disparar o evento change
+                if (subcategorySelect && transactionTypeSelect) {
+                    subcategorySelect.dispatchEvent(new Event('change'));
+                }
+                const modal = bootstrap.Modal.getInstance(document.getElementById('quickCreateSubcategoryModal'));
+                modal.hide();
+                form.reset();
+            } else {
+                errorMsg.textContent = Object.values(data.errors || {}).flat().join(', ') || 'Erro ao criar subcategoria';
+                errorMsg.style.display = 'block';
+            }
+        })
+        .catch(error => {
+            errorMsg.textContent = 'Erro ao criar subcategoria: ' + error.message;
+            errorMsg.style.display = 'block';
+        })
+        .finally(() => {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-save me-1"></i>Salvar';
+        });
+    });
 });
 </script>
 {% endblock %}
-
-

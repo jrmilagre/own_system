@@ -1,131 +1,305 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-br">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Finanças{% endblock %}</title>
+    <title>{% block title %}Own System - Money{% endblock %}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
     <style>
-        nav {
-            background-color: #f0f0f0;
-            padding: 10px;
+        :root {
+            --money-dark: #003366; /* Azul clássico do Money */
+            --money-sidebar: #f0f0f0;
+            --money-accent: #0078d7;
+            --money-header-bg: #e1e1e1;
         }
-        nav a {
-            text-decoration: none;
+
+        * {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            font-variant-numeric: tabular-nums;
+        }
+        
+        body { 
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; 
+            font-variant-numeric: tabular-nums;
+            background-color: #fff; 
+        }
+
+        /* Cabeçalho Global (Abas superiores) */
+        .global-nav {
+            background-color: var(--money-header-bg);
+            border-bottom: 2px solid #ccc;
+            padding: 0 1rem;
+        }
+        .nav-link-money {
             color: #333;
-            padding: 5px 10px;
+            font-size: 0.85rem;
+            padding: 8px 12px;
+            border-bottom: 3px solid transparent;
+            text-decoration: none;
             display: inline-block;
+            transition: all 0.2s ease;
         }
-        nav a:hover {
-            background-color: #ddd;
+        .nav-link-money:hover {
+            border-bottom: 3px solid var(--money-accent);
+            color: var(--money-accent);
         }
-        .dropdown {
-            position: relative;
-            display: inline-block;
+        
+        /* Cores pastel únicas para cada item do menu quando ativo */
+        .nav-link-money.active.nav-conteudo {
+            background-color: #E3F2FD; /* Azul pastel */
+            border-bottom: 3px solid #2196F3;
+            color: #1976D2;
         }
-        .dropdown-content {
-            display: none;
-            position: absolute;
-            background-color: #f9f9f9;
-            min-width: 160px;
-            box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
-            z-index: 1;
-            top: 100%;
-            left: 0;
+        .nav-link-money.active.nav-contas {
+            background-color: #E8F5E9; /* Verde pastel */
+            border-bottom: 3px solid #4CAF50;
+            color: #388E3C;
         }
-        .dropdown:hover .dropdown-content {
-            display: block;
+        .nav-link-money.active.nav-beneficiarios {
+            background-color: #FCE4EC; /* Rosa pastel */
+            border-bottom: 3px solid #E91E63;
+            color: #C2185B;
         }
-        .dropdown-content a {
-            color: black;
-            padding: 12px 16px;
+        .nav-link-money.active.nav-categorias {
+            background-color: #FFF9C4; /* Amarelo pastel */
+            border-bottom: 3px solid #FBC02D;
+            color: #F57F17;
+        }
+        .nav-link-money.active.nav-transacoes {
+            background-color: #FFE0B2; /* Laranja pastel */
+            border-bottom: 3px solid #FF9800;
+            color: #F57C00;
+        }
+        .nav-link-money.active.nav-agendamentos {
+            background-color: #F3E5F5; /* Roxo pastel */
+            border-bottom: 3px solid #9C27B0;
+            color: #7B1FA2;
+        }
+        .nav-link-money.active.nav-investimentos {
+            background-color: #E0F7FA; /* Ciano pastel */
+            border-bottom: 3px solid #00BCD4;
+            color: #0097A7;
+        }
+        .nav-link-money.active.nav-orcamento {
+            background-color: #C8E6C9; /* Verde claro pastel */
+            border-bottom: 3px solid #66BB6A;
+            color: #388E3C;
+        }
+        .nav-link-money.active.nav-fluxo-caixa {
+            background-color: #BBDEFB; /* Azul claro pastel */
+            border-bottom: 3px solid #42A5F5;
+            color: #1976D2;
+        }
+        .nav-link-money.active.nav-relatorios {
+            background-color: #FFCDD2; /* Vermelho pastel */
+            border-bottom: 3px solid #EF5350;
+            color: #C62828;
+        }
+        
+        /* Cores do section-header baseadas no menu ativo */
+        .section-header.nav-conteudo {
+            background-color: #2196F3;
+        }
+        .section-header.nav-contas {
+            background-color: #4CAF50;
+        }
+        .section-header.nav-beneficiarios {
+            background-color: #E91E63;
+        }
+        .section-header.nav-categorias {
+            background-color: #FBC02D;
+        }
+        .section-header.nav-transacoes {
+            background-color: #FF9800;
+        }
+        .section-header.nav-agendamentos {
+            background-color: #9C27B0;
+        }
+        .section-header.nav-investimentos {
+            background-color: #00BCD4;
+        }
+        .section-header.nav-orcamento {
+            background-color: #66BB6A;
+        }
+        .section-header.nav-fluxo-caixa {
+            background-color: #42A5F5;
+        }
+        .section-header.nav-relatorios {
+            background-color: #EF5350;
+        }
+
+        /* Título da Seção (Ex: Gerenciador de Contas) */
+        .section-header {
+            background-color: #005a9e; /* Azul escuro inspirado nas imagens */
+            color: white;
+            padding: 5px 15px;
+            font-weight: 600;
+        }
+
+        /* Barra Lateral Contextual */
+        .sidebar {
+            background-color: #000; /* Preto lateral das capturas */
+            color: #ddd;
+            min-height: calc(100vh - 80px);
+            font-size: 0.85rem;
+        }
+        .sidebar a {
+            color: #bbb;
             text-decoration: none;
             display: block;
+            padding: 8px 15px;
+            border-bottom: 1px solid #333;
         }
-        .dropdown-content a:hover {
-            background-color: #f1f1f1;
+        .sidebar a:hover { 
+            background-color: #222; 
+            color: #fff; 
         }
-        .submenu {
-            position: relative;
+        
+        /* Mensagens do Django */
+        .messages {
+            list-style: none;
+            padding: 0;
+            margin: 15px 0;
         }
-        .submenu-content {
-            display: none;
-            position: absolute;
-            background-color: #f9f9f9;
-            min-width: 160px;
-            box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
-            z-index: 2;
-            top: 0;
-            left: 100%;
+        .messages li {
+            padding: 10px 15px;
+            margin-bottom: 10px;
+            border-radius: 4px;
         }
-        .submenu:hover .submenu-content {
-            display: block;
+        .messages .success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
         }
-        .submenu-content a {
-            color: black;
-            padding: 12px 16px;
-            text-decoration: none;
-            display: block;
+        .messages .error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
         }
-        .submenu-content a:hover {
-            background-color: #f1f1f1;
+        .messages .warning {
+            background-color: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+        .messages .info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        
+        /* Melhorias de legibilidade para tabelas */
+        
+        /* Ajuste para Mobile */
+        @media (max-width: 768px) {
+            .sidebar { min-height: auto; }
         }
     </style>
+    {% block extra_css %}{% endblock %}
 </head>
 <body>
-    <nav>
-        <a href="{% url 'home' %}">Home</a> |
-        <a href="{% url 'finance:index' %}">Finanças</a> |
-        <a href="{% url 'finance:account_list' %}">Contas</a> |
-        <a href="{% url 'finance:beneficiary_list' %}">Beneficiários</a> |
-        <a href="{% url 'finance:category_list' %}">Categorias</a> |
-        <a href="{% url 'finance:transaction_list' %}">Transações</a> |
-        <a href="{% url 'finance:scheduler_list' %}">Agendamentos</a> |
-        <a href="{% url 'finance:budget_manage' %}">Orçamento</a> |
-        <div class="dropdown">
-            <a href="#">Investimentos</a>
-            <div class="dropdown-content">
-                <a href="{% url 'finance:asset_list' %}">Ativos</a>
-                <a href="{% url 'finance:asset_transaction_list' %}">Transações de Ativos</a>
-                <a href="{% url 'finance:inventory_list' %}">Inventário do lar</a>
-            </div>
-        </div> |
-        <div class="dropdown">
-            <a href="#">Fluxo de caixa</a>
-            <div class="dropdown-content">
-                <a href="{% url 'finance:cash_flow_item_list' %}">Cadastro</a>
-                <a href="{% url 'finance:cash_flow_report' %}">Relatório</a>
-            </div>
-        </div> |
-        <div class="dropdown">
-            <a href="{% url 'finance:reports_index' %}">Relatórios</a>
-            <div class="dropdown-content">
-                <div class="submenu">
-                    <a href="#">Contas</a>
-                    <div class="submenu-content">
-                        <a href="{% url 'finance:account_statement' %}">Extrato</a>
-                    </div>
-                </div>
-                <div class="submenu">
-                    <a href="#">Ativos</a>
-                    <div class="submenu-content">
-                        <a href="{% url 'finance:asset_stock_position_report' %}">Posição de estoque</a>
-                    </div>
-                </div>
-            </div>
-        </div>
+
+    <nav class="global-nav d-flex flex-wrap align-items-center">
+        <a href="{% url 'finance:index' %}" class="nav-link-money nav-conteudo {% if request.resolver_match.url_name == 'index' %}active{% endif %}">Conteúdo</a>
+        <a href="{% url 'finance:account_list' %}" class="nav-link-money nav-contas {% if 'account' in request.resolver_match.url_name or request.resolver_match.url_name == 'historico' %}active{% endif %}">Contas</a>
+        <a href="{% url 'finance:beneficiary_list' %}" class="nav-link-money nav-beneficiarios {% if 'beneficiary' in request.resolver_match.url_name %}active{% endif %}">Beneficiários</a>
+        <a href="{% url 'finance:category_list' %}" class="nav-link-money nav-categorias {% if 'category' in request.resolver_match.url_name or 'subcategory' in request.resolver_match.url_name %}active{% endif %}">Categorias</a>
+        <a href="{% url 'finance:transaction_list' %}" class="nav-link-money nav-transacoes {% if 'transaction' in request.resolver_match.url_name %}active{% endif %}">Transações</a>
+        <a href="{% url 'finance:scheduler_list' %}" class="nav-link-money nav-agendamentos {% if 'scheduler' in request.resolver_match.url_name %}active{% endif %}">Agendamentos</a>
+        <a href="{% url 'finance:asset_list' %}" class="nav-link-money nav-investimentos {% if 'asset' in request.resolver_match.url_name or 'inventory' in request.resolver_match.url_name %}active{% endif %}">Investimentos</a>
+        <a href="{% url 'finance:budget_list' %}" class="nav-link-money nav-orcamento {% if 'budget' in request.resolver_match.url_name %}active{% endif %}">Orçamento</a>
+        <a href="{% url 'finance:cash_flow_item_list' %}" class="nav-link-money nav-fluxo-caixa {% if 'cash_flow' in request.resolver_match.url_name or 'cash-flow' in request.resolver_match.url_name or 'cash_flow_report' in request.resolver_match.url_name %}active{% endif %}">Fluxo de caixa</a>
+        <a href="{% url 'finance:reports_index' %}" class="nav-link-money nav-relatorios {% if 'report' in request.resolver_match.url_name or request.resolver_match.url_name == 'account_statement' %}active{% endif %}">Relatórios</a>
+        <div class="ms-auto d-none d-md-block text-danger fw-bold">?</div>
     </nav>
-    
-    <main>
-        {% if messages %}
-            <ul class="messages">
-                {% for message in messages %}
-                    <li{% if message.tags %} class="{{ message.tags }}"{% endif %}>{{ message }}</li>
-                {% endfor %}
-            </ul>
-        {% endif %}
-        {% block content %}
-        {% endblock %}
-    </main>
+
+    <div class="section-header d-flex justify-content-between align-items-center" id="sectionHeader">
+        <span>{% block section_name %}Gerenciador de Contas{% endblock %}</span>
+        <button class="btn btn-sm btn-outline-light d-md-none" type="button" data-bs-toggle="collapse" data-bs-target="#sidebarMenu">
+            <i class="fas fa-bars"></i>
+        </button>
+    </div>
+
+    <div class="container-fluid">
+        <div class="row">
+            <nav id="sidebarMenu" class="col-md-3 col-lg-2 d-md-block sidebar collapse">
+                <div class="position-sticky pt-3">
+                    {% block sidebar %}
+                    <h6 class="px-3 text-uppercase text-muted" style="font-size: 0.7rem; color: #888 !important;">Ações Rápidas</h6>
+                    <ul class="nav flex-column">
+                        <li class="nav-item">
+                            <a href="{% url 'finance:account_create' %}"><i class="fas fa-plus-circle me-2"></i> Nova conta...</a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{% url 'finance:transaction_create' %}"><i class="fas fa-exchange-alt me-2"></i> Nova transação</a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{% url 'finance:scheduler_create' %}"><i class="fas fa-calendar-plus me-2"></i> Novo agendamento</a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{% url 'finance:account_list' %}"><i class="fas fa-chart-line me-2"></i> Histórico</a>
+                        </li>
+                    </ul>
+                    {% endblock %}
+                </div>
+            </nav>
+
+            <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4 py-3">
+                {% if messages %}
+                    <ul class="messages">
+                        {% for message in messages %}
+                            <li class="{{ message.tags }}">{{ message }}</li>
+                        {% endfor %}
+                    </ul>
+                {% endif %}
+                {% block content %}
+                {% endblock %}
+            </main>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Aplicar cor do menu ativo ao section-header
+        document.addEventListener('DOMContentLoaded', function() {
+            const activeNav = document.querySelector('.nav-link-money.active');
+            const sectionHeader = document.getElementById('sectionHeader');
+            
+            if (activeNav && sectionHeader) {
+                // Remover todas as classes de cor do section-header
+                sectionHeader.classList.remove(
+                    'nav-conteudo', 'nav-contas', 'nav-beneficiarios', 'nav-categorias',
+                    'nav-transacoes', 'nav-agendamentos', 'nav-investimentos',
+                    'nav-orcamento', 'nav-fluxo-caixa', 'nav-relatorios'
+                );
+                
+                // Adicionar a classe correspondente ao menu ativo
+                if (activeNav.classList.contains('nav-conteudo')) {
+                    sectionHeader.classList.add('nav-conteudo');
+                } else if (activeNav.classList.contains('nav-contas')) {
+                    sectionHeader.classList.add('nav-contas');
+                } else if (activeNav.classList.contains('nav-beneficiarios')) {
+                    sectionHeader.classList.add('nav-beneficiarios');
+                } else if (activeNav.classList.contains('nav-categorias')) {
+                    sectionHeader.classList.add('nav-categorias');
+                } else if (activeNav.classList.contains('nav-transacoes')) {
+                    sectionHeader.classList.add('nav-transacoes');
+                } else if (activeNav.classList.contains('nav-agendamentos')) {
+                    sectionHeader.classList.add('nav-agendamentos');
+                } else if (activeNav.classList.contains('nav-investimentos')) {
+                    sectionHeader.classList.add('nav-investimentos');
+                } else if (activeNav.classList.contains('nav-orcamento')) {
+                    sectionHeader.classList.add('nav-orcamento');
+                } else if (activeNav.classList.contains('nav-fluxo-caixa')) {
+                    sectionHeader.classList.add('nav-fluxo-caixa');
+                } else if (activeNav.classList.contains('nav-relatorios')) {
+                    sectionHeader.classList.add('nav-relatorios');
+                }
+            }
+        });
+    </script>
+    {% block extra_js %}{% endblock %}
 </body>
 </html>
-

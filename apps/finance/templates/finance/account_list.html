@@ -1,41 +1,84 @@
-{% extends 'finance/base.html' %}
+{% extends "finance/base.html" %}
 
-{% block title %}Contas{% endblock %}
+{% block section_name %}Gerenciador de Contas{% endblock %}
 
 {% block content %}
-<h1>Contas</h1>
-<a href="{% url 'finance:account_create' %}"><button>Criar Nova Conta</button></a>
-{% if accounts %}
-    <table>
-        <thead>
-            <tr>
-                <th>Nome</th>
-                <th>Tipo</th>
-                <th>Moeda</th>
-                <th>Saldo de Abertura</th>
-                <th>Saldo atual</th>
-                <th>Ações</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for account in accounts %}
-            <tr>
-                <td>{{ account.name }}</td>
-                <td>{{ account.get_account_type_display }}</td>
-                <td>{{ account.currency }}</td>
-                <td>{{ account.opening_balance }}</td>
-                <td>{{ account.get_balance }}</td>
-                <td>
-                    <a href="{% url 'finance:account_update' account.pk %}"><button>Editar</button></a>
-                    <a href="{% url 'finance:account_delete' account.pk %}"><button>Deletar</button></a>
-                    <a href="{% url 'finance:account_statement' %}?account={{ account.pk }}&start_date={{ default_start_date|date:'Y-m-d' }}&end_date={{ default_end_date|date:'Y-m-d' }}"><button>Extrato</button></a>
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-{% else %}
-    <p>Nenhuma conta cadastrada.</p>
-{% endif %}
-{% endblock %}
+<div class="card shadow-sm border-0">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover table-sm mb-0" style="font-size: 0.9rem;">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ps-3">Conta</th>
+                        <th>Tipo</th>
+                        <th class="text-end pe-3">Saldo</th>
+                        <th class="text-center pe-3">Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for account in accounts %}
+                    <tr>
+                        <td class="ps-3" style="cursor: pointer;" onclick="window.location.href='{% url 'finance:historico' account.pk %}'">
+                            <span style="font-weight: 500;">{{ account.name }}</span>
+                        </td>
+                        <td style="cursor: pointer;" onclick="window.location.href='{% url 'finance:historico' account.pk %}'">
+                            <div class="d-flex align-items-center gap-2">
+                                {% if account.account_type == 'CASH' %}
+                                    <span style="font-size: 1.1rem;">💰</span>
+                                {% elif account.account_type == 'BANK' %}
+                                    <span style="font-size: 1.1rem;">🏦</span>
+                                {% elif account.account_type == 'INVEST' %}
+                                    <span style="font-size: 1.1rem;">📈</span>
+                                {% elif account.account_type == 'CREDCARD' %}
+                                    <span style="font-size: 1.1rem;">💳</span>
+                                {% else %}
+                                    <i class="fas fa-wallet text-muted"></i>
+                                {% endif %}
+                                <span>{{ account.get_account_type_display }}</span>
+                            </div>
+                        </td>
+                        <td class="text-end pe-3" style="cursor: pointer;" onclick="window.location.href='{% url 'finance:historico' account.pk %}'">
+                            <span class="fw-bold {% if account.get_balance < 0 %}text-danger{% else %}text-dark{% endif %}" style="font-size: 0.95rem;">
+                                R$ {{ account.get_balance|floatformat:2 }}
+                            </span>
+                        </td>
+                        <td class="pe-3">
+                            <div class="btn-group btn-group-sm" role="group">
+                                <a href="{% url 'finance:historico' account.pk %}" class="btn btn-outline-info" title="Ver histórico" onclick="event.stopPropagation();">
+                                    <i class="fas fa-chart-line"></i>
+                                </a>
+                                <a href="{% url 'finance:account_statement' %}?account={{ account.pk }}" class="btn btn-outline-secondary" title="Visualizar" onclick="event.stopPropagation();">
+                                    <i class="fas fa-eye"></i>
+                                </a>
+                                <a href="{% url 'finance:account_update' account.pk %}" class="btn btn-outline-primary" title="Editar" onclick="event.stopPropagation();">
+                                    <i class="fas fa-edit"></i>
+                                </a>
+                                <a href="{% url 'finance:account_delete' account.pk %}" class="btn btn-outline-danger" title="Excluir" onclick="event.stopPropagation();">
+                                    <i class="fas fa-trash"></i>
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot class="bg-light">
+                    <tr>
+                        <td class="ps-3 fw-bold" colspan="3">Total</td>
+                        <td class="text-end pe-3">
+                            <span class="fw-bold {% if total_balance < 0 %}text-danger{% else %}text-dark{% endif %}" style="font-size: 1rem;">
+                                R$ {{ total_balance|floatformat:2 }}
+                            </span>
+                        </td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+</div>
 
+<div class="mt-3 d-flex gap-2 flex-wrap">
+    <a href="{% url 'finance:account_list' %}" class="btn btn-secondary btn-sm">Ir para conta</a>
+    <a href="{% url 'finance:account_create' %}" class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> Nova conta...</a>
+    <a href="{% url 'finance:account_list' %}" class="btn btn-outline-danger btn-sm">Excluir conta</a>
+</div>
+{% endblock %}

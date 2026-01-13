@@ -1,69 +1,209 @@
 {% extends 'finance/base.html' %}
 
+{% block section_name %}Fluxo de Caixa{% endblock %}
+
 {% block title %}Itens do Fluxo de Caixa{% endblock %}
 
 {% block content %}
-<h1>Itens do Fluxo de Caixa</h1>
-<a href="{% url 'finance:cash_flow_item_create' %}"><button>Criar Novo Item</button></a>
-<a href="{% url 'finance:cash_flow_report' %}"><button>Ver Relatório</button></a>
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h1 class="h4 mb-0">Itens do Fluxo de Caixa</h1>
+    <div class="d-flex gap-2">
+        <a href="{% url 'finance:cash_flow_item_create' %}" class="btn btn-primary btn-sm">
+            <i class="fas fa-plus"></i> Criar Novo Item
+        </a>
+        <a href="{% url 'finance:cash_flow_report' %}" class="btn btn-info btn-sm">
+            <i class="fas fa-chart-bar"></i> Ver Relatório
+        </a>
+    </div>
+</div>
+
 {% if items %}
-    <table style="border-collapse: collapse; margin-top: 20px;">
-        <thead>
-            <tr style="background-color: #f0f0f0;">
-                <th style="text-align: left; padding: 2px 8px; border: 1px solid #ddd;">Código : Descrição</th>
-                <th style="text-align: left; padding: 2px 8px; border: 1px solid #ddd;">Tipo de Cálculo</th>
-                <th style="text-align: left; padding: 2px 8px; border: 1px solid #ddd;">Acumula em</th>
-                <th style="text-align: left; padding: 2px 8px; border: 1px solid #ddd;">Ordem</th>
-                <th style="text-align: left; padding: 2px 8px; border: 1px solid #ddd;">Ações</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for data in items %}
-            <tr class="level-{{ data.level }}" data-code="{{ data.item.code }}" data-parent-code="{{ data.parent_code|default:'' }}">
-                <td class="code-cell" style="padding: 2px 8px; border: 1px solid #ddd; font-family: monospace;">
-                    <span class="expand-toggle" style="cursor: pointer; margin-right: 5px; display: inline-block; width: 12px; text-align: center;">{% if data.has_children %}+{% else %}&nbsp;{% endif %}</span>
-                    {{ data.item.code }} : {{ data.item.description }}
-                </td>
-                <td style="padding: 2px 8px; border: 1px solid #ddd;">{{ data.item.get_calculation_type_display }}</td>
-                <td style="padding: 2px 8px; border: 1px solid #ddd;">
-                    {% if data.item.accumulates_in %}
-                        {{ data.item.accumulates_in.code }} - {{ data.item.accumulates_in.description }}
-                    {% else %}
-                        -
-                    {% endif %}
-                </td>
-                <td style="padding: 2px 8px; border: 1px solid #ddd;">{{ data.item.order }}</td>
-                <td style="padding: 2px 8px; border: 1px solid #ddd;">
-                    <a href="{% url 'finance:cash_flow_item_create' %}?parent_id={{ data.item.pk }}&action=sibling"><button>Criar Novo Item</button></a>
-                    <a href="{% url 'finance:cash_flow_item_create' %}?parent_id={{ data.item.pk }}&action=child"><button>Criar Novo Subitem</button></a>
-                    <a href="{% url 'finance:cash_flow_item_update' data.item.pk %}"><button>Editar</button></a>
-                    <a href="{% url 'finance:cash_flow_item_delete' data.item.pk %}"><button>Deletar</button></a>
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+<div class="card shadow-sm border-0">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover table-sm mb-0" style="font-size: 0.9rem;">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ps-3">Código : Descrição</th>
+                        <th>Tipo de Cálculo</th>
+                        <th>Acumula em</th>
+                        <th>Ordem</th>
+                        <th class="pe-3">Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for data in items %}
+                    <tr class="level-{{ data.level }} tree-row" data-code="{{ data.item.code }}" data-parent-code="{{ data.parent_code|default:'' }}" data-level="{{ data.level }}">
+                        <td class="code-cell ps-3">
+                            <div class="d-flex align-items-center tree-content-wrapper" data-level="{{ data.level }}">
+                                <span class="expand-toggle" style="cursor: pointer; min-width: 24px; text-align: center; flex-shrink: 0;">
+                                    {% if data.has_children %}
+                                        <i class="fas fa-chevron-right expand-icon text-muted" style="font-size: 0.75rem; transition: transform 0.2s;"></i>
+                                    {% else %}
+                                        <span style="display: inline-block; width: 20px; height: 20px; position: relative;">
+                                            <span style="position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 4px; height: 4px; background-color: #6c757d; border-radius: 50%;"></span>
+                                        </span>
+                                    {% endif %}
+                                </span>
+                                <span class="font-monospace" style="font-size: 0.85rem;">{{ data.item.code }}</span>
+                                <span style="margin: 0 8px; color: #6c757d;">:</span>
+                                <span style="font-weight: 500;">{{ data.item.description }}</span>
+                            </div>
+                        </td>
+                        <td>
+                            <span class="badge {% if data.item.calculation_type == 'SUM' %}bg-primary{% elif data.item.calculation_type == 'SUBTRACT' %}bg-danger{% else %}bg-secondary{% endif %}">
+                                {{ data.item.get_calculation_type_display }}
+                            </span>
+                        </td>
+                        <td>
+                            {% if data.item.accumulates_in %}
+                                <small class="text-muted">{{ data.item.accumulates_in.code }} - {{ data.item.accumulates_in.description }}</small>
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ data.item.order }}</td>
+                        <td class="pe-3">
+                            <div class="btn-group btn-group-sm" role="group">
+                                <a href="{% url 'finance:cash_flow_item_create' %}?parent_id={{ data.item.pk }}&action=sibling" class="btn btn-outline-secondary" title="Criar Item Irmão">
+                                    <i class="fas fa-plus"></i>
+                                </a>
+                                <a href="{% url 'finance:cash_flow_item_create' %}?parent_id={{ data.item.pk }}&action=child" class="btn btn-outline-secondary" title="Criar Subitem">
+                                    <i class="fas fa-level-down-alt"></i>
+                                </a>
+                                <a href="{% url 'finance:cash_flow_item_update' data.item.pk %}" class="btn btn-outline-primary" title="Editar">
+                                    <i class="fas fa-edit"></i>
+                                </a>
+                                <a href="{% url 'finance:cash_flow_item_delete' data.item.pk %}" class="btn btn-outline-danger" title="Deletar">
+                                    <i class="fas fa-trash"></i>
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
 {% else %}
-    <p>Nenhum item do fluxo de caixa cadastrado.</p>
+<div class="alert alert-info">
+    <i class="fas fa-info-circle me-2"></i>Nenhum item do fluxo de caixa cadastrado.
+</div>
 {% endif %}
 
+{% endblock %}
+
+{% block extra_css %}
 <style>
+.tree-row {
+    transition: background-color 0.15s ease;
+}
+
+.tree-row:hover {
+    background-color: #f8f9fa;
+}
+
 .code-cell {
-    padding-left: 0;
+    padding-left: 0 !important;
+    position: relative;
+}
+
+.tree-content-wrapper {
+    position: relative;
+    min-height: 32px;
+}
+
+.expand-toggle {
+    user-select: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #fff;
+    border-radius: 3px;
+    padding: 2px;
+}
+
+.expand-toggle:hover {
+    background-color: #f0f0f0;
+}
+
+.expand-toggle:hover .expand-icon {
+    color: #0d6efd !important;
+}
+
+.expand-icon.expanded {
+    transform: rotate(90deg);
+}
+
+.level-0 {
+    font-weight: 600;
+    border-left: 4px solid #0d6efd;
+}
+
+.level-0 .tree-content-wrapper {
+    padding-left: 12px;
+}
+
+.level-1 {
+    font-weight: 500;
+    border-left: 4px solid #198754;
+    background-color: #f8f9fa;
+}
+
+.level-1 .tree-content-wrapper {
+    padding-left: 36px;
+}
+
+.level-2 {
+    font-weight: 500;
+    border-left: 4px solid #ffc107;
+    background-color: #fffbf0;
+}
+
+.level-2 .tree-content-wrapper {
+    padding-left: 60px;
+}
+
+.level-3 {
+    font-weight: 400;
+    border-left: 4px solid #dc3545;
+    background-color: #fff5f5;
+}
+
+.level-3 .tree-content-wrapper {
+    padding-left: 84px;
+}
+
+.level-4 {
+    font-weight: 400;
+    border-left: 4px solid #6c757d;
+    background-color: #f8f9fa;
+}
+
+.level-4 .tree-content-wrapper {
+    padding-left: 108px;
+}
+
+.level-5 {
+    font-weight: 400;
+    border-left: 4px solid #0dcaf0;
+    background-color: #f0f9ff;
+}
+
+.level-5 .tree-content-wrapper {
+    padding-left: 132px;
 }
 </style>
+{% endblock %}
+
+{% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const codeCells = document.querySelectorAll('.code-cell');
     const rows = document.querySelectorAll('tbody tr[data-code]');
     
-    // Aplicar indentação baseada no nível hierárquico
-    codeCells.forEach(function(cell) {
-        const row = cell.closest('tr');
-        const level = parseInt(row.className.match(/level-(\d+)/)?.[1] || '0');
-        const padding = level * 20;
-        cell.style.paddingLeft = (padding + 20) + 'px'; // +20 para o botão expandir
-    });
+    // A indentação visual é feita via CSS com background colors diferentes por nível
     
     // Inicialmente, ocultar todos os filhos (nível > 0)
     rows.forEach(function(row) {
@@ -83,10 +223,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (!show) {
                     const rowCode = row.getAttribute('data-code');
                     toggleChildren(rowCode, false);
-                    // Atualizar botão do item filho
+                    // Atualizar ícone do item filho
                     const toggleBtn = row.querySelector('.expand-toggle');
-                    if (toggleBtn && toggleBtn.textContent.trim() !== '') {
-                        toggleBtn.textContent = '+';
+                    const icon = toggleBtn ? toggleBtn.querySelector('.expand-icon') : null;
+                    if (icon) {
+                        icon.classList.remove('expanded');
                     }
                 }
             }
@@ -99,16 +240,32 @@ document.addEventListener('DOMContentLoaded', function() {
             e.stopPropagation();
             const row = this.closest('tr');
             const code = row.getAttribute('data-code');
-            const isExpanded = this.textContent === '-';
+            const icon = this.querySelector('.expand-icon');
+            const isExpanded = icon && icon.classList.contains('expanded');
             
             if (isExpanded) {
                 // Recolher
-                this.textContent = '+';
+                icon.classList.remove('expanded');
                 toggleChildren(code, false);
             } else {
                 // Expandir
-                this.textContent = '-';
+                icon.classList.add('expanded');
                 toggleChildren(code, true);
+            }
+        });
+        
+        // Adicionar hover effect
+        btn.addEventListener('mouseenter', function() {
+            const icon = this.querySelector('.expand-icon');
+            if (icon) {
+                icon.style.transform = icon.classList.contains('expanded') ? 'rotate(90deg) scale(1.1)' : 'scale(1.1)';
+            }
+        });
+        
+        btn.addEventListener('mouseleave', function() {
+            const icon = this.querySelector('.expand-icon');
+            if (icon) {
+                icon.style.transform = icon.classList.contains('expanded') ? 'rotate(90deg)' : 'rotate(0deg)';
             }
         });
     });

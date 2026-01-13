@@ -1,5 +1,7 @@
 {% extends 'finance/base.html' %}
 
+{% block section_name %}Categorias{% endblock %}
+
 {% block title %}Categorias{% endblock %}
 
 {% block content %}
@@ -28,64 +30,78 @@
     }
 </style>
 
-<h1>Categorias</h1>
-<a href="{% url 'finance:category_create' %}"><button>Criar Nova Categoria</button></a>
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="h4 mb-0">Categorias</h1>
+    <a href="{% url 'finance:category_create' %}" class="btn btn-primary btn-sm">
+        <i class="fas fa-plus"></i> Criar Nova Categoria
+    </a>
+</div>
+
 {% if categories %}
-    <table>
-        <thead>
-            <tr>
-                <th>Categoria</th>
-                <th>Subcategorias</th>
-                <th>Status no Fluxo de Caixa</th>
-                <th>Ações</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for category in categories %}
-            <tr>
-                <td>{{ category.category }}</td>
-                <td>
-                    <a href="{% url 'finance:subcategory_list' category.pk %}">
-                        Ver Subcategorias ({{ category.subcategory_count }})
-                    </a>
-                    {% if category.subcategory_count > 0 %}
-                    <div class="mapping-summary">
-                        {% if category.mapped_count > 0 %}
-                            <span class="mapping-mapped">✓ {{ category.mapped_count }} mapeada{{ category.mapped_count|pluralize }}</span>
-                        {% endif %}
-                        {% if category.not_mapped_count > 0 %}
-                            <span class="mapping-not-mapped">✗ {{ category.not_mapped_count }} não mapeada{{ category.not_mapped_count|pluralize }}</span>
-                        {% endif %}
-                        {% if category.duplicate_count > 0 %}
-                            <span class="mapping-duplicate">⚠ {{ category.duplicate_count }} duplicada{{ category.duplicate_count|pluralize }}</span>
-                        {% endif %}
-                    </div>
-                    {% endif %}
-                </td>
-                <td>
-                    {% if category.subcategory_count > 0 %}
-                        Total: {{ category.subcategory_count }}
-                        {% if category.not_mapped_count > 0 or category.duplicate_count > 0 %}
-                            <br><small style="color: #d32f2f;">
-                                ⚠ Atenção: {{ category.not_mapped_count|add:category.duplicate_count }} com problemas
-                            </small>
-                        {% else %}
-                            <br><small style="color: #2e7d32;">✓ Todas mapeadas corretamente</small>
-                        {% endif %}
-                    {% else %}
-                        <small style="color: #757575;">Sem subcategorias</small>
-                    {% endif %}
-                </td>
-                <td>
-                    <a href="{% url 'finance:category_update' category.pk %}"><button>Editar</button></a>
-                    <a href="{% url 'finance:category_delete' category.pk %}"><button>Deletar</button></a>
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+<div class="card shadow-sm border-0">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover table-sm mb-0" style="font-size: 0.9rem;">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ps-3">Categoria</th>
+                        <th>Subcategorias</th>
+                        <th>Status no Fluxo de Caixa</th>
+                        <th class="pe-3">Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for category in categories %}
+                    <tr>
+                        <td class="ps-3 fw-bold">{{ category.category }}</td>
+                        <td>
+                            <a href="{% url 'finance:subcategory_list' category.pk %}" class="text-decoration-none">
+                                Ver Subcategorias ({{ category.subcategory_count }})
+                            </a>
+                            {% if category.subcategory_count > 0 %}
+                            <div class="mapping-summary">
+                                {% if category.mapped_count > 0 %}
+                                    <span class="mapping-mapped">✓ {{ category.mapped_count }} mapeada{{ category.mapped_count|pluralize }}</span>
+                                {% endif %}
+                                {% if category.not_mapped_count > 0 %}
+                                    <span class="mapping-not-mapped">✗ {{ category.not_mapped_count }} não mapeada{{ category.not_mapped_count|pluralize }}</span>
+                                {% endif %}
+                                {% if category.duplicate_count > 0 %}
+                                    <span class="mapping-duplicate">⚠ {{ category.duplicate_count }} duplicada{{ category.duplicate_count|pluralize }}</span>
+                                {% endif %}
+                            </div>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if category.subcategory_count > 0 %}
+                                Total: {{ category.subcategory_count }}
+                                {% if category.not_mapped_count > 0 or category.duplicate_count > 0 %}
+                                    <br><small class="text-danger">
+                                        ⚠ Atenção: {{ category.not_mapped_count|add:category.duplicate_count }} com problemas
+                                    </small>
+                                {% else %}
+                                    <br><small class="text-success">✓ Todas mapeadas corretamente</small>
+                                {% endif %}
+                            {% else %}
+                                <small class="text-muted">Sem subcategorias</small>
+                            {% endif %}
+                        </td>
+                        <td class="pe-3">
+                            <div class="btn-group btn-group-sm" role="group">
+                                <a href="{% url 'finance:category_update' category.pk %}" class="btn btn-outline-primary">Editar</a>
+                                <a href="{% url 'finance:category_delete' category.pk %}" class="btn btn-outline-danger">Deletar</a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
 {% else %}
-    <p>Nenhuma categoria cadastrada.</p>
+<div class="alert alert-info">
+    <i class="fas fa-info-circle me-2"></i>Nenhuma categoria cadastrada.
+</div>
 {% endif %}
 {% endblock %}
-

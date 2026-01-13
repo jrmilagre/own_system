@@ -453,6 +453,7 @@ class Transaction(BaseModel):
 
 class Scheduler(BaseModel):
     RECURRENCE_TYPE_CHOICES = [
+        ('NONE', 'Único (sem recorrência)'),
         ('DAILY', 'Diária'),
         ('WEEKLY', 'Semanal'),
         ('MONTHLY', 'Mensal'),

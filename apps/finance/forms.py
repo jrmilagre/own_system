@@ -1,6 +1,6 @@
 from django import forms
 from django.forms import formset_factory, inlineformset_factory, BaseFormSet
-from .models import Account, Beneficiary, Category, Subcategory, Transaction, Scheduler, Asset, AssetTransaction, AssetPosition, Inventory, CashFlowItem
+from .models import Account, Beneficiary, Category, Subcategory, Transaction, Scheduler, Asset, AssetTransaction, AssetPosition, Inventory, CashFlowItem, Budget
 
 
 class AccountForm(forms.ModelForm):
@@ -220,9 +220,19 @@ class SchedulerForm(forms.ModelForm):
 
     def clean(self):
         cleaned_data = super().clean()
+        recurrence_type = cleaned_data.get('recurrence_type')
         termination_type = cleaned_data.get('termination_type')
         remaining_installments = cleaned_data.get('remaining_installments')
         final_date = cleaned_data.get('final_date')
+
+        # Se for agendamento único (sem recorrência), não validar campos de recorrência e término
+        if recurrence_type == 'NONE':
+            # Limpar campos de recorrência e término para agendamentos únicos
+            cleaned_data['recurrence_interval'] = 1
+            cleaned_data['termination_type'] = 'INFINITE'
+            cleaned_data['remaining_installments'] = None
+            cleaned_data['final_date'] = None
+            return cleaned_data
 
         if termination_type == 'INSTALLMENTS':
             if not remaining_installments or remaining_installments <= 0:
@@ -855,3 +865,19 @@ class TransactionFilterForm(forms.Form):
         label='Data fim',
         widget=forms.DateInput(attrs={'type': 'date', 'class': 'form-control'})
     )
+
+
+class BudgetForm(forms.ModelForm):
+    class Meta:
+        model = Budget
+        fields = ['subcategory', 'budget_date', 'amount']
+        widgets = {
+            'subcategory': forms.Select(attrs={'required': True}),
+            'budget_date': forms.DateInput(attrs={'type': 'date', 'required': True}),
+            'amount': forms.NumberInput(attrs={'step': '0.01', 'required': True}),
+        }
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Ordenar subcategorias por categoria e nome
+        self.fields['subcategory'].queryset = Subcategory.objects.all().select_related('category').order_by('category__category', 'subcategory')

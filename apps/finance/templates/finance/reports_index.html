@@ -1,15 +1,75 @@
 {% extends 'finance/base.html' %}
 
+{% block section_name %}Relatórios{% endblock %}
+
 {% block title %}Relatórios{% endblock %}
 
 {% block content %}
-<h1>Relatórios</h1>
-<h2>Contas</h2>
-<ul>
-    <li><a href="{% url 'finance:account_statement' %}">Extrato</a></li>
-</ul>
-<h2>Ativos</h2>
-<ul>
-    <li><a href="{% url 'finance:asset_stock_position_report' %}">Posição de estoque</a></li>
-</ul>
+<div class="card shadow-sm border-0">
+    <div class="card-body">
+        <h1 class="h4 mb-4">Relatórios</h1>
+        
+        <div class="row g-3">
+            <!-- Seção Contas -->
+            <div class="col-md-6 col-lg-4">
+                <div class="card border-primary h-100">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0">
+                            <i class="fas fa-university me-2"></i>Contas
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <ul class="list-unstyled mb-0">
+                            <li class="mb-2">
+                                <a href="{% url 'finance:account_statement' %}" class="text-decoration-none">
+                                    <i class="fas fa-file-alt text-primary me-2"></i>Extrato
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Seção Ativos -->
+            <div class="col-md-6 col-lg-4">
+                <div class="card border-secondary h-100">
+                    <div class="card-header bg-secondary text-white">
+                        <h5 class="mb-0">
+                            <i class="fas fa-briefcase me-2"></i>Ativos
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <ul class="list-unstyled mb-0">
+                            <li class="mb-2">
+                                <a href="{% url 'finance:asset_stock_position_report' %}" class="text-decoration-none">
+                                    <i class="fas fa-chart-bar text-secondary me-2"></i>Posição de estoque
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Seção Fluxo de Caixa -->
+            <div class="col-md-6 col-lg-4">
+                <div class="card border-info h-100">
+                    <div class="card-header bg-info text-white">
+                        <h5 class="mb-0">
+                            <i class="fas fa-money-bill-wave me-2"></i>Fluxo de Caixa
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <ul class="list-unstyled mb-0">
+                            <li class="mb-2">
+                                <a href="{% url 'finance:cash_flow_report' %}" class="text-decoration-none">
+                                    <i class="fas fa-chart-line text-info me-2"></i>Relatório de Fluxo de Caixa
+                                </a>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}

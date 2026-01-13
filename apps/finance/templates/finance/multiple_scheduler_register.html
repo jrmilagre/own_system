@@ -7,7 +7,7 @@
 <p>Edite os campos abaixo antes de registrar as transações:</p>
 
 {% if next_due_date %}
-<p><strong>Próxima data (após registro):</strong> {{ next_due_date|date:"d/m/Y" }}</p>
+<p><strong>Próxima data (após registro):</strong> {{ next_due_date|date:"d-m-Y" }}</p>
 {% endif %}
 
 <form method="post">

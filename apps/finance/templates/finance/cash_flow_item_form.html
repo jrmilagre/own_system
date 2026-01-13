@@ -1,69 +1,98 @@
 {% extends 'finance/base.html' %}
 
-{% block title %}{% if item %}Editar{% else %}Criar{% endif %} Item do Fluxo de Caixa{% endblock %}
+{% block section_name %}{% if item %}Editar Item do Fluxo de Caixa{% else %}Criar Novo Item do Fluxo de Caixa{% endif %}{% endblock %}
+
+{% block title %}{% if item %}Editar Item do Fluxo de Caixa{% else %}Criar Item do Fluxo de Caixa{% endif %}{% endblock %}
 
 {% block content %}
-<h1>{% if item %}Editar{% else %}Criar{% endif %} Item do Fluxo de Caixa</h1>
-
-<form method="post">
-    {% csrf_token %}
-    
-    {% if form.non_field_errors %}
-    <div style="color: red; padding: 10px; background-color: #ffe6e6; border: 1px solid red; margin-bottom: 10px;">
-        <strong>Erros no formulário:</strong>
-        <ul>
-            {% for error in form.non_field_errors %}
-            <li>{{ error }}</li>
-            {% endfor %}
-        </ul>
+<div class="card shadow-sm border-0">
+    <div class="card-header bg-light">
+        <h5 class="mb-0">
+            <i class="fas fa-sitemap me-2"></i>
+            {% if item %}Editar Item do Fluxo de Caixa{% else %}Criar Novo Item do Fluxo de Caixa{% endif %}
+        </h5>
     </div>
-    {% endif %}
-    
-    <h2>Dados do Item</h2>
-    <table>
-        <tr>
-            <td>{{ form.code.label_tag }}</td>
-            <td>{{ form.code }}</td>
-            {% if form.code.errors %}
-            <td>{{ form.code.errors }}</td>
+    <div class="card-body" style="background-color: #f8f9fa;">
+        <form method="post" class="needs-validation" novalidate>
+            {% csrf_token %}
+            
+            {% if form.non_field_errors %}
+            <div class="alert alert-danger mb-3">
+                <strong><i class="fas fa-exclamation-triangle me-1"></i>Erros no formulário:</strong>
+                <ul class="mb-0 mt-2">
+                    {% for error in form.non_field_errors %}
+                    <li>{{ error }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
             {% endif %}
-        </tr>
-        <tr>
-            <td>{{ form.description.label_tag }}</td>
-            <td>{{ form.description }}</td>
-            {% if form.description.errors %}
-            <td>{{ form.description.errors }}</td>
-            {% endif %}
-        </tr>
-        <tr>
-            <td>{{ form.calculation_type.label_tag }}</td>
-            <td>{{ form.calculation_type }}</td>
-            {% if form.calculation_type.errors %}
-            <td>{{ form.calculation_type.errors }}</td>
-            {% endif %}
-        </tr>
-        <tr id="accumulates-in-row" style="display: none;">
-            <td>{{ form.accumulates_in.label_tag }}</td>
-            <td>{{ form.accumulates_in }}</td>
-            {% if form.accumulates_in.errors %}
-            <td>{{ form.accumulates_in.errors }}</td>
-            {% endif %}
-        </tr>
-        <tr>
-            <td>{{ form.order.label_tag }}</td>
-            <td>{{ form.order }}</td>
-            {% if form.order.errors %}
-            <td>{{ form.order.errors }}</td>
-            {% endif %}
-        </tr>
-        <tr id="rules-section" style="display: none;">
-            <td colspan="2">
-                <h3>Regras de Cálculo</h3>
+            
+            <h6 class="mb-3 text-muted"><i class="fas fa-info-circle me-1"></i>Dados do Item</h6>
+            <div class="row g-3">
+                <!-- Código -->
+                <div class="col-md-6">
+                    <label for="{{ form.code.id_for_label }}" class="form-label">
+                        <i class="fas fa-hashtag me-1 text-primary"></i>Código <span class="text-danger">*</span>
+                    </label>
+                    {{ form.code }}
+                    {% if form.code.errors %}
+                        <div class="text-danger small mt-1">{{ form.code.errors }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Descrição -->
+                <div class="col-md-6">
+                    <label for="{{ form.description.id_for_label }}" class="form-label">
+                        <i class="fas fa-align-left me-1 text-info"></i>Descrição <span class="text-danger">*</span>
+                    </label>
+                    {{ form.description }}
+                    {% if form.description.errors %}
+                        <div class="text-danger small mt-1">{{ form.description.errors }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Tipo de Cálculo -->
+                <div class="col-md-6">
+                    <label for="{{ form.calculation_type.id_for_label }}" class="form-label">
+                        <i class="fas fa-calculator me-1 text-warning"></i>Tipo de Cálculo <span class="text-danger">*</span>
+                    </label>
+                    {{ form.calculation_type }}
+                    {% if form.calculation_type.errors %}
+                        <div class="text-danger small mt-1">{{ form.calculation_type.errors }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Acumula em -->
+                <div class="col-md-6" id="accumulates-in-row" style="display: none;">
+                    <label for="{{ form.accumulates_in.id_for_label }}" class="form-label">
+                        <i class="fas fa-arrow-up me-1 text-success"></i>Acumula em
+                    </label>
+                    {{ form.accumulates_in }}
+                    {% if form.accumulates_in.errors %}
+                        <div class="text-danger small mt-1">{{ form.accumulates_in.errors }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Ordem -->
+                <div class="col-md-6">
+                    <label for="{{ form.order.id_for_label }}" class="form-label">
+                        <i class="fas fa-sort-numeric-down me-1 text-secondary"></i>Ordem <span class="text-danger">*</span>
+                    </label>
+                    {{ form.order }}
+                    {% if form.order.errors %}
+                        <div class="text-danger small mt-1">{{ form.order.errors }}</div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Regras de Cálculo -->
+            <div id="rules-section" style="display: none;" class="mt-4 pt-3 border-top">
+                <h6 class="mb-3 text-muted"><i class="fas fa-list-ul me-1"></i>Regras de Cálculo</h6>
                 {{ rules_formset.management_form }}
                 {% if rules_formset.non_form_errors %}
-                <div style="color: red; padding: 10px; background-color: #ffe6e6; border: 1px solid red; margin-bottom: 10px;">
-                    <strong>Erros nas regras:</strong>
-                    <ul>
+                <div class="alert alert-danger mb-3">
+                    <strong><i class="fas fa-exclamation-triangle me-1"></i>Erros nas regras:</strong>
+                    <ul class="mb-0 mt-2">
                         {% for error in rules_formset.non_form_errors %}
                         <li>{{ error }}</li>
                         {% endfor %}
@@ -72,65 +101,136 @@
                 {% endif %}
                 <div id="rules-container">
                     {% for rule_form in rules_formset %}
-                    <div class="rule-form" data-form-index="{{ forloop.counter0 }}">
-                        <h4>Regra {{ forloop.counter }}
-                            <button type="button" class="remove-rule">Remover</button>
-                        </h4>
-                        {% if rule_form.DELETE %}
-                        <div style="display: none;">{{ rule_form.DELETE }}</div>
-                        {% endif %}
-                        <table>
-                            <tr>
-                                <td>{{ rule_form.rule_type.label_tag }}</td>
-                                <td>{{ rule_form.rule_type }}</td>
-                                {% if rule_form.rule_type.errors %}
-                                <td>{{ rule_form.rule_type.errors }}</td>
-                                {% endif %}
-                            </tr>
-                            <tr class="subcategory-fields" style="display: none;">
-                                <td>{{ rule_form.subcategory.label_tag }}</td>
-                                <td>{{ rule_form.subcategory }}</td>
-                                {% if rule_form.subcategory.errors %}
-                                <td>{{ rule_form.subcategory.errors }}</td>
-                                {% endif %}
-                            </tr>
-                            <tr class="asset-operation-fields" style="display: none;">
-                                <td>{{ rule_form.asset_operation_type.label_tag }}</td>
-                                <td>{{ rule_form.asset_operation_type }}</td>
-                                {% if rule_form.asset_operation_type.errors %}
-                                <td>{{ rule_form.asset_operation_type.errors }}</td>
-                                {% endif %}
-                            </tr>
-                            <tr class="asset-operation-fields" style="display: none;">
-                                <td>{{ rule_form.asset_type.label_tag }}</td>
-                                <td>{{ rule_form.asset_type }}</td>
-                                {% if rule_form.asset_type.errors %}
-                                <td>{{ rule_form.asset_type.errors }}</td>
-                                {% endif %}
-                            </tr>
-                        </table>
+                    <div class="rule-form card mb-3" data-form-index="{{ forloop.counter0 }}">
+                        <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                            <h6 class="mb-0">Regra {{ forloop.counter }}</h6>
+                            <button type="button" class="btn btn-sm btn-outline-danger remove-rule">
+                                <i class="fas fa-trash"></i> Remover
+                            </button>
+                        </div>
+                        <div class="card-body">
+                            {% if rule_form.DELETE %}
+                            <div style="display: none;">{{ rule_form.DELETE }}</div>
+                            {% endif %}
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label for="{{ rule_form.rule_type.id_for_label }}" class="form-label">
+                                        <i class="fas fa-tag me-1 text-primary"></i>Tipo de Regra <span class="text-danger">*</span>
+                                    </label>
+                                    {{ rule_form.rule_type }}
+                                    {% if rule_form.rule_type.errors %}
+                                        <div class="text-danger small mt-1">{{ rule_form.rule_type.errors }}</div>
+                                    {% endif %}
+                                </div>
+
+                                <div class="col-md-6 subcategory-fields" style="display: none;">
+                                    <label for="{{ rule_form.subcategory.id_for_label }}" class="form-label">
+                                        <i class="fas fa-tags me-1 text-warning"></i>Subcategoria <span class="text-danger">*</span>
+                                    </label>
+                                    {{ rule_form.subcategory }}
+                                    {% if rule_form.subcategory.errors %}
+                                        <div class="text-danger small mt-1">{{ rule_form.subcategory.errors }}</div>
+                                    {% endif %}
+                                </div>
+
+                                <div class="col-md-6 asset-operation-fields" style="display: none;">
+                                    <label for="{{ rule_form.asset_operation_type.id_for_label }}" class="form-label">
+                                        <i class="fas fa-exchange-alt me-1 text-info"></i>Tipo de Operação <span class="text-danger">*</span>
+                                    </label>
+                                    {{ rule_form.asset_operation_type }}
+                                    {% if rule_form.asset_operation_type.errors %}
+                                        <div class="text-danger small mt-1">{{ rule_form.asset_operation_type.errors }}</div>
+                                    {% endif %}
+                                </div>
+
+                                <div class="col-md-6 asset-operation-fields" style="display: none;">
+                                    <label for="{{ rule_form.asset_type.id_for_label }}" class="form-label">
+                                        <i class="fas fa-briefcase me-1 text-secondary"></i>Tipo de Ativo <span class="text-danger">*</span>
+                                    </label>
+                                    {{ rule_form.asset_type }}
+                                    {% if rule_form.asset_type.errors %}
+                                        <div class="text-danger small mt-1">{{ rule_form.asset_type.errors }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
                     </div>
                     {% endfor %}
                 </div>
-                <button type="button" id="add-rule">Adicionar Regra</button>
-            </td>
-        </tr>
-    </table>
-    
-    <button type="submit">Salvar</button>
-    <a href="{% url 'finance:cash_flow_item_list' %}">Cancelar</a>
-</form>
+                <button type="button" id="add-rule" class="btn btn-outline-primary btn-sm">
+                    <i class="fas fa-plus me-1"></i>Adicionar Regra
+                </button>
+            </div>
 
+            <!-- Botões de ação -->
+            <div class="mt-4 pt-3 border-top">
+                <div class="d-flex gap-2 justify-content-end">
+                    <a href="{% url 'finance:cash_flow_item_list' %}" class="btn btn-secondary">
+                        <i class="fas fa-times me-1"></i>Cancelar
+                    </a>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save me-1"></i>Salvar
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.form-label {
+    font-weight: 500;
+    font-size: 0.9rem;
+    margin-bottom: 0.5rem;
+    color: #495057;
+}
+
+.form-control, .form-select {
+    font-size: 0.9rem;
+    border-radius: 0.375rem;
+    border: 1px solid #dee2e6;
+    background-color: #fff;
+    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+}
+
+.form-control:focus, .form-select:focus {
+    border-color: #86b7fe;
+    box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+    background-color: #fff;
+}
+
+.form-control:hover, .form-select:hover {
+    border-color: #adb5bd;
+}
+
+.rule-form {
+    border: 1px solid #dee2e6;
+}
+
+.rule-form[style*="display: none"] {
+    display: none !important;
+}
+</style>
+{% endblock %}
+
+{% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Debug: verificar se o formulário está sendo submetido
-    const form = document.querySelector('form');
-    if (form) {
-        form.addEventListener('submit', function(e) {
-            console.log('Formulário sendo submetido...');
-            // Não prevenir o submit, deixar o comportamento padrão
-        });
-    }
+    // Aplicar classes Bootstrap aos campos do formulário
+    document.querySelectorAll('input[type="text"], input[type="number"], input[type="date"], select, textarea').forEach(function(field) {
+        if (!field.classList.contains('form-control') && !field.classList.contains('form-select') && !field.classList.contains('form-check-input')) {
+            if (field.tagName === 'SELECT') {
+                field.classList.add('form-select');
+            } else if (field.tagName === 'TEXTAREA') {
+                field.classList.add('form-control');
+            } else {
+                field.classList.add('form-control');
+            }
+        }
+    });
     
     const calculationType = document.getElementById('id_calculation_type');
     const rulesSection = document.getElementById('rules-section');
@@ -140,24 +240,26 @@ document.addEventListener('DOMContentLoaded', function() {
     function updateFormVisibility() {
         const type = calculationType.value;
         if (type === 'RULES') {
-            rulesSection.style.display = 'table-row';
+            rulesSection.style.display = 'block';
         } else {
             rulesSection.style.display = 'none';
         }
         
         if (type === 'SUBTOTAL' || type === 'RULES') {
-            accumulatesInRow.style.display = 'table-row';
+            accumulatesInRow.style.display = 'block';
         } else {
             accumulatesInRow.style.display = 'none';
         }
     }
     
-    calculationType.addEventListener('change', updateFormVisibility);
-    updateFormVisibility();
+    if (calculationType) {
+        calculationType.addEventListener('change', updateFormVisibility);
+        updateFormVisibility();
+    }
     
     // Mostrar/ocultar campos baseado no tipo de regra
     function setupRuleTypeListeners() {
-        document.querySelectorAll('.rule-type-select').forEach(select => {
+        document.querySelectorAll('[id^="id_rules-"][id$="-rule_type"]').forEach(select => {
             select.addEventListener('change', function() {
                 const ruleForm = this.closest('.rule-form');
                 const ruleType = this.value;
@@ -169,15 +271,17 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Mostrar campos relevantes
                 if (ruleType === 'subcategory') {
                     ruleForm.querySelectorAll('.subcategory-fields')
-                        .forEach(field => field.style.display = 'table-row');
+                        .forEach(field => field.style.display = 'block');
                 } else if (ruleType === 'asset_operation') {
                     ruleForm.querySelectorAll('.asset-operation-fields')
-                        .forEach(field => field.style.display = 'table-row');
+                        .forEach(field => field.style.display = 'block');
                 }
             });
             
             // Trigger inicial
-            select.dispatchEvent(new Event('change'));
+            if (select.value) {
+                select.dispatchEvent(new Event('change'));
+            }
         });
     }
     
@@ -220,15 +324,24 @@ document.addEventListener('DOMContentLoaded', function() {
             });
             
             // Atualizar título
-            const title = newForm.querySelector('h4');
+            const title = newForm.querySelector('h6');
             if (title) {
-                title.innerHTML = 'Regra ' + (newIndex + 1) + ' <button type="button" class="remove-rule">Remover</button>';
+                title.textContent = 'Regra ' + (newIndex + 1);
             }
             
             // Atualizar contador
             totalForms.value = newIndex + 1;
             
             container.appendChild(newForm);
+            
+            // Aplicar classes Bootstrap aos novos campos
+            newForm.querySelectorAll('input[type="text"], input[type="number"], select').forEach(function(field) {
+                if (field.tagName === 'SELECT') {
+                    field.classList.add('form-select');
+                } else {
+                    field.classList.add('form-control');
+                }
+            });
             
             // Re-aplicar event listeners
             setupRuleTypeListeners();
@@ -258,7 +371,9 @@ document.addEventListener('DOMContentLoaded', function() {
             } else {
                 ruleForm.remove();
                 const totalForms = document.getElementById('id_rules-TOTAL_FORMS');
-                totalForms.value = parseInt(totalForms.value) - 1;
+                if (totalForms) {
+                    totalForms.value = parseInt(totalForms.value) - 1;
+                }
             }
         });
     });
