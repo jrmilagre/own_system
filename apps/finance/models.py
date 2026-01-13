@@ -956,7 +956,7 @@ class AssetTransaction(BaseModel):
     quantity = models.DecimalField(
         'Quantidade',
         max_digits=15,
-        decimal_places=6,
+        decimal_places=8,
         default=0,
         help_text='Quantidade de ativos (0 para dividendos, juros, etc.)'
     )
@@ -1024,18 +1024,27 @@ class AssetTransaction(BaseModel):
     
     def save(self, *args, **kwargs):
         # Calcular total_value automaticamente baseado no tipo de operação
-        if self.operation_type in ['BUY', 'SELL', 'SUB']:
-            # Para compras: quantity * price + fees
-            # Para vendas: quantity * price - fees
-            if self.operation_type == 'BUY':
-                self.total_value = (self.quantity * self.price) + self.fees
-            elif self.operation_type == 'SELL':
-                self.total_value = (self.quantity * self.price) - self.fees
-            else:  # SUB
-                self.total_value = (self.quantity * self.price) + self.fees
+        # Se total_value não foi preenchido (é 0), calcular automaticamente
+        # Caso contrário, usar o valor preenchido (pode ter sido preenchido manualmente ou calculado pelo JS)
+        calculated_base = self.quantity * self.price
+        
+        if self.operation_type in ['BUY', 'SELL', 'SUB', 'REDEMPTION']:
+            # Se total_value é 0 ou muito próximo de 0, calcular automaticamente
+            if abs(self.total_value) < 0.01:
+                if self.operation_type == 'BUY':
+                    self.total_value = calculated_base + self.fees
+                elif self.operation_type == 'SELL':
+                    self.total_value = calculated_base - self.fees
+                elif self.operation_type == 'SUB':
+                    self.total_value = calculated_base + self.fees
+                else:  # REDEMPTION
+                    self.total_value = calculated_base - self.fees
+            # Se total_value foi preenchido (diferente de 0), manter como está
+            # O usuário pode ter preenchido manualmente ou foi calculado pelo JS
         elif self.operation_type in ['DIVIDEND', 'JCP', 'INTEREST', 'AMORTIZATION']:
-            # Para rendimentos, usar income_value
-            self.total_value = self.income_value
+            # Para rendimentos, usar income_value se total_value não foi preenchido
+            if abs(self.total_value) < 0.01:
+                self.total_value = self.income_value
         elif self.operation_type in ['BONUS', 'SPLIT', 'GROUP', 'CAPITAL_INCREASE', 'RIGHTS_EXERCISE']:
             # Operações que não envolvem dinheiro
             self.total_value = 0
@@ -1043,15 +1052,24 @@ class AssetTransaction(BaseModel):
         super().save(*args, **kwargs)
     
     def get_net_value(self):
-        """Retorna o valor líquido da operação"""
+        """Retorna o valor líquido da operação para o fluxo de caixa
+        Sempre calcula baseado em quantity * price e adiciona/subtrai fees
+        para garantir consistência, independentemente de como total_value foi preenchido
+        """
+        calculated_base = self.quantity * self.price
+        
         if self.operation_type == 'BUY':
-            return -self.total_value  # Saída de dinheiro
+            # Para compras: quantity * price + fees (saída de dinheiro)
+            return -(calculated_base + self.fees)
         elif self.operation_type == 'SELL':
-            return self.total_value  # Entrada de dinheiro
+            # Para vendas: quantity * price - fees (entrada de dinheiro)
+            return calculated_base - self.fees
         elif self.operation_type == 'SUB':
-            return -self.total_value  # Saída de dinheiro (pagamento para exercer direito)
+            # Para subscrições: quantity * price + fees (saída de dinheiro)
+            return -(calculated_base + self.fees)
         elif self.operation_type == 'REDEMPTION':
-            return self.total_value  # Entrada de dinheiro (resgate)
+            # Para resgates: quantity * price - fees (entrada de dinheiro)
+            return calculated_base - self.fees
         elif self.operation_type in ['DIVIDEND', 'JCP', 'INTEREST', 'AMORTIZATION']:
             return self.income_value  # Entrada de dinheiro
         return 0
@@ -1077,7 +1095,7 @@ class AssetPosition(BaseModel):
     quantity = models.DecimalField(
         'Quantidade',
         max_digits=15,
-        decimal_places=6
+        decimal_places=8
     )
     average_cost = models.DecimalField(
         'Preço médio',

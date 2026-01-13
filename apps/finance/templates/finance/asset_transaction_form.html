@@ -51,6 +51,13 @@
             {% endif %}
         </tr>
         <tr>
+            <td><label for="{{ form.total_value.id_for_label }}">Preço total:</label></td>
+            <td>{{ form.total_value }}</td>
+            {% if form.total_value.errors %}
+            <td>{{ form.total_value.errors }}</td>
+            {% endif %}
+        </tr>
+        <tr>
             <td><label for="{{ form.fees.id_for_label }}">Taxas e impostos:</label></td>
             <td>{{ form.fees }}</td>
             {% if form.fees.errors %}
@@ -82,4 +89,86 @@
     <button type="submit">Salvar</button>
     <a href="{% url 'finance:asset_transaction_list' %}">Cancelar</a>
 </form>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const quantityInput = document.getElementById('id_quantity');
+    const priceInput = document.getElementById('id_price');
+    const totalValueInput = document.getElementById('id_total_value');
+    
+    // Rastrear qual campo foi editado por último para evitar loops
+    let lastEdited = null;
+    
+    // Função para calcular preço total a partir de quantidade e preço unitário
+    function calculateTotalFromPrice() {
+        if (lastEdited === 'total_value') return; // Evitar loop
+        
+        const quantity = parseFloat(quantityInput.value) || 0;
+        const price = parseFloat(priceInput.value) || 0;
+        
+        if (quantity > 0 && price > 0) {
+            const total = quantity * price;
+            totalValueInput.value = total.toFixed(2);
+            lastEdited = 'price';
+        }
+    }
+    
+    // Função para calcular preço unitário a partir de quantidade e preço total
+    function calculatePriceFromTotal() {
+        if (lastEdited === 'price') return; // Evitar loop
+        
+        const quantity = parseFloat(quantityInput.value) || 0;
+        const total = parseFloat(totalValueInput.value) || 0;
+        
+        if (quantity > 0 && total > 0) {
+            const price = total / quantity;
+            priceInput.value = price.toFixed(4);
+            lastEdited = 'total_value';
+        }
+    }
+    
+    // Função para recalcular quando quantidade mudar
+    function recalculateOnQuantityChange() {
+        if (lastEdited === 'total_value') {
+            // Se o último editado foi total_value, recalcular price
+            calculatePriceFromTotal();
+        } else {
+            // Caso contrário, recalcular total_value
+            calculateTotalFromPrice();
+        }
+    }
+    
+    // Event listeners
+    if (priceInput) {
+        priceInput.addEventListener('input', function() {
+            lastEdited = 'price';
+            calculateTotalFromPrice();
+        });
+        priceInput.addEventListener('blur', function() {
+            lastEdited = 'price';
+            calculateTotalFromPrice();
+        });
+    }
+    
+    if (totalValueInput) {
+        totalValueInput.addEventListener('input', function() {
+            lastEdited = 'total_value';
+            calculatePriceFromTotal();
+        });
+        totalValueInput.addEventListener('blur', function() {
+            lastEdited = 'total_value';
+            calculatePriceFromTotal();
+        });
+    }
+    
+    if (quantityInput) {
+        quantityInput.addEventListener('input', function() {
+            recalculateOnQuantityChange();
+        });
+        quantityInput.addEventListener('blur', function() {
+            recalculateOnQuantityChange();
+        });
+    }
+});
+</script>
 {% endblock %}
