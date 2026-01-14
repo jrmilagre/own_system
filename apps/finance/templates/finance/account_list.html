@@ -9,8 +9,8 @@
             <table class="table table-hover table-sm mb-0" style="font-size: 0.9rem;">
                 <thead class="table-light">
                     <tr>
-                        <th class="ps-3">Conta</th>
-                        <th>Tipo</th>
+                        <th class="ps-3">Tipo</th>
+                        <th>Conta</th>
                         <th class="text-end pe-3">Saldo</th>
                         <th class="text-center pe-3">Ações</th>
                     </tr>
@@ -19,9 +19,6 @@
                     {% for account in accounts %}
                     <tr>
                         <td class="ps-3" style="cursor: pointer;" onclick="window.location.href='{% url 'finance:historico' account.pk %}'">
-                            <span style="font-weight: 500;">{{ account.name }}</span>
-                        </td>
-                        <td style="cursor: pointer;" onclick="window.location.href='{% url 'finance:historico' account.pk %}'">
                             <div class="d-flex align-items-center gap-2">
                                 {% if account.account_type == 'CASH' %}
                                     <span style="font-size: 1.1rem;">💰</span>
@@ -36,6 +33,9 @@
                                 {% endif %}
                                 <span>{{ account.get_account_type_display }}</span>
                             </div>
+                        </td>
+                        <td style="cursor: pointer;" onclick="window.location.href='{% url 'finance:historico' account.pk %}'">
+                            <span style="font-weight: 500;">{{ account.name }}</span>
                         </td>
                         <td class="text-end pe-3" style="cursor: pointer;" onclick="window.location.href='{% url 'finance:historico' account.pk %}'">
                             <span class="fw-bold {% if account.get_balance < 0 %}text-danger{% else %}text-dark{% endif %}" style="font-size: 0.95rem;">
@@ -63,12 +63,13 @@
                 </tbody>
                 <tfoot class="bg-light">
                     <tr>
-                        <td class="ps-3 fw-bold" colspan="3">Total</td>
+                        <td class="ps-3 fw-bold" colspan="2">Total</td>
                         <td class="text-end pe-3">
                             <span class="fw-bold {% if total_balance < 0 %}text-danger{% else %}text-dark{% endif %}" style="font-size: 1rem;">
                                 R$ {{ total_balance|floatformat:2 }}
                             </span>
                         </td>
+                        <td class="pe-3"></td>
                     </tr>
                 </tfoot>
             </table>

@@ -17,7 +17,7 @@ from .forms import (
     MultipleSchedulerForm, MultipleSchedulerItemForm, MultipleSchedulerItemFormSet,
     MultipleSchedulerRegisterItemFormSet, AssetForm, AssetTransactionForm, AssetPositionForm, InventoryForm,
     CashFlowItemForm, CashFlowCalculationRuleFormSet, TransactionFilterForm, BudgetForm,
-    Money99ImportForm, Money99StagingFilterForm
+    Money99ImportForm, Money99StagingFilterForm, SubcategoryMoveForm
 )
 from .money99_parser import Money99Parser
 from decimal import Decimal, InvalidOperation
@@ -317,6 +317,115 @@ def subcategory_delete(request, category_pk, pk):
     return render(request, 'finance/subcategory_confirm_delete.html', {
         'category': category,
         'subcategory': subcategory
+    })
+
+
+def subcategory_move(request, category_pk, pk):
+    """Exibir formulário para mover subcategoria"""
+    category = get_object_or_404(Category, pk=category_pk)
+    subcategory = get_object_or_404(Subcategory, pk=pk, category=category)
+    
+    # Contar registros que serão afetados
+    transaction_count = Transaction.objects.filter(subcategory=subcategory).count()
+    scheduler_count = Scheduler.objects.filter(subcategory=subcategory).count()
+    budget_count = Budget.objects.filter(subcategory=subcategory).count()
+    
+    # Contar referências no CashFlowItem
+    cash_flow_count = 0
+    cash_flow_items = CashFlowItem.objects.filter(calculation_type='RULES')
+    for item in cash_flow_items:
+        if item.calculation_rules:
+            for rule in item.calculation_rules:
+                if rule.get('type') == 'subcategory' and rule.get('subcategory_id') == subcategory.id:
+                    cash_flow_count += 1
+                    break  # Contar apenas uma vez por item
+    
+    if request.method == 'POST':
+        form = SubcategoryMoveForm(request.POST, source_subcategory=subcategory)
+        if form.is_valid():
+            # Executar a movimentação diretamente
+            destination_subcategory = form.cleaned_data['destination_subcategory']
+            
+            try:
+                with db_transaction.atomic():
+                    # 1. Atualizar Transactions
+                    transactions_updated = Transaction.objects.filter(
+                        subcategory=subcategory
+                    ).update(subcategory=destination_subcategory)
+                    
+                    # 2. Atualizar Schedulers
+                    schedulers_updated = Scheduler.objects.filter(
+                        subcategory=subcategory
+                    ).update(subcategory=destination_subcategory)
+                    
+                    # 3. Atualizar Budgets (com tratamento de unique_together)
+                    budgets_updated = 0
+                    budgets_merged = 0
+                    source_budgets = Budget.objects.filter(subcategory=subcategory)
+                    
+                    for budget in source_budgets:
+                        # Verificar se já existe um budget na subcategoria destino com a mesma data
+                        existing_budget = Budget.objects.filter(
+                            subcategory=destination_subcategory,
+                            budget_date=budget.budget_date
+                        ).first()
+                        
+                        if existing_budget:
+                            # Mesclar: somar os valores
+                            existing_budget.amount += budget.amount
+                            existing_budget.save()
+                            budget.delete()
+                            budgets_merged += 1
+                        else:
+                            # Mover o budget
+                            budget.subcategory = destination_subcategory
+                            budget.save()
+                            budgets_updated += 1
+                    
+                    # 4. Atualizar CashFlowItem calculation_rules
+                    cash_flow_items_updated = 0
+                    cash_flow_rules_updated = 0
+                    cash_flow_items = CashFlowItem.objects.filter(calculation_type='RULES')
+                    
+                    for item in cash_flow_items:
+                        if item.calculation_rules:
+                            updated = False
+                            for rule in item.calculation_rules:
+                                if rule.get('type') == 'subcategory' and rule.get('subcategory_id') == subcategory.id:
+                                    rule['subcategory_id'] = destination_subcategory.id
+                                    updated = True
+                                    cash_flow_rules_updated += 1
+                            
+                            if updated:
+                                item.save(update_fields=['calculation_rules'])
+                                cash_flow_items_updated += 1
+                    
+                    # 5. Deletar a subcategoria origem após mover todos os registros
+                    subcategory_name = str(subcategory)
+                    subcategory.delete()
+                    
+                    messages.success(request, 
+                        f'Movimentação concluída com sucesso! '
+                        f'{transactions_updated} transações, {schedulers_updated} agendamentos, '
+                        f'{budgets_updated + budgets_merged} orçamentos ({budgets_merged} mesclados), '
+                        f'e {cash_flow_rules_updated} regras de fluxo de caixa atualizadas. '
+                        f'A subcategoria "{subcategory_name}" foi deletada.')
+                    
+                    return redirect('finance:subcategory_list', category_pk=category_pk)
+                    
+            except Exception as e:
+                messages.error(request, f'Erro ao mover subcategoria: {str(e)}')
+    else:
+        form = SubcategoryMoveForm(source_subcategory=subcategory)
+    
+    return render(request, 'finance/subcategory_move.html', {
+        'form': form,
+        'category': category,
+        'subcategory': subcategory,
+        'transaction_count': transaction_count,
+        'scheduler_count': scheduler_count,
+        'budget_count': budget_count,
+        'cash_flow_count': cash_flow_count,
     })
 
 

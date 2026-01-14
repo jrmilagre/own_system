@@ -26,6 +26,7 @@ urlpatterns = [
     path('categories/<int:category_pk>/subcategories/create/', views.subcategory_create, name='subcategory_create'),
     path('categories/<int:category_pk>/subcategories/<int:pk>/update/', views.subcategory_update, name='subcategory_update'),
     path('categories/<int:category_pk>/subcategories/<int:pk>/delete/', views.subcategory_delete, name='subcategory_delete'),
+    path('categories/<int:category_pk>/subcategories/<int:pk>/move/', views.subcategory_move, name='subcategory_move'),
     # Transaction URLs
     path('transactions/', views.transaction_list, name='transaction_list'),
     path('transactions/create/', views.transaction_create, name='transaction_create'),

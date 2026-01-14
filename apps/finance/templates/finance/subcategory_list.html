@@ -1,5 +1,7 @@
 {% extends 'finance/base.html' %}
 
+{% block section_name %}Subcategorias - {{ category.category }}{% endblock %}
+
 {% block title %}Subcategorias - {{ category.category }}{% endblock %}
 
 {% block content %}
@@ -9,6 +11,7 @@
         border-radius: 4px;
         font-weight: bold;
         display: inline-block;
+        font-size: 0.85rem;
     }
     .mapping-not-mapped {
         background-color: #ffebee;
@@ -24,43 +27,81 @@
     }
 </style>
 
-<h1>Subcategorias de "{{ category.category }}"</h1>
-<a href="{% url 'finance:subcategory_create' category.pk %}"><button>Criar Nova Subcategoria</button></a>
-<a href="{% url 'finance:category_list' %}"><button>Voltar para Categorias</button></a>
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h1 class="h4 mb-0">Subcategorias de "{{ category.category }}"</h1>
+    <div class="d-flex gap-2">
+        <a href="{% url 'finance:category_list' %}" class="btn btn-secondary btn-sm">
+            <i class="fas fa-arrow-left me-1"></i>Voltar para Categorias
+        </a>
+        <a href="{% url 'finance:subcategory_create' category.pk %}" class="btn btn-primary btn-sm">
+            <i class="fas fa-plus"></i> Criar Nova Subcategoria
+        </a>
+    </div>
+</div>
+
 {% if subcategories %}
-    <table>
-        <thead>
-            <tr>
-                <th>Subcategoria</th>
-                <th>Tipo de Transação Padrão</th>
-                <th>Status no Fluxo de Caixa</th>
-                <th>Ações</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for subcategory in subcategories %}
-            <tr>
-                <td>{{ subcategory.subcategory }}</td>
-                <td>{{ subcategory.get_default_transaction_type_display }}</td>
-                <td>
-                    {% if subcategory.mapping_count == 0 %}
-                        <span class="mapping-status mapping-not-mapped">✗ Não mapeada</span>
-                    {% elif subcategory.mapping_count == 1 %}
-                        <span class="mapping-status mapping-mapped">✓ Mapeada</span>
-                    {% else %}
-                        <span class="mapping-status mapping-duplicate">⚠ Duplicada ({{ subcategory.mapping_count }} vezes)</span>
-                    {% endif %}
-                </td>
-                <td>
-                    <a href="{% url 'finance:subcategory_update' category.pk subcategory.pk %}"><button>Editar</button></a>
-                    <a href="{% url 'finance:subcategory_delete' category.pk subcategory.pk %}"><button>Deletar</button></a>
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+<div class="card shadow-sm border-0">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover table-sm mb-0" style="font-size: 0.9rem;">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ps-3">Subcategoria</th>
+                        <th>Tipo de Transação Padrão</th>
+                        <th>Status no Fluxo de Caixa</th>
+                        <th class="pe-3">Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for subcategory in subcategories %}
+                    <tr>
+                        <td class="ps-3">
+                            <i class="fas fa-tags me-2 text-primary"></i>{{ subcategory.subcategory }}
+                        </td>
+                        <td>
+                            <span class="badge {% if subcategory.default_transaction_type == 'CR' %}bg-success{% else %}bg-danger{% endif %}">
+                                {{ subcategory.get_default_transaction_type_display }}
+                            </span>
+                        </td>
+                        <td>
+                            {% if subcategory.mapping_count == 0 %}
+                                <span class="mapping-status mapping-not-mapped">
+                                    <i class="fas fa-times-circle me-1"></i>Não mapeada
+                                </span>
+                            {% elif subcategory.mapping_count == 1 %}
+                                <span class="mapping-status mapping-mapped">
+                                    <i class="fas fa-check-circle me-1"></i>Mapeada
+                                </span>
+                            {% else %}
+                                <span class="mapping-status mapping-duplicate">
+                                    <i class="fas fa-exclamation-triangle me-1"></i>Duplicada ({{ subcategory.mapping_count }} vezes)
+                                </span>
+                            {% endif %}
+                        </td>
+                        <td class="pe-3">
+                            <div class="btn-group btn-group-sm" role="group">
+                                <a href="{% url 'finance:subcategory_update' category.pk subcategory.pk %}" class="btn btn-outline-primary" title="Editar">
+                                    <i class="fas fa-edit"></i>
+                                </a>
+                                <a href="{% url 'finance:subcategory_move' category.pk subcategory.pk %}" class="btn btn-outline-warning" title="Mover">
+                                    <i class="fas fa-arrows-alt"></i>
+                                </a>
+                                <a href="{% url 'finance:subcategory_delete' category.pk subcategory.pk %}" class="btn btn-outline-danger" title="Deletar">
+                                    <i class="fas fa-trash"></i>
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
 {% else %}
-    <p>Nenhuma subcategoria cadastrada para esta categoria.</p>
+<div class="alert alert-info">
+    <i class="fas fa-info-circle me-2"></i>Nenhuma subcategoria cadastrada para esta categoria.
+</div>
 {% endif %}
 {% endblock %}
 

@@ -945,3 +945,37 @@ class Money99StagingFilterForm(forms.Form):
         super().__init__(*args, **kwargs)
         # Este formulário usa campos CharField simples para filtros de texto
         # Não há necessidade de configurar querysets
+
+
+class SubcategoryMoveForm(forms.Form):
+    """Formulário para mover subcategoria - seleciona subcategoria destino"""
+    destination_subcategory = forms.ModelChoiceField(
+        queryset=Subcategory.objects.all(),
+        label='Subcategoria de destino',
+        required=True,
+        widget=forms.Select(attrs={'required': True, 'class': 'form-select'})
+    )
+    
+    def __init__(self, *args, **kwargs):
+        self.source_subcategory = kwargs.pop('source_subcategory', None)
+        super().__init__(*args, **kwargs)
+        
+        if self.source_subcategory:
+            # Excluir a subcategoria origem das opções
+            self.fields['destination_subcategory'].queryset = Subcategory.objects.exclude(
+                pk=self.source_subcategory.pk
+            ).order_by('category__category', 'subcategory')
+    
+    def clean(self):
+        cleaned_data = super().clean()
+        destination_subcategory = cleaned_data.get('destination_subcategory')
+        
+        if destination_subcategory and self.source_subcategory:
+            # Validação adicional: garantir que não seja a mesma subcategoria
+            # (já tratado no __init__, mas adicionar aqui como segurança)
+            if destination_subcategory.pk == self.source_subcategory.pk:
+                raise forms.ValidationError({
+                    'destination_subcategory': 'A subcategoria de destino deve ser diferente da origem.'
+                })
+        
+        return cleaned_data
