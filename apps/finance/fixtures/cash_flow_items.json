@@ -1,0 +1,218 @@
+[
+    {
+        "model": "finance.cashflowitem",
+        "pk": null,
+        "fields": {
+            "code": "1",
+            "description": "Início",
+            "calculation_type": "SUBTOTAL",
+            "order": 1,
+            "calculation_rules": [],
+            "accumulates_in": null
+        }
+    },
+    {
+        "model": "finance.cashflowitem",
+        "pk": null,
+        "fields": {
+            "code": "1.01",
+            "description": "Renda (marido)",
+            "calculation_type": "SUBTOTAL",
+            "order": 2,
+            "calculation_rules": [],
+            "accumulates_in": null
+        }
+    },
+    {
+        "model": "finance.cashflowitem",
+        "pk": null,
+        "fields": {
+            "code": "2",
+            "description": "Caixa bruto",
+            "calculation_type": "SUBTOTAL",
+            "order": 3,
+            "calculation_rules": [],
+            "accumulates_in": null
+        }
+    },
+    {
+        "model": "finance.cashflowitem",
+        "pk": null,
+        "fields": {
+            "code": "2.01",
+            "description": "Despesas fixas",
+            "calculation_type": "SUBTOTAL",
+            "order": 4,
+            "calculation_rules": [],
+            "accumulates_in": null
+        }
+    },
+    {
+        "model": "finance.cashflowitem",
+        "pk": null,
+        "fields": {
+            "code": "3",
+            "description": "Caixa após despesas fixas",
+            "calculation_type": "SUBTOTAL",
+            "order": 5,
+            "calculation_rules": [],
+            "accumulates_in": null
+        }
+    },
+    {
+        "model": "finance.cashflowitem",
+        "pk": null,
+        "fields": {
+            "code": "3.01",
+            "description": "Despesas variáveis",
+            "calculation_type": "SUBTOTAL",
+            "order": 6,
+            "calculation_rules": [],
+            "accumulates_in": null
+        }
+    },
+    {
+        "model": "finance.cashflowitem",
+        "pk": null,
+        "fields": {
+            "code": "4",
+            "description": "Caixa após despesas variáveis",
+            "calculation_type": "SUBTOTAL",
+            "order": 7,
+            "calculation_rules": [],
+            "accumulates_in": null
+        }
+    },
+    {
+        "model": "finance.cashflowitem",
+        "pk": null,
+        "fields": {
+            "code": "4.01",
+            "description": "Resultado financeiro",
+            "calculation_type": "SUBTOTAL",
+            "order": 8,
+            "calculation_rules": [],
+            "accumulates_in": null
+        }
+    },
+    {
+        "model": "finance.cashflowitem",
+        "pk": null,
+        "fields": {
+            "code": "4.01.01",
+            "description": "Receitas financeiras",
+            "calculation_type": "SUBTOTAL",
+            "order": 9,
+            "calculation_rules": [],
+            "accumulates_in": null
+        }
+    },
+    {
+        "model": "finance.cashflowitem",
+        "pk": null,
+        "fields": {
+            "code": "4.01.02",
+            "description": "Despesas financeiras",
+            "calculation_type": "SUBTOTAL",
+            "order": 10,
+            "calculation_rules": [],
+            "accumulates_in": null
+        }
+    },
+    {
+        "model": "finance.cashflowitem",
+        "pk": null,
+        "fields": {
+            "code": "5",
+            "description": "Caixa após resultado financeiro",
+            "calculation_type": "SUBTOTAL",
+            "order": 11,
+            "calculation_rules": [],
+            "accumulates_in": null
+        }
+    },
+    {
+        "model": "finance.cashflowitem",
+        "pk": null,
+        "fields": {
+            "code": "5.01",
+            "description": "Resultado patrimonial",
+            "calculation_type": "SUBTOTAL",
+            "order": 12,
+            "calculation_rules": [],
+            "accumulates_in": null
+        }
+    },
+    {
+        "model": "finance.cashflowitem",
+        "pk": null,
+        "fields": {
+            "code": "5.01.01",
+            "description": "Aportes",
+            "calculation_type": "SUBTOTAL",
+            "order": 13,
+            "calculation_rules": [],
+            "accumulates_in": null
+        }
+    },
+    {
+        "model": "finance.cashflowitem",
+        "pk": null,
+        "fields": {
+            "code": "5.01.02",
+            "description": "Resgates",
+            "calculation_type": "SUBTOTAL",
+            "order": 14,
+            "calculation_rules": [],
+            "accumulates_in": null
+        }
+    },
+    {
+        "model": "finance.cashflowitem",
+        "pk": null,
+        "fields": {
+            "code": "6",
+            "description": "Caixa após resultado patrimonial",
+            "calculation_type": "SUBTOTAL",
+            "order": 15,
+            "calculation_rules": [],
+            "accumulates_in": null
+        }
+    },
+    {
+        "model": "finance.cashflowitem",
+        "pk": null,
+        "fields": {
+            "code": "6.01",
+            "description": "Captação de recursos",
+            "calculation_type": "SUBTOTAL",
+            "order": 16,
+            "calculation_rules": [],
+            "accumulates_in": null
+        }
+    },
+    {
+        "model": "finance.cashflowitem",
+        "pk": null,
+        "fields": {
+            "code": "6.02",
+            "description": "Dispêndio de recursos",
+            "calculation_type": "SUBTOTAL",
+            "order": 17,
+            "calculation_rules": [],
+            "accumulates_in": null
+        }
+    },
+    {
+        "model": "finance.cashflowitem",
+        "pk": null,
+        "fields": {
+            "code": "7",
+            "description": "Caixa líquido",
+            "calculation_type": "SUBTOTAL",
+            "order": 18,
+            "calculation_rules": [],
+            "accumulates_in": null
+        }
+    }
+]
