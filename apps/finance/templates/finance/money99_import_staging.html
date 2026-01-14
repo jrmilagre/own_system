@@ -1,0 +1,636 @@
+{% extends 'finance/base.html' %}
+{% load static %}
+
+{% block title %}Revisar Transações - Money99{% endblock %}
+
+{% block section_name %}Revisar Transações do Money99{% endblock %}
+
+{% block sidebar %}
+<h6 class="px-3 text-uppercase text-muted" style="font-size: 0.7rem; color: #888 !important;">Ações</h6>
+<ul class="nav flex-column">
+    <li class="nav-item">
+        <a href="{% url 'finance:money99_import_upload' %}"><i class="fas fa-upload me-2"></i> Novo upload</a>
+    </li>
+    <li class="nav-item">
+        <a href="{% url 'finance:transaction_list' %}"><i class="fas fa-list me-2"></i> Ver transações</a>
+    </li>
+</ul>
+{% endblock %}
+
+{% block content %}
+<div class="card mb-3">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><i class="fas fa-filter me-2"></i>Filtros</h5>
+        <span class="badge bg-primary">{{ total_count }} total / {{ filtered_count }} filtradas / {{ selected_count }} selecionadas</span>
+    </div>
+    <div class="card-body">
+        <form method="get" action="{% url 'finance:money99_import_staging' %}" id="filterForm" class="row g-3">
+            <div class="col-md-6 col-lg-2">
+                <label for="{{ filter_form.date_start.id_for_label }}" class="form-label">{{ filter_form.date_start.label }}</label>
+                {{ filter_form.date_start }}
+            </div>
+            <div class="col-md-6 col-lg-2">
+                <label for="{{ filter_form.date_end.id_for_label }}" class="form-label">{{ filter_form.date_end.label }}</label>
+                {{ filter_form.date_end }}
+            </div>
+            <div class="col-md-6 col-lg-2">
+                <label for="{{ filter_form.account.id_for_label }}" class="form-label">{{ filter_form.account.label }}</label>
+                {{ filter_form.account }}
+            </div>
+            <div class="col-md-6 col-lg-2">
+                <label for="{{ filter_form.beneficiary.id_for_label }}" class="form-label">{{ filter_form.beneficiary.label }}</label>
+                {{ filter_form.beneficiary }}
+            </div>
+            <div class="col-md-6 col-lg-2">
+                <label for="{{ filter_form.category.id_for_label }}" class="form-label">{{ filter_form.category.label }}</label>
+                {{ filter_form.category }}
+            </div>
+            <div class="col-md-6 col-lg-2">
+                <label for="{{ filter_form.transaction_type.id_for_label }}" class="form-label">{{ filter_form.transaction_type.label }}</label>
+                {{ filter_form.transaction_type }}
+            </div>
+            <div class="col-md-6 col-lg-2">
+                <label for="{{ filter_form.min_value.id_for_label }}" class="form-label">{{ filter_form.min_value.label }}</label>
+                {{ filter_form.min_value }}
+            </div>
+            <div class="col-md-6 col-lg-2">
+                <label for="{{ filter_form.max_value.id_for_label }}" class="form-label">{{ filter_form.max_value.label }}</label>
+                {{ filter_form.max_value }}
+            </div>
+            <div class="col-md-6 col-lg-2">
+                <label for="{{ filter_form.import_status.id_for_label }}" class="form-label">{{ filter_form.import_status.label }}</label>
+                {{ filter_form.import_status }}
+            </div>
+            <div class="col-12">
+                <button type="submit" class="btn btn-primary btn-sm">
+                    <i class="fas fa-search me-1"></i>Filtrar
+                </button>
+                <a href="{% url 'finance:money99_import_staging' %}" class="btn btn-secondary btn-sm">
+                    <i class="fas fa-times me-1"></i>Limpar
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><i class="fas fa-table me-2"></i>Transações</h5>
+        <div>
+            <button type="button" class="btn btn-sm btn-outline-primary" id="selectAllBtn">
+                <i class="fas fa-check-square me-1"></i>Selecionar todas
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="deselectAllBtn">
+                <i class="fas fa-square me-1"></i>Deselecionar todas
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-danger" id="removeSelectedBtn">
+                <i class="fas fa-trash me-1"></i>Remover selecionadas
+            </button>
+            <button type="button" class="btn btn-sm btn-success" id="importBtn">
+                <i class="fas fa-download me-1"></i>Importar selecionadas
+            </button>
+        </div>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-striped table-hover" id="transactionsTable">
+                <thead>
+                    <tr>
+                        <th width="40">
+                            <input type="checkbox" id="selectAllCheckbox" title="Selecionar todas">
+                        </th>
+                        <th class="sortable" data-sort="transaction_date" style="cursor: pointer;">
+                            Data <i class="fas fa-sort sort-icon" style="opacity: 0.3;"></i>
+                        </th>
+                        <th class="sortable" data-sort="account" style="cursor: pointer;">
+                            Conta <i class="fas fa-sort sort-icon" style="opacity: 0.3;"></i>
+                        </th>
+                        <th class="sortable" data-sort="beneficiary" style="cursor: pointer;">
+                            Beneficiário <i class="fas fa-sort sort-icon" style="opacity: 0.3;"></i>
+                        </th>
+                        <th class="sortable" data-sort="category" style="cursor: pointer;">
+                            Categoria <i class="fas fa-sort sort-icon" style="opacity: 0.3;"></i>
+                        </th>
+                        <th class="sortable" data-sort="subcategory" style="cursor: pointer;">
+                            Subcategoria <i class="fas fa-sort sort-icon" style="opacity: 0.3;"></i>
+                        </th>
+                        <th class="sortable" data-sort="transaction_type" style="cursor: pointer;">
+                            Tipo <i class="fas fa-sort sort-icon" style="opacity: 0.3;"></i>
+                        </th>
+                        <th class="sortable" data-sort="value" style="cursor: pointer;">
+                            Valor <i class="fas fa-sort sort-icon" style="opacity: 0.3;"></i>
+                        </th>
+                        <th class="sortable" data-sort="memo" style="cursor: pointer;">
+                            Memo <i class="fas fa-sort sort-icon" style="opacity: 0.3;"></i>
+                        </th>
+                        <th width="120">Status</th>
+                        <th width="80">Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for transaction in transactions %}
+                    <tr data-index="{{ transaction.original_index|default:forloop.counter0 }}" data-selected="{{ transaction.selected|yesno:'true,false' }}" {% if transaction.is_imported %}class="table-secondary"{% endif %}>
+                        <td>
+                            <input type="checkbox" class="transaction-checkbox" 
+                                   {% if transaction.selected %}checked{% endif %}>
+                        </td>
+                        <td>
+                            <input type="date" class="form-control form-control-sm editable-field" 
+                                   data-field="transaction_date" 
+                                   value="{{ transaction.transaction_date|date:'Y-m-d' }}" 
+                                   style="min-width: 120px;">
+                        </td>
+                        <td>
+                            <input type="text" class="form-control form-control-sm editable-field" 
+                                   data-field="account" 
+                                   value="{{ transaction.account }}" 
+                                   style="min-width: 150px;">
+                        </td>
+                        <td>
+                            <input type="text" class="form-control form-control-sm editable-field" 
+                                   data-field="beneficiary" 
+                                   value="{{ transaction.beneficiary|default:'' }}" 
+                                   style="min-width: 150px;">
+                        </td>
+                        <td>
+                            <input type="text" class="form-control form-control-sm editable-field" 
+                                   data-field="category" 
+                                   value="{{ transaction.category|default:'' }}" 
+                                   style="min-width: 120px;">
+                        </td>
+                        <td>
+                            <input type="text" class="form-control form-control-sm editable-field" 
+                                   data-field="subcategory" 
+                                   value="{{ transaction.subcategory|default:'' }}" 
+                                   style="min-width: 120px;">
+                        </td>
+                        <td>
+                            <select class="form-select form-select-sm editable-field" 
+                                    data-field="transaction_type" 
+                                    style="min-width: 80px;">
+                                <option value="CR" {% if transaction.transaction_type == 'CR' %}selected{% endif %}>Crédito</option>
+                                <option value="DB" {% if transaction.transaction_type == 'DB' %}selected{% endif %}>Débito</option>
+                            </select>
+                        </td>
+                        <td>
+                            <input type="number" step="0.01" class="form-control form-control-sm editable-field" 
+                                   data-field="value" 
+                                   value="{{ transaction.value }}" 
+                                   style="min-width: 100px;">
+                        </td>
+                        <td>
+                            <input type="text" class="form-control form-control-sm editable-field" 
+                                   data-field="memo" 
+                                   value="{{ transaction.memo|default:'' }}" 
+                                   style="min-width: 200px;">
+                        </td>
+                        <td>
+                            {% if transaction.is_imported %}
+                                <span class="badge bg-success" title="Já importada">
+                                    <i class="fas fa-check-circle me-1"></i>Importada
+                                </span>
+                            {% else %}
+                                <span class="badge bg-secondary" title="Não importada">
+                                    <i class="fas fa-clock me-1"></i>Pendente
+                                </span>
+                            {% endif %}
+                            {% if transaction.edited %}
+                                <span class="badge bg-warning ms-1" title="Editado">
+                                    <i class="fas fa-edit"></i>
+                                </span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <button type="button" class="btn btn-sm btn-outline-danger remove-item-btn" 
+                                    data-index="{{ transaction.original_index|default:forloop.counter0 }}"
+                                    title="Remover transação">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="12" class="text-center text-muted">
+                            Nenhuma transação encontrada.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Paginação -->
+{% if transactions.has_other_pages %}
+<nav aria-label="Paginação de transações" class="mt-3">
+    <ul class="pagination justify-content-center">
+        {% if transactions.has_previous %}
+            <li class="page-item">
+                <a class="page-link" href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page=1">
+                    <i class="fas fa-angle-double-left"></i> Primeira
+                </a>
+            </li>
+            <li class="page-item">
+                <a class="page-link" href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ transactions.previous_page_number }}">
+                    <i class="fas fa-angle-left"></i> Anterior
+                </a>
+            </li>
+        {% endif %}
+        
+        <li class="page-item active">
+            <span class="page-link">
+                Página {{ transactions.number }} de {{ transactions.paginator.num_pages }}
+            </span>
+        </li>
+        
+        {% if transactions.has_next %}
+            <li class="page-item">
+                <a class="page-link" href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ transactions.next_page_number }}">
+                    Próxima <i class="fas fa-angle-right"></i>
+                </a>
+            </li>
+            <li class="page-item">
+                <a class="page-link" href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ transactions.paginator.num_pages }}">
+                    Última <i class="fas fa-angle-double-right"></i>
+                </a>
+            </li>
+        {% endif %}
+    </ul>
+</nav>
+{% endif %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+    // Obter índices reais das transações na página atual
+    const transactions = [];
+    document.querySelectorAll('#transactionsTable tbody tr[data-index]').forEach((row, idx) => {
+        const originalIndex = parseInt(row.getAttribute('data-index'));
+        transactions.push({
+            row: row,
+            index: originalIndex,
+            checkbox: row.querySelector('.transaction-checkbox')
+        });
+    });
+
+    // Selecionar/Deselecionar todas
+    const selectAllCheckbox = document.getElementById('selectAllCheckbox');
+    const selectAllBtn = document.getElementById('selectAllBtn');
+    const deselectAllBtn = document.getElementById('deselectAllBtn');
+    
+    function updateSelectAllState() {
+        const allChecked = transactions.every(t => t.checkbox.checked);
+        selectAllCheckbox.checked = allChecked;
+    }
+    
+    selectAllCheckbox.addEventListener('change', function() {
+        transactions.forEach(t => {
+            t.checkbox.checked = this.checked;
+            updateRowSelection(t.row, this.checked);
+        });
+    });
+    
+    selectAllBtn.addEventListener('click', function() {
+        transactions.forEach(t => {
+            t.checkbox.checked = true;
+            updateRowSelection(t.row, true);
+        });
+        selectAllCheckbox.checked = true;
+    });
+    
+    deselectAllBtn.addEventListener('click', function() {
+        transactions.forEach(t => {
+            t.checkbox.checked = false;
+            updateRowSelection(t.row, false);
+        });
+        selectAllCheckbox.checked = false;
+    });
+    
+    transactions.forEach(t => {
+        t.checkbox.addEventListener('change', function() {
+            updateRowSelection(t.row, this.checked);
+            updateSelectAllState();
+            
+            // Salvar estado de seleção via AJAX
+            fetch('{% url "finance:money99_import_edit_item" %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: JSON.stringify({
+                    index: t.index,
+                    field: 'selected',
+                    value: this.checked
+                })
+            })
+            .catch(error => {
+                console.error('Erro ao salvar seleção:', error);
+            });
+        });
+    });
+    
+    function updateRowSelection(row, selected) {
+        row.setAttribute('data-selected', selected);
+        if (selected) {
+            row.classList.add('table-primary');
+        } else {
+            row.classList.remove('table-primary');
+        }
+    }
+    
+    // Edição inline
+    document.querySelectorAll('.editable-field').forEach(field => {
+        let originalValue = field.value;
+        
+        field.addEventListener('change', function() {
+            const row = this.closest('tr');
+            const index = parseInt(row.getAttribute('data-index'));
+            const fieldName = this.getAttribute('data-field');
+            const newValue = this.value;
+            
+            // Atualizar visualmente
+            row.querySelector('td:last-child').innerHTML = '<span class="badge bg-warning" title="Editado">E</span>';
+            
+            // Salvar na sessão via AJAX
+            fetch('{% url "finance:money99_import_edit_item" %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: JSON.stringify({
+                    index: index,
+                    field: fieldName,
+                    value: newValue
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (!data.success) {
+                    alert('Erro ao salvar: ' + (data.error || 'Erro desconhecido'));
+                    this.value = originalValue;
+                }
+            })
+            .catch(error => {
+                console.error('Erro:', error);
+                alert('Erro ao salvar alteração');
+                this.value = originalValue;
+            });
+        });
+    });
+    
+    // Remover selecionadas
+    document.getElementById('removeSelectedBtn').addEventListener('click', function() {
+        const selectedIndices = transactions
+            .filter(t => t.checkbox.checked)
+            .map(t => t.index);
+        
+        if (selectedIndices.length === 0) {
+            alert('Selecione pelo menos uma transação para remover');
+            return;
+        }
+        
+        if (!confirm(`Tem certeza que deseja remover ${selectedIndices.length} transação(ões)?`)) {
+            return;
+        }
+        
+        fetch('{% url "finance:money99_import_remove_item" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify({
+                indices: selectedIndices
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                alert('Erro ao remover: ' + (data.error || 'Erro desconhecido'));
+            }
+        })
+        .catch(error => {
+            console.error('Erro:', error);
+            alert('Erro ao remover transações');
+        });
+    });
+    
+    // Importar selecionadas
+    document.getElementById('importBtn').addEventListener('click', function() {
+        // Coletar transações selecionadas da página atual para validação
+        const selectedIndicesCurrentPage = transactions
+            .filter(t => t.checkbox.checked)
+            .map(t => t.index);
+        
+        // Verificar se há pelo menos uma selecionada na página atual
+        // (mas vamos importar TODAS as selecionadas de todas as páginas)
+        if (selectedIndicesCurrentPage.length === 0 && {{ transactions.paginator.num_pages|default:1 }} === 1) {
+            alert('Selecione pelo menos uma transação para importar');
+            return;
+        }
+        
+        // Avisar o usuário que TODAS as transações selecionadas serão importadas
+        const totalPages = {{ transactions.paginator.num_pages|default:1 }};
+        let confirmMessage = 'Tem certeza que deseja importar todas as transações selecionadas';
+        if (totalPages > 1) {
+            confirmMessage += ' (de todas as páginas)';
+        }
+        confirmMessage += '?';
+        
+        if (!confirm(confirmMessage)) {
+            return;
+        }
+        
+        // Coletar filtros atuais da URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const filters = {
+            date_start: urlParams.get('date_start') || '',
+            date_end: urlParams.get('date_end') || '',
+            account: urlParams.get('account') || '',
+            beneficiary: urlParams.get('beneficiary') || '',
+            category: urlParams.get('category') || '',
+            transaction_type: urlParams.get('transaction_type') || '',
+            min_value: urlParams.get('min_value') || '',
+            max_value: urlParams.get('max_value') || ''
+        };
+        
+        // Verificar se há filtros aplicados
+        const hasFilters = Object.values(filters).some(v => v !== '');
+        
+        // Enviar lista vazia para indicar que deve importar TODAS as selecionadas
+        // Se há filtros, a view vai aplicar os filtros antes de verificar selected
+        fetch('{% url "finance:money99_import_execute" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify({
+                selected_indices: [],  // Lista vazia = importar todas com selected=True
+                filters: hasFilters ? filters : null  // Enviar filtros se houver
+            })
+        })
+        .then(response => {
+            if (response.redirected) {
+                window.location.href = response.url;
+            } else {
+                return response.json();
+            }
+        })
+        .then(data => {
+            if (data && !data.success) {
+                alert('Erro ao importar: ' + (data.error || 'Erro desconhecido'));
+            }
+        })
+        .catch(error => {
+            console.error('Erro:', error);
+            // Se houver redirecionamento, o erro é esperado
+            if (!error.message.includes('redirected')) {
+                alert('Erro ao importar transações');
+            }
+        });
+    });
+    
+    // Inicializar estado visual das linhas
+    transactions.forEach(t => {
+        updateRowSelection(t.row, t.checkbox.checked);
+    });
+    updateSelectAllState();
+    
+    // Ordenação de tabela
+    let currentSort = {
+        column: null,
+        direction: 'asc' // 'asc' ou 'desc'
+    };
+    
+    function getCellValue(row, columnIndex) {
+        const cell = row.cells[columnIndex];
+        if (!cell) return '';
+        
+        const input = cell.querySelector('input, select');
+        if (input) {
+            if (input.type === 'date') {
+                return input.value || '';
+            } else if (input.type === 'number') {
+                return parseFloat(input.value) || 0;
+            } else {
+                return (input.value || '').toLowerCase();
+            }
+        }
+        return (cell.textContent || '').trim().toLowerCase();
+    }
+    
+    function sortTable(columnIndex, sortField) {
+        const tbody = document.querySelector('#transactionsTable tbody');
+        const rows = Array.from(tbody.querySelectorAll('tr[data-index]'));
+        
+        // Determinar direção da ordenação
+        if (currentSort.column === sortField) {
+            // Mesma coluna: alternar direção
+            currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
+        } else {
+            // Nova coluna: começar com crescente
+            currentSort.column = sortField;
+            currentSort.direction = 'asc';
+        }
+        
+        // Ordenar linhas
+        rows.sort((a, b) => {
+            let aValue = getCellValue(a, columnIndex);
+            let bValue = getCellValue(b, columnIndex);
+            
+            // Tratamento especial para valores numéricos
+            if (sortField === 'value') {
+                aValue = parseFloat(aValue) || 0;
+                bValue = parseFloat(bValue) || 0;
+            } else if (sortField === 'transaction_date') {
+                // Comparar datas
+                aValue = aValue ? new Date(aValue) : new Date(0);
+                bValue = bValue ? new Date(bValue) : new Date(0);
+            }
+            
+            // Comparação
+            let comparison = 0;
+            if (aValue < bValue) {
+                comparison = -1;
+            } else if (aValue > bValue) {
+                comparison = 1;
+            }
+            
+            // Aplicar direção
+            return currentSort.direction === 'asc' ? comparison : -comparison;
+        });
+        
+        // Reordenar DOM
+        rows.forEach(row => tbody.appendChild(row));
+        
+        // Atualizar indicadores visuais
+        updateSortIndicators(sortField);
+    }
+    
+    function updateSortIndicators(activeColumn) {
+        // Remover todos os indicadores
+        document.querySelectorAll('.sort-icon').forEach(icon => {
+            icon.className = 'fas fa-sort sort-icon';
+            icon.style.opacity = '0.3';
+        });
+        
+        // Adicionar indicador na coluna ativa
+        const activeHeader = document.querySelector(`th[data-sort="${activeColumn}"]`);
+        if (activeHeader) {
+            const icon = activeHeader.querySelector('.sort-icon');
+            if (icon) {
+                if (currentSort.direction === 'asc') {
+                    icon.className = 'fas fa-sort-up sort-icon';
+                    icon.style.opacity = '1';
+                } else {
+                    icon.className = 'fas fa-sort-down sort-icon';
+                    icon.style.opacity = '1';
+                }
+            }
+        }
+    }
+    
+    // Adicionar event listeners nos cabeçalhos clicáveis
+    document.querySelectorAll('th.sortable').forEach(header => {
+        header.addEventListener('click', function(e) {
+            // Não ordenar se clicar no ícone diretamente (evitar conflito)
+            if (e.target.tagName === 'I') {
+                e.stopPropagation();
+                return;
+            }
+            
+            const sortField = this.getAttribute('data-sort');
+            const columnIndex = Array.from(this.parentElement.children).indexOf(this);
+            sortTable(columnIndex, sortField);
+        });
+        
+        // Adicionar hover effect
+        header.addEventListener('mouseenter', function() {
+            if (this.getAttribute('data-sort') !== currentSort.column) {
+                const icon = this.querySelector('.sort-icon');
+                if (icon && icon.style.opacity === '0.3') {
+                    icon.style.opacity = '0.6';
+                }
+            }
+        });
+        
+        header.addEventListener('mouseleave', function() {
+            if (this.getAttribute('data-sort') !== currentSort.column) {
+                const icon = this.querySelector('.sort-icon');
+                if (icon && icon.style.opacity === '0.6') {
+                    icon.style.opacity = '0.3';
+                }
+            }
+        });
+    });
+})();
+</script>
+{% endblock %}

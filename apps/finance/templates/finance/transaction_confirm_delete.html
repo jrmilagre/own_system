@@ -1,15 +1,96 @@
 {% extends 'finance/base.html' %}
 
+{% block section_name %}Deletar Transação{% endblock %}
+
 {% block title %}Deletar Transação{% endblock %}
 
 {% block content %}
-<h1>Deletar Transação</h1>
-<p>Tem certeza que deseja deletar a transação "{{ transaction.account }} - {{ transaction.beneficiary }} - {{ transaction.value }}"?</p>
-<form method="post">
-    {% csrf_token %}
-    <button type="submit">Confirmar Exclusão</button>
-    <a href="{% url 'finance:transaction_list' %}">Cancelar</a>
-</form>
+<div class="card shadow-sm border-0">
+    <div class="card-header bg-danger text-white">
+        <h5 class="mb-0">
+            <i class="fas fa-exclamation-triangle me-2"></i>Confirmar Exclusão
+        </h5>
+    </div>
+    <div class="card-body">
+        <p class="mb-3">Tem certeza que deseja deletar esta transação?</p>
+        
+        <div class="table-responsive mb-4">
+            <table class="table table-bordered">
+                <tbody>
+                    <tr>
+                        <th width="150">Data:</th>
+                        <td>{{ transaction.transaction_date|date:"d/m/Y" }}</td>
+                    </tr>
+                    <tr>
+                        <th>Conta:</th>
+                        <td>{{ transaction.account }}</td>
+                    </tr>
+                    {% if transaction.beneficiary %}
+                    <tr>
+                        <th>Beneficiário:</th>
+                        <td>{{ transaction.beneficiary }}</td>
+                    </tr>
+                    {% endif %}
+                    {% if transaction.subcategory %}
+                    <tr>
+                        <th>Subcategoria:</th>
+                        <td>{{ transaction.subcategory }}</td>
+                    </tr>
+                    {% endif %}
+                    <tr>
+                        <th>Tipo:</th>
+                        <td>
+                            <span class="badge {% if transaction.transaction_type == 'CR' %}bg-success{% else %}bg-danger{% endif %}">
+                                {{ transaction.get_transaction_type_display }}
+                            </span>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Valor:</th>
+                        <td class="fw-bold {% if transaction.transaction_type == 'DB' %}text-danger{% else %}text-success{% endif %}">
+                            R$ {{ transaction.value|floatformat:2 }}
+                        </td>
+                    </tr>
+                    {% if transaction.is_transfer %}
+                    <tr>
+                        <th>Tipo:</th>
+                        <td>
+                            <span class="badge bg-info">Transferência</span>
+                            {% if transaction.get_transfer_pair %}
+                            <span class="badge bg-secondary ms-2">Par encontrado</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endif %}
+                    {% if transaction.notes %}
+                    <tr>
+                        <th>Anotações:</th>
+                        <td>{{ transaction.notes }}</td>
+                    </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+        
+        <p class="text-danger small mb-4">
+            <i class="fas fa-info-circle me-1"></i>Esta ação não pode ser desfeita.
+            {% if transaction.is_transfer %}
+            <br><i class="fas fa-info-circle me-1"></i>Ambas as transações da transferência serão deletadas.
+            {% endif %}
+        </p>
+        
+        <form method="post">
+            {% csrf_token %}
+            <div class="d-flex gap-2">
+                <a href="{% url 'finance:transaction_list' %}" class="btn btn-secondary">
+                    <i class="fas fa-times me-1"></i>Cancelar
+                </a>
+                <button type="submit" class="btn btn-danger">
+                    <i class="fas fa-trash me-1"></i>Confirmar Exclusão
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
 {% endblock %}
-
 

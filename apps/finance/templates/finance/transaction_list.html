@@ -69,6 +69,7 @@
                     <tr>
                         <th class="ps-3">Transação</th>
                         <th>Conta</th>
+                        <th>Subcategoria</th>
                         <th>Tipo</th>
                         <th class="text-end">Valor</th>
                         <th>Data</th>
@@ -78,7 +79,7 @@
                 <tbody>
                     {% for group in multiple_groups %}
                     <tr class="table-info multiple-group-header" data-group-id="{{ group.group_id }}">
-                        <td colspan="6" class="ps-3">
+                        <td colspan="7" class="ps-3">
                             <div class="d-flex align-items-center gap-2">
                                 <span style="font-size: 1.1rem;">📦</span>
                                 <strong>Transação Múltipla</strong> 
@@ -90,7 +91,7 @@
                         </td>
                     </tr>
                     <tr class="multiple-group-details" data-group-id="{{ group.group_id }}" style="display: none;">
-                        <td colspan="6" class="ps-4">
+                        <td colspan="7" class="ps-4">
                             <div class="table-responsive">
                                 <table class="table table-sm table-bordered mb-2">
                                     <thead class="table-secondary">
@@ -151,6 +152,13 @@
                         </td>
                         <td>{{ transaction.account }}</td>
                         <td>
+                            {% if transaction.subcategory %}
+                                {{ transaction.subcategory }}
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td>
                             <span class="badge {% if transaction.transaction_type == 'CR' %}bg-success{% else %}bg-danger{% endif %}">
                                 {{ transaction.get_transaction_type_display }}
                             </span>
@@ -184,7 +192,7 @@
                 </tbody>
                 <tfoot class="table-light">
                     <tr>
-                        <td colspan="3" class="text-end fw-bold">Subtotal (página):</td>
+                        <td colspan="4" class="text-end fw-bold">Subtotal (página):</td>
                         <td class="text-end fw-bold">R$ {{ subtotal|floatformat:2 }}</td>
                         <td colspan="2"></td>
                     </tr>

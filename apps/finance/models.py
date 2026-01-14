@@ -420,6 +420,14 @@ class Transaction(BaseModel):
         default=False,
         help_text='Indica se esta transação faz parte de uma transação múltipla'
     )
+    import_hash = models.CharField(
+        'Hash de importação',
+        max_length=32,
+        unique=True,
+        null=True,
+        blank=True,
+        help_text='Hash MD5 gerado a partir dos dados originais da importação para prevenir duplicatas'
+    )
 
     class Meta:
         verbose_name = 'Transação'

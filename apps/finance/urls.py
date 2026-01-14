@@ -88,5 +88,11 @@ urlpatterns = [
     path('cash-flow-items/create/', views.cash_flow_item_create, name='cash_flow_item_create'),
     path('cash-flow-items/<int:pk>/update/', views.cash_flow_item_update, name='cash_flow_item_update'),
     path('cash-flow-items/<int:pk>/delete/', views.cash_flow_item_delete, name='cash_flow_item_delete'),
+    # Money99 Import URLs
+    path('conectividade/money99/upload/', views.money99_import_upload, name='money99_import_upload'),
+    path('conectividade/money99/staging/', views.money99_import_staging, name='money99_import_staging'),
+    path('conectividade/money99/edit-item/', views.money99_import_edit_item, name='money99_import_edit_item'),
+    path('conectividade/money99/remove-item/', views.money99_import_remove_item, name='money99_import_remove_item'),
+    path('conectividade/money99/execute/', views.money99_import_execute, name='money99_import_execute'),
 ]
 

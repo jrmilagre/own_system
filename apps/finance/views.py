@@ -5,16 +5,23 @@ from django.http import JsonResponse
 from django.db import transaction as db_transaction
 from django.core.paginator import Paginator
 from django.db.models import Q
+from django.db import close_old_connections
 from datetime import datetime, date
 import uuid
+import json as json_module
+import time
 from .models import Account, Beneficiary, Category, Subcategory, Transaction, Scheduler, Asset, AssetTransaction, AssetPosition, Budget, Inventory, CashFlowItem
 from .forms import (
     AccountForm, BeneficiaryForm, CategoryForm, SubcategoryForm, TransactionForm, SchedulerForm,
     MultipleTransactionForm, MultipleTransactionItemForm, MultipleTransactionItemFormSet,
     MultipleSchedulerForm, MultipleSchedulerItemForm, MultipleSchedulerItemFormSet,
     MultipleSchedulerRegisterItemFormSet, AssetForm, AssetTransactionForm, AssetPositionForm, InventoryForm,
-    CashFlowItemForm, CashFlowCalculationRuleFormSet, TransactionFilterForm, BudgetForm
+    CashFlowItemForm, CashFlowCalculationRuleFormSet, TransactionFilterForm, BudgetForm,
+    Money99ImportForm, Money99StagingFilterForm
 )
+from .money99_parser import Money99Parser
+from decimal import Decimal, InvalidOperation
+import json
 
 
 def index(request):
@@ -316,6 +323,22 @@ def subcategory_delete(request, category_pk, pk):
 # Transaction Views
 def transaction_list(request):
     """Lista de transações com filtros e paginação"""
+    # #region agent log
+    import json as json_module
+    import time
+    log_data = {
+        'sessionId': 'debug-session',
+        'runId': 'run1',
+        'hypothesisId': 'G',
+        'location': 'views.py:323',
+        'message': 'transaction_list entry',
+        'data': {},
+        'timestamp': int(time.time() * 1000)
+    }
+    with open('.cursor/debug.log', 'a', encoding='utf-8') as f:
+        f.write(json_module.dumps(log_data) + '\n')
+    # #endregion
+    
     # Inicializar formulário de filtros
     filter_form = TransactionFilterForm(request.GET)
     
@@ -363,9 +386,52 @@ def transaction_list(request):
     transactions = transactions.order_by('-transaction_date', '-due_date', '-created_at')
     
     # Paginação
+    # #region agent log
+    log_data = {
+        'sessionId': 'debug-session',
+        'runId': 'run1',
+        'hypothesisId': 'G',
+        'location': 'views.py:365',
+        'message': 'Before paginator.get_page',
+        'data': {'transaction_count': transactions.count() if hasattr(transactions, 'count') else len(list(transactions))},
+        'timestamp': int(time.time() * 1000)
+    }
+    with open('.cursor/debug.log', 'a', encoding='utf-8') as f:
+        f.write(json_module.dumps(log_data) + '\n')
+    # #endregion
+    
     paginator = Paginator(transactions, 50)  # 50 transações por página
     page_number = request.GET.get('page', 1)
+    
+    # #region agent log
+    log_data = {
+        'sessionId': 'debug-session',
+        'runId': 'run1',
+        'hypothesisId': 'G',
+        'location': 'views.py:372',
+        'message': 'Calling paginator.get_page',
+        'data': {'page_number': page_number},
+        'timestamp': int(time.time() * 1000)
+    }
+    with open('.cursor/debug.log', 'a', encoding='utf-8') as f:
+        f.write(json_module.dumps(log_data) + '\n')
+    # #endregion
+    
     page_obj = paginator.get_page(page_number)
+    
+    # #region agent log
+    log_data = {
+        'sessionId': 'debug-session',
+        'runId': 'run1',
+        'hypothesisId': 'G',
+        'location': 'views.py:372',
+        'message': 'After paginator.get_page',
+        'data': {},
+        'timestamp': int(time.time() * 1000)
+    }
+    with open('.cursor/debug.log', 'a', encoding='utf-8') as f:
+        f.write(json_module.dumps(log_data) + '\n')
+    # #endregion
     
     # Agrupar transações múltiplas
     multiple_groups = {}
@@ -2864,3 +2930,1219 @@ def cash_flow_report(request):
         'total_general': total_general,
         'total_budget_general': total_budget_general,
     })
+
+
+# Money99 Import Views
+def money99_import_upload(request):
+    """View para upload e parsing inicial do arquivo Money99"""
+    if request.method == 'POST':
+        form = Money99ImportForm(request.POST, request.FILES)
+        if form.is_valid():
+            uploaded_file = request.FILES['file']
+            
+            try:
+                # Parsear arquivo
+                transactions_data = Money99Parser.parse_file(uploaded_file)
+                
+                if not transactions_data:
+                    messages.error(request, 'Nenhuma transação válida encontrada no arquivo.')
+                    return render(request, 'finance/money99_import_upload.html', {'form': form})
+                
+                # Converter datas para strings para armazenar na sessão
+                # (sessão Django não serializa objetos date diretamente)
+                for idx, trans in enumerate(transactions_data):
+                    if trans['transaction_date']:
+                        trans['transaction_date'] = trans['transaction_date'].isoformat()
+                    # Converter Decimal para string
+                    trans['value'] = str(trans['value'])
+                    # Adicionar índice original
+                    trans['original_index'] = idx
+                
+                # Armazenar na sessão
+                request.session['money99_staging_data'] = transactions_data
+                request.session['money99_staging_count'] = len(transactions_data)
+                
+                messages.success(request, f'{len(transactions_data)} transações parseadas com sucesso!')
+                return redirect('finance:money99_import_staging')
+            except Exception as e:
+                messages.error(request, f'Erro ao processar arquivo: {str(e)}')
+    else:
+        form = Money99ImportForm()
+    
+    return render(request, 'finance/money99_import_upload.html', {'form': form})
+
+
+def money99_import_staging(request):
+    """View para exibir transações em staging com filtros"""
+    # Verificar se há dados na sessão
+    if 'money99_staging_data' not in request.session:
+        messages.warning(request, 'Nenhum arquivo carregado. Por favor, faça o upload do arquivo primeiro.')
+        return redirect('finance:money99_import_upload')
+    
+    # Recuperar dados da sessão
+    transactions_data = request.session['money99_staging_data'].copy()
+    
+    # Converter strings de volta para objetos date e Decimal
+    for trans in transactions_data:
+        if trans.get('transaction_date'):
+            try:
+                trans['transaction_date'] = datetime.strptime(trans['transaction_date'], '%Y-%m-%d').date()
+            except (ValueError, TypeError):
+                trans['transaction_date'] = None
+        if trans.get('value'):
+            try:
+                trans['value'] = Decimal(str(trans['value']))
+            except (ValueError, TypeError):
+                trans['value'] = Decimal('0')
+    
+    # Verificar status de importação para todas as transações
+    # Coletar todos os import_hash e verificar quais já existem no banco
+    all_import_hashes = [t.get('import_hash') for t in transactions_data if t.get('import_hash')]
+    imported_hashes_set = set()
+    if all_import_hashes:
+        imported_hashes_set = set(
+            Transaction.objects.filter(import_hash__in=all_import_hashes)
+            .values_list('import_hash', flat=True)
+        )
+    
+    # Adicionar campo is_imported a cada transação
+    for trans in transactions_data:
+        trans['is_imported'] = trans.get('import_hash') in imported_hashes_set
+    
+    # Aplicar filtros
+    filter_form = Money99StagingFilterForm(request.GET)
+    filtered_transactions = transactions_data.copy()
+    
+    if filter_form.is_valid():
+        date_start = filter_form.cleaned_data.get('date_start')
+        date_end = filter_form.cleaned_data.get('date_end')
+        account_filter = filter_form.cleaned_data.get('account', '').lower()
+        beneficiary_filter = filter_form.cleaned_data.get('beneficiary', '').lower()
+        category_filter = filter_form.cleaned_data.get('category', '').lower()
+        transaction_type_filter = filter_form.cleaned_data.get('transaction_type')
+        min_value = filter_form.cleaned_data.get('min_value')
+        max_value = filter_form.cleaned_data.get('max_value')
+        import_status_filter = filter_form.cleaned_data.get('import_status')
+        
+        filtered_transactions = []
+        for trans in transactions_data:
+            # Filtro de data
+            if date_start and trans.get('transaction_date'):
+                if trans['transaction_date'] < date_start:
+                    continue
+            if date_end and trans.get('transaction_date'):
+                if trans['transaction_date'] > date_end:
+                    continue
+            
+            # Filtro de conta
+            if account_filter:
+                if account_filter not in trans.get('account', '').lower():
+                    continue
+            
+            # Filtro de beneficiário
+            if beneficiary_filter:
+                if beneficiary_filter not in trans.get('beneficiary', '').lower():
+                    continue
+            
+            # Filtro de categoria
+            if category_filter:
+                cat = trans.get('category', '') or ''
+                subcat = trans.get('subcategory', '') or ''
+                if category_filter not in cat.lower() and category_filter not in subcat.lower():
+                    continue
+            
+            # Filtro de tipo
+            if transaction_type_filter:
+                if trans.get('transaction_type') != transaction_type_filter:
+                    continue
+            
+            # Filtro de valor
+            if min_value is not None:
+                if trans.get('value', Decimal('0')) < min_value:
+                    continue
+            if max_value is not None:
+                if trans.get('value', Decimal('0')) > max_value:
+                    continue
+            
+            # Filtro de status de importação
+            if import_status_filter:
+                is_imported = trans.get('is_imported', False)
+                if import_status_filter == 'imported' and not is_imported:
+                    continue
+                if import_status_filter == 'not_imported' and is_imported:
+                    continue
+            
+            filtered_transactions.append(trans)
+    
+    # Atualizar seleção na sessão se houver POST (para manter estado entre páginas)
+    if request.method == 'POST':
+        selected_indices = request.POST.getlist('selected_indices')
+        selected_indices = [int(i) for i in selected_indices if i.isdigit()]
+        # Atualizar estado de seleção nos dados originais
+        for idx, trans in enumerate(transactions_data):
+            trans['selected'] = idx in selected_indices
+        request.session['money99_staging_data'] = transactions_data
+        request.session.modified = True
+    
+    # Contar selecionadas
+    # Se há filtros aplicados, considerar apenas as explicitamente marcadas (selected=True)
+    # Se não há filtros, considerar o padrão (selected=True por padrão)
+    has_filters = bool(filter_form.is_valid() and any([
+        filter_form.cleaned_data.get('date_start'),
+        filter_form.cleaned_data.get('date_end'),
+        filter_form.cleaned_data.get('account'),
+        filter_form.cleaned_data.get('beneficiary'),
+        filter_form.cleaned_data.get('category'),
+        filter_form.cleaned_data.get('transaction_type'),
+        filter_form.cleaned_data.get('min_value') is not None,
+        filter_form.cleaned_data.get('max_value') is not None,
+        filter_form.cleaned_data.get('import_status'),
+    ]))
+    
+    if has_filters:
+        # Com filtros: contar apenas as explicitamente marcadas
+        selected_count = sum(1 for t in filtered_transactions if t.get('selected', False))
+    else:
+        # Sem filtros: contar todas (padrão selected=True)
+        selected_count = sum(1 for t in filtered_transactions if t.get('selected', True))
+    
+    # Paginação
+    paginator = Paginator(filtered_transactions, 100)  # 100 transações por página
+    page_number = request.GET.get('page', 1)
+    page_obj = paginator.get_page(page_number)
+    
+    return render(request, 'finance/money99_import_staging.html', {
+        'transactions': page_obj,
+        'filter_form': filter_form,
+        'total_count': len(transactions_data),
+        'filtered_count': len(filtered_transactions),
+        'selected_count': selected_count,
+    })
+
+
+def money99_import_edit_item(request):
+    """View AJAX para editar item individual em staging"""
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Método não permitido'}, status=405)
+    
+    try:
+        data = json.loads(request.body)
+        index = data.get('index')
+        field = data.get('field')
+        value = data.get('value')
+        
+        if 'money99_staging_data' not in request.session:
+            return JsonResponse({'success': False, 'error': 'Nenhum dado em staging'}, status=400)
+        
+        transactions_data = request.session['money99_staging_data']
+        
+        # Encontrar transação pelo original_index
+        trans = None
+        for t in transactions_data:
+            if t.get('original_index') == index:
+                trans = t
+                break
+        
+        if trans is None:
+            return JsonResponse({'success': False, 'error': 'Transação não encontrada'}, status=400)
+        
+        # Preservar import_hash original (nunca deve ser alterado)
+        original_import_hash = trans.get('import_hash')
+        
+        # Validar e converter valor conforme o campo
+        if field == 'import_hash':
+            # Não permitir edição do import_hash - ele deve permanecer baseado nos valores originais
+            return JsonResponse({'success': False, 'error': 'Campo import_hash não pode ser editado'}, status=400)
+        elif field == 'transaction_date':
+            try:
+                # Aceitar formato YYYY-MM-DD
+                trans['transaction_date'] = datetime.strptime(value, '%Y-%m-%d').date().isoformat()
+            except ValueError:
+                return JsonResponse({'success': False, 'error': 'Data inválida'}, status=400)
+        elif field == 'value':
+            try:
+                trans['value'] = str(Decimal(str(value)))
+            except (ValueError, InvalidOperation):
+                return JsonResponse({'success': False, 'error': 'Valor inválido'}, status=400)
+        elif field in ['account', 'beneficiary', 'memo', 'category', 'subcategory']:
+            trans[field] = str(value)
+        elif field == 'transaction_type':
+            if value not in ['CR', 'DB']:
+                return JsonResponse({'success': False, 'error': 'Tipo inválido'}, status=400)
+            trans['transaction_type'] = value
+        elif field == 'selected':
+            # Atualizar estado de seleção
+            # #region agent log
+            log_data = {
+                'sessionId': 'debug-session',
+                'runId': 'run1',
+                'hypothesisId': 'K',
+                'location': 'views.py:3125',
+                'message': 'Updating selected state',
+                'data': {
+                    'original_index': index,
+                    'old_selected': trans.get('selected', False),
+                    'new_selected': bool(value)
+                },
+                'timestamp': int(time.time() * 1000)
+            }
+            with open('.cursor/debug.log', 'a', encoding='utf-8') as f:
+                f.write(json_module.dumps(log_data) + '\n')
+            # #endregion
+            trans['selected'] = bool(value)
+        else:
+            return JsonResponse({'success': False, 'error': 'Campo inválido'}, status=400)
+        
+        if field != 'selected':
+            trans['edited'] = True
+        
+        # Garantir que import_hash original seja preservado (nunca alterado)
+        if original_import_hash:
+            trans['import_hash'] = original_import_hash
+        
+        request.session['money99_staging_data'] = transactions_data
+        request.session.modified = True
+        
+        return JsonResponse({'success': True, 'message': 'Item atualizado com sucesso'})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+def money99_import_remove_item(request):
+    """View AJAX para remover item do staging"""
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Método não permitido'}, status=405)
+    
+    try:
+        data = json.loads(request.body)
+        indices = data.get('indices', [])
+        
+        if 'money99_staging_data' not in request.session:
+            return JsonResponse({'success': False, 'error': 'Nenhum dado em staging'}, status=400)
+        
+        transactions_data = request.session['money99_staging_data']
+        
+        # Remover transações pelos original_index
+        indices_to_remove = set(indices)
+        transactions_data = [t for t in transactions_data if t.get('original_index') not in indices_to_remove]
+        
+        # Reindexar original_index após remoção
+        for idx, trans in enumerate(transactions_data):
+            trans['original_index'] = idx
+        
+        request.session['money99_staging_data'] = transactions_data
+        request.session['money99_staging_count'] = len(transactions_data)
+        request.session.modified = True
+        
+        return JsonResponse({'success': True, 'message': f'{len(indices)} item(ns) removido(s)'})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+def money99_import_execute(request):
+    """View para executar importação final das transações selecionadas"""
+    if request.method != 'POST':
+        messages.error(request, 'Método não permitido')
+        return redirect('finance:money99_import_staging')
+    
+    try:
+        data = json.loads(request.body)
+        selected_indices = data.get('selected_indices', [])
+        filters = data.get('filters')  # Filtros aplicados na página de staging
+        
+        if 'money99_staging_data' not in request.session:
+            messages.error(request, 'Nenhum dado em staging')
+            return redirect('finance:money99_import_upload')
+        
+        transactions_data = request.session['money99_staging_data']
+        
+        # Converter strings de volta para objetos date e Decimal para aplicar filtros
+        for trans in transactions_data:
+            if trans.get('transaction_date') and isinstance(trans['transaction_date'], str):
+                try:
+                    trans['transaction_date'] = datetime.strptime(trans['transaction_date'], '%Y-%m-%d').date()
+                except (ValueError, TypeError):
+                    trans['transaction_date'] = None
+            if trans.get('value') and isinstance(trans['value'], str):
+                try:
+                    trans['value'] = Decimal(str(trans['value']))
+                except (ValueError, TypeError):
+                    trans['value'] = Decimal('0')
+        
+        # Aplicar filtros se fornecidos (mesmos filtros da página de staging)
+        if filters:
+            # #region agent log
+            log_data = {
+                'sessionId': 'debug-session',
+                'runId': 'run1',
+                'hypothesisId': 'L',
+                'location': 'views.py:3250',
+                'message': 'Applying filters before checking selected',
+                'data': {
+                    'filters': filters,
+                    'total_before_filter': len(transactions_data)
+                },
+                'timestamp': int(time.time() * 1000)
+            }
+            with open('.cursor/debug.log', 'a', encoding='utf-8') as f:
+                f.write(json_module.dumps(log_data) + '\n')
+            # #endregion
+            
+            filtered_transactions = []
+            filtered_count = 0
+            for trans in transactions_data:
+                # Filtro de data
+                if filters.get('date_start') and trans.get('transaction_date'):
+                    try:
+                        date_start = datetime.strptime(filters['date_start'], '%Y-%m-%d').date()
+                        # #region agent log
+                        if filters.get('date_start') == '2026-01-01':
+                            log_data = {
+                                'sessionId': 'debug-session',
+                                'runId': 'run1',
+                                'hypothesisId': 'N',
+                                'location': 'views.py:3262',
+                                'message': 'Checking date_start filter',
+                                'data': {
+                                    'original_index': trans.get('original_index'),
+                                    'date_start': str(date_start),
+                                    'trans_date': str(trans.get('transaction_date')),
+                                    'will_pass': trans['transaction_date'] >= date_start
+                                },
+                                'timestamp': int(time.time() * 1000)
+                            }
+                            with open('.cursor/debug.log', 'a', encoding='utf-8') as f:
+                                f.write(json_module.dumps(log_data) + '\n')
+                        # #endregion
+                        if trans['transaction_date'] < date_start:
+                            continue
+                    except (ValueError, TypeError):
+                        pass
+                if filters.get('date_end') and trans.get('transaction_date'):
+                    try:
+                        date_end = datetime.strptime(filters['date_end'], '%Y-%m-%d').date()
+                        # #region agent log
+                        if filters.get('date_end') == '2026-01-13':
+                            log_data = {
+                                'sessionId': 'debug-session',
+                                'runId': 'run1',
+                                'hypothesisId': 'N',
+                                'location': 'views.py:3280',
+                                'message': 'Checking date_end filter',
+                                'data': {
+                                    'original_index': trans.get('original_index'),
+                                    'date_end': str(date_end),
+                                    'trans_date': str(trans.get('transaction_date')),
+                                    'will_pass': trans['transaction_date'] <= date_end
+                                },
+                                'timestamp': int(time.time() * 1000)
+                            }
+                            with open('.cursor/debug.log', 'a', encoding='utf-8') as f:
+                                f.write(json_module.dumps(log_data) + '\n')
+                        # #endregion
+                        if trans['transaction_date'] > date_end:
+                            continue
+                    except (ValueError, TypeError):
+                        pass
+                
+                # Filtro de conta
+                if filters.get('account'):
+                    account_filter = filters['account'].lower()
+                    if account_filter not in trans.get('account', '').lower():
+                        continue
+                
+                # Filtro de beneficiário
+                if filters.get('beneficiary'):
+                    beneficiary_filter = filters['beneficiary'].lower()
+                    if beneficiary_filter not in trans.get('beneficiary', '').lower():
+                        continue
+                
+                # Filtro de categoria
+                if filters.get('category'):
+                    category_filter = filters['category'].lower()
+                    cat = trans.get('category', '') or ''
+                    subcat = trans.get('subcategory', '') or ''
+                    # #region agent log
+                    if 'templo' in category_filter or 'vivo' in category_filter or 'templo' in cat.lower() or 'vivo' in cat.lower():
+                        log_data = {
+                            'sessionId': 'debug-session',
+                            'runId': 'run1',
+                            'hypothesisId': 'M',
+                            'location': 'views.py:3288',
+                            'message': 'Checking category filter for Templo Vivo',
+                            'data': {
+                                'original_index': trans.get('original_index'),
+                                'category_filter': category_filter,
+                                'trans_category': cat,
+                                'trans_subcategory': subcat,
+                                'cat_match': category_filter in cat.lower(),
+                                'subcat_match': category_filter in subcat.lower(),
+                                'will_pass': category_filter in cat.lower() or category_filter in subcat.lower()
+                            },
+                            'timestamp': int(time.time() * 1000)
+                        }
+                        with open('.cursor/debug.log', 'a', encoding='utf-8') as f:
+                            f.write(json_module.dumps(log_data) + '\n')
+                    # #endregion
+                    if category_filter not in cat.lower() and category_filter not in subcat.lower():
+                        continue
+                
+                # Filtro de tipo
+                if filters.get('transaction_type'):
+                    if trans.get('transaction_type') != filters['transaction_type']:
+                        continue
+                
+                # Filtro de valor
+                if filters.get('min_value'):
+                    try:
+                        min_value = Decimal(str(filters['min_value']))
+                        if trans.get('value', Decimal('0')) < min_value:
+                            continue
+                    except (ValueError, TypeError):
+                        pass
+                if filters.get('max_value'):
+                    try:
+                        max_value = Decimal(str(filters['max_value']))
+                        if trans.get('value', Decimal('0')) > max_value:
+                            continue
+                    except (ValueError, TypeError):
+                        pass
+                
+                filtered_transactions.append(trans)
+                filtered_count += 1
+                
+                # #region agent log
+                if filtered_count <= 5:  # Log apenas primeiras 5 filtradas
+                    log_data = {
+                        'sessionId': 'debug-session',
+                        'runId': 'run1',
+                        'hypothesisId': 'L',
+                        'location': 'views.py:3300',
+                        'message': 'Transaction passed filter',
+                        'data': {
+                            'original_index': trans.get('original_index'),
+                            'transaction_date': str(trans.get('transaction_date')),
+                            'account': trans.get('account', ''),
+                            'category': trans.get('category', ''),
+                            'selected': trans.get('selected', False)
+                        },
+                        'timestamp': int(time.time() * 1000)
+                    }
+                    with open('.cursor/debug.log', 'a', encoding='utf-8') as f:
+                        f.write(json_module.dumps(log_data) + '\n')
+                # #endregion
+            
+            # #region agent log
+            selected_in_filtered = sum(1 for t in filtered_transactions if t.get('selected', False))
+            log_data = {
+                'sessionId': 'debug-session',
+                'runId': 'run1',
+                'hypothesisId': 'L',
+                'location': 'views.py:3340',
+                'message': 'After applying filters',
+                'data': {
+                    'filtered_count': len(filtered_transactions),
+                    'selected_in_filtered': selected_in_filtered,
+                    'filters_applied': filters
+                },
+                'timestamp': int(time.time() * 1000)
+            }
+            with open('.cursor/debug.log', 'a', encoding='utf-8') as f:
+                f.write(json_module.dumps(log_data) + '\n')
+            # #endregion
+            
+            # Usar apenas transações filtradas para verificar seleção
+            transactions_to_check = filtered_transactions
+        else:
+            # Sem filtros, usar todas as transações
+            transactions_to_check = transactions_data
+        
+        # #region agent log
+        log_data = {
+            'sessionId': 'debug-session',
+            'runId': 'run1',
+            'hypothesisId': 'H',
+            'location': 'views.py:3213',
+            'message': 'Starting import execution',
+            'data': {
+                'selected_indices_count': len(selected_indices),
+                'total_transactions': len(transactions_data),
+                'filtered_transactions': len(transactions_to_check) if filters else len(transactions_data),
+                'has_filters': bool(filters),
+                'selected_indices_empty': not selected_indices
+            },
+            'timestamp': int(time.time() * 1000)
+        }
+        with open('.cursor/debug.log', 'a', encoding='utf-8') as f:
+            f.write(json_module.dumps(log_data) + '\n')
+        # #endregion
+        
+        # Filtrar apenas transações selecionadas
+        # Se selected_indices estiver vazio, importar todas com selected=True (mas apenas das filtradas, se houver filtros)
+        # Caso contrário, importar apenas as especificadas nos índices
+        selected_transactions = []
+        
+        # #region agent log
+        selected_count_before = sum(1 for t in transactions_to_check if t.get('selected', False))
+        selected_count_with_default = sum(1 for t in transactions_to_check if t.get('selected', True))
+        # Verificar alguns exemplos de selected
+        sample_selected = []
+        for i, t in enumerate(transactions_to_check[:5]):
+            sample_selected.append({
+                'index': i,
+                'original_index': t.get('original_index'),
+                'selected': t.get('selected'),
+                'selected_type': type(t.get('selected')).__name__ if 'selected' in t else 'missing'
+            })
+        log_data = {
+            'sessionId': 'debug-session',
+            'runId': 'run1',
+            'hypothesisId': 'J',
+            'location': 'views.py:3420',
+            'message': 'Before filtering selected transactions',
+            'data': {
+                'total_transactions': len(transactions_data),
+                'transactions_to_check': len(transactions_to_check),
+                'selected_count_in_check_false_default': selected_count_before,
+                'selected_count_in_check_true_default': selected_count_with_default,
+                'selected_indices_empty': not selected_indices,
+                'selected_indices_count': len(selected_indices) if selected_indices else 0,
+                'has_filters': bool(filters),
+                'filters': filters if filters else None,
+                'sample_selected': sample_selected
+            },
+            'timestamp': int(time.time() * 1000)
+        }
+        with open('.cursor/debug.log', 'a', encoding='utf-8') as f:
+            f.write(json_module.dumps(log_data) + '\n')
+        # #endregion
+        
+        checked_count = 0
+        included_count = 0
+        for trans in transactions_to_check:
+            checked_count += 1
+            # Se lista vazia, usar campo 'selected'; senão, verificar índices
+            should_include = False
+            if not selected_indices:
+                # Lista vazia = importar todas as selecionadas
+                # Converter selected para booleano se necessário (pode vir como string da sessão)
+                selected_value = trans.get('selected', False)
+                if isinstance(selected_value, str):
+                    should_include = selected_value.lower() in ('true', '1', 'yes')
+                else:
+                    should_include = bool(selected_value)
+            else:
+                # Lista com índices = importar apenas essas
+                should_include = trans.get('original_index') in selected_indices
+            
+            # #region agent log
+            if checked_count <= 20:  # Log primeiras 20 transações verificadas
+                log_data = {
+                    'sessionId': 'debug-session',
+                    'runId': 'run1',
+                    'hypothesisId': 'J',
+                    'location': 'views.py:3488',
+                    'message': 'Checking transaction for import',
+                    'data': {
+                        'original_index': trans.get('original_index'),
+                        'transaction_date': str(trans.get('transaction_date')),
+                        'account': trans.get('account', ''),
+                        'category': trans.get('category', ''),
+                        'subcategory': trans.get('subcategory', ''),
+                        'selected': trans.get('selected', False),
+                        'selected_type': type(trans.get('selected')).__name__,
+                        'should_include': should_include,
+                        'selected_indices_empty': not selected_indices,
+                        'trans_keys': list(trans.keys())
+                    },
+                    'timestamp': int(time.time() * 1000)
+                }
+                with open('.cursor/debug.log', 'a', encoding='utf-8') as f:
+                    f.write(json_module.dumps(log_data) + '\n')
+            # #endregion
+            
+            if should_include:
+                trans_copy = trans.copy()
+                # Converter strings de volta para objetos (se necessário)
+                if trans_copy.get('transaction_date'):
+                    # Se já é um objeto date, não precisa converter
+                    if isinstance(trans_copy['transaction_date'], str):
+                        try:
+                            trans_copy['transaction_date'] = datetime.strptime(trans_copy['transaction_date'], '%Y-%m-%d').date()
+                        except (ValueError, TypeError):
+                            # #region agent log
+                            log_data = {
+                                'sessionId': 'debug-session',
+                                'runId': 'run1',
+                                'hypothesisId': 'P',
+                                'location': 'views.py:3525',
+                                'message': 'Failed to parse transaction_date',
+                                'data': {
+                                    'original_index': trans.get('original_index'),
+                                    'transaction_date': str(trans_copy.get('transaction_date'))
+                                },
+                                'timestamp': int(time.time() * 1000)
+                            }
+                            with open('.cursor/debug.log', 'a', encoding='utf-8') as f:
+                                f.write(json_module.dumps(log_data) + '\n')
+                            # #endregion
+                            continue
+                    # Se já é date, manter como está
+                if trans_copy.get('value'):
+                    # Se já é Decimal, não precisa converter
+                    if isinstance(trans_copy['value'], str):
+                        try:
+                            trans_copy['value'] = Decimal(str(trans_copy['value']))
+                        except (ValueError, TypeError):
+                            # #region agent log
+                            log_data = {
+                                'sessionId': 'debug-session',
+                                'runId': 'run1',
+                                'hypothesisId': 'P',
+                                'location': 'views.py:3545',
+                                'message': 'Failed to parse value',
+                                'data': {
+                                    'original_index': trans.get('original_index'),
+                                    'value': str(trans_copy.get('value'))
+                                },
+                                'timestamp': int(time.time() * 1000)
+                            }
+                            with open('.cursor/debug.log', 'a', encoding='utf-8') as f:
+                                f.write(json_module.dumps(log_data) + '\n')
+                            # #endregion
+                            continue
+                    # Se já é Decimal, manter como está
+                
+                # #region agent log
+                if len(selected_transactions) < 5:  # Log primeiras 5 incluídas
+                    log_data = {
+                        'sessionId': 'debug-session',
+                        'runId': 'run1',
+                        'hypothesisId': 'P',
+                        'location': 'views.py:3560',
+                        'message': 'Transaction added to selected_transactions',
+                        'data': {
+                            'original_index': trans.get('original_index'),
+                            'transaction_date': str(trans_copy.get('transaction_date')),
+                            'account': trans_copy.get('account', ''),
+                            'category': trans_copy.get('category', ''),
+                            'value': str(trans_copy.get('value'))
+                        },
+                        'timestamp': int(time.time() * 1000)
+                    }
+                    with open('.cursor/debug.log', 'a', encoding='utf-8') as f:
+                        f.write(json_module.dumps(log_data) + '\n')
+                # #endregion
+                
+                selected_transactions.append(trans_copy)
+                included_count += 1
+        
+        # #region agent log
+        log_data = {
+            'sessionId': 'debug-session',
+            'runId': 'run1',
+            'hypothesisId': 'H',
+            'location': 'views.py:3390',
+            'message': 'After filtering selected transactions',
+            'data': {
+                'selected_count': len(selected_transactions),
+                'checked_count': checked_count,
+                'included_count': included_count,
+                'using_selected_field': not selected_indices,
+                'has_filters': bool(filters)
+            },
+            'timestamp': int(time.time() * 1000)
+        }
+        with open('.cursor/debug.log', 'a', encoding='utf-8') as f:
+            f.write(json_module.dumps(log_data) + '\n')
+        # #endregion
+        
+        if not selected_transactions:
+            messages.warning(request, 'Nenhuma transação selecionada para importar')
+            return redirect('finance:money99_import_staging')
+        
+        # Estatísticas
+        stats = {
+            'created_accounts': 0,
+            'created_beneficiaries': 0,
+            'created_categories': 0,
+            'created_subcategories': 0,
+            'created_transactions': 0,
+            'errors': [],
+            'duplicates': 0,
+        }
+        
+        # Processar transações
+        # #region agent log
+        log_data = {
+            'sessionId': 'debug-session',
+            'runId': 'run1',
+            'hypothesisId': 'A',
+            'location': 'views.py:3160',
+            'message': 'Entering atomic transaction block',
+            'data': {'selected_count': len(selected_transactions)},
+            'timestamp': int(time.time() * 1000)
+        }
+        with open('.cursor/debug.log', 'a', encoding='utf-8') as f:
+            f.write(json_module.dumps(log_data) + '\n')
+        # #endregion
+        
+        with db_transaction.atomic():
+            batch_size = 100
+            transactions_to_create = []
+            
+            # Coletar todos os import_hash que serão criados para verificação em lote
+            # Isso evita verificar duplicatas uma por uma dentro do loop
+            all_import_hashes = [t.get('import_hash') for t in selected_transactions if t.get('import_hash')]
+            existing_hashes_set = set()
+            if all_import_hashes:
+                existing_hashes_set = set(
+                    Transaction.objects.filter(import_hash__in=all_import_hashes)
+                    .values_list('import_hash', flat=True)
+                )
+            
+            # #region agent log
+            log_data = {
+                'sessionId': 'debug-session',
+                'runId': 'run1',
+                'hypothesisId': 'B',
+                'location': 'views.py:3665',
+                'message': 'Inside atomic block, starting loop',
+                'data': {
+                    'batch_size': batch_size,
+                    'total_hashes': len(all_import_hashes),
+                    'existing_hashes': len(existing_hashes_set)
+                },
+                'timestamp': int(time.time() * 1000)
+            }
+            with open('.cursor/debug.log', 'a', encoding='utf-8') as f:
+                f.write(json_module.dumps(log_data) + '\n')
+            # #endregion
+            
+            for i, trans_data in enumerate(selected_transactions, 1):
+                try:
+                    # Criar/obter Account
+                    account_name = Money99Parser.normalize_name(trans_data['account'])
+                    if not account_name:
+                        stats['errors'].append(f'Linha {trans_data["line_num"]}: Conta vazia')
+                        continue
+
+                    account, created = Account.objects.get_or_create(
+                        name=account_name,
+                        defaults={
+                            'account_type': Money99Parser.infer_account_type(account_name),
+                            'currency': 'Real brasileiro',
+                            'opening_balance': Decimal('0'),
+                        }
+                    )
+                    if created:
+                        stats['created_accounts'] += 1
+
+                    # Criar/obter Beneficiary (se houver)
+                    beneficiary = None
+                    beneficiary_name = None
+                    if trans_data.get('beneficiary'):
+                        beneficiary_name = Money99Parser.normalize_name(trans_data['beneficiary'])
+                        beneficiary, created = Beneficiary.objects.get_or_create(
+                            full_name=beneficiary_name
+                        )
+                        if created:
+                            stats['created_beneficiaries'] += 1
+
+                    # Criar/obter Category e Subcategory
+                    subcategory = None
+                    if trans_data.get('category'):
+                        category_name = Money99Parser.normalize_name(trans_data['category'])
+                        category, created = Category.objects.get_or_create(
+                            category=category_name
+                        )
+                        if created:
+                            stats['created_categories'] += 1
+
+                        if trans_data.get('subcategory'):
+                            subcategory_name = Money99Parser.normalize_name(trans_data['subcategory'])
+                            subcategory, created = Subcategory.objects.get_or_create(
+                                category=category,
+                                subcategory=subcategory_name,
+                                defaults={
+                                    'default_transaction_type': trans_data['transaction_type'],
+                                }
+                            )
+                            if created:
+                                stats['created_subcategories'] += 1
+
+                    # Verificar duplicatas usando import_hash
+                    # O hash é baseado nos valores originais e não muda mesmo após edições no stage
+                    import_hash = trans_data.get('import_hash')
+                    if not import_hash:
+                        # Se não há hash, pular esta transação (não deve acontecer, mas por segurança)
+                        stats['errors'].append(f'Linha {trans_data.get("line_num", "?")}: Hash de importação não encontrado')
+                        continue
+                    
+                    # Verificar no set de hashes existentes (verificação em lote feita antes do loop)
+                    if import_hash in existing_hashes_set:
+                        stats['duplicates'] += 1
+                        # #region agent log
+                        if stats['duplicates'] <= 5:  # Log apenas primeiras 5 duplicatas
+                            log_data = {
+                                'sessionId': 'debug-session',
+                                'runId': 'run1',
+                                'hypothesisId': 'DUP',
+                                'location': 'views.py:3770',
+                                'message': 'Duplicate transaction detected by import_hash',
+                                'data': {
+                                    'original_index': trans_data.get('original_index'),
+                                    'import_hash': import_hash,
+                                    'transaction_date': str(trans_data['transaction_date']),
+                                    'account': account_name,
+                                    'value': str(trans_data['value']),
+                                    'beneficiary': beneficiary_name if beneficiary else None,
+                                    'category': trans_data.get('category'),
+                                    'subcategory': trans_data.get('subcategory'),
+                                },
+                                'timestamp': int(time.time() * 1000)
+                            }
+                            with open('.cursor/debug.log', 'a', encoding='utf-8') as f:
+                                f.write(json_module.dumps(log_data) + '\n')
+                        # #endregion
+                        continue
+                    
+                    # Adicionar ao set para evitar duplicatas dentro do mesmo lote
+                    existing_hashes_set.add(import_hash)
+
+                    # Criar Transaction
+                    transaction_obj = Transaction(
+                        account=account,
+                        beneficiary=beneficiary,
+                        subcategory=subcategory,
+                        transaction_type=trans_data['transaction_type'],
+                        value=trans_data['value'],
+                        transaction_date=trans_data['transaction_date'],
+                        due_date=None,
+                        purchase_date=None,
+                        notes=trans_data.get('memo', ''),
+                        import_hash=import_hash,  # Incluir hash de importação baseado em valores originais
+                    )
+                    transactions_to_create.append(transaction_obj)
+
+                    # Criar em lotes para melhor performance
+                    if len(transactions_to_create) >= batch_size:
+                        # #region agent log
+                        log_data = {
+                            'sessionId': 'debug-session',
+                            'runId': 'run1',
+                            'hypothesisId': 'C',
+                            'location': 'views.py:3252',
+                            'message': 'Before bulk_create',
+                            'data': {'batch_size': len(transactions_to_create)},
+                            'timestamp': int(time.time() * 1000)
+                        }
+                        with open('.cursor/debug.log', 'a', encoding='utf-8') as f:
+                            f.write(json_module.dumps(log_data) + '\n')
+                        # #endregion
+                        
+                        try:
+                            created_objs = Transaction.objects.bulk_create(transactions_to_create, ignore_conflicts=False)
+                            actual_created = len(created_objs) if created_objs else 0
+                            stats['created_transactions'] += actual_created
+                            
+                            # #region agent log
+                            log_data = {
+                                'sessionId': 'debug-session',
+                                'runId': 'run1',
+                                'hypothesisId': 'C',
+                                'location': 'views.py:3790',
+                                'message': 'After bulk_create',
+                                'data': {
+                                    'created': actual_created,
+                                    'expected': len(transactions_to_create),
+                                    'stats_created': stats['created_transactions']
+                                },
+                                'timestamp': int(time.time() * 1000)
+                            }
+                            with open('.cursor/debug.log', 'a', encoding='utf-8') as f:
+                                f.write(json_module.dumps(log_data) + '\n')
+                            # #endregion
+                        except Exception as e:
+                            # Se for erro de UNIQUE constraint, tratar como duplicatas
+                            if 'UNIQUE constraint failed' in str(e) and 'import_hash' in str(e):
+                                # #region agent log
+                                log_data = {
+                                    'sessionId': 'debug-session',
+                                    'runId': 'run1',
+                                    'hypothesisId': 'DUP_BULK',
+                                    'location': 'views.py:3849',
+                                    'message': 'UNIQUE constraint in bulk_create - trying individual creates',
+                                    'data': {
+                                        'batch_size': len(transactions_to_create),
+                                        'error': str(e)
+                                    },
+                                    'timestamp': int(time.time() * 1000)
+                                }
+                                with open('.cursor/debug.log', 'a', encoding='utf-8') as f:
+                                    f.write(json_module.dumps(log_data) + '\n')
+                                # #endregion
+                                
+                                # Tentar criar uma por uma para identificar quais são duplicatas
+                                for trans_obj in transactions_to_create:
+                                    try:
+                                        Transaction.objects.create(
+                                            account=trans_obj.account,
+                                            beneficiary=trans_obj.beneficiary,
+                                            subcategory=trans_obj.subcategory,
+                                            transaction_type=trans_obj.transaction_type,
+                                            value=trans_obj.value,
+                                            transaction_date=trans_obj.transaction_date,
+                                            due_date=trans_obj.due_date,
+                                            purchase_date=trans_obj.purchase_date,
+                                            notes=trans_obj.notes,
+                                            import_hash=trans_obj.import_hash
+                                        )
+                                        stats['created_transactions'] += 1
+                                    except Exception as individual_error:
+                                        if 'UNIQUE constraint failed' in str(individual_error) and 'import_hash' in str(individual_error):
+                                            stats['duplicates'] += 1
+                                        else:
+                                            stats['errors'].append(f'Erro ao criar transação individual: {str(individual_error)}')
+                            else:
+                                # #region agent log
+                                log_data = {
+                                    'sessionId': 'debug-session',
+                                    'runId': 'run1',
+                                    'hypothesisId': 'ERROR',
+                                    'location': 'views.py:3880',
+                                    'message': 'Error in bulk_create',
+                                    'data': {
+                                        'error': str(e),
+                                        'error_type': type(e).__name__,
+                                        'batch_size': len(transactions_to_create)
+                                    },
+                                    'timestamp': int(time.time() * 1000)
+                                }
+                                with open('.cursor/debug.log', 'a', encoding='utf-8') as f:
+                                    f.write(json_module.dumps(log_data) + '\n')
+                                # #endregion
+                                stats['errors'].append(f'Erro ao criar lote: {str(e)}')
+                        transactions_to_create = []
+                        
+                        # NÃO fechar conexões aqui - isso quebra a transação atômica
+                        # close_old_connections() será chamado apenas após sair do bloco atomic()
+
+                except Exception as e:
+                    error_msg = f'Linha {trans_data.get("line_num", "?")}: {str(e)}'
+                    stats['errors'].append(error_msg)
+                    continue
+
+            # Criar transações restantes
+            if transactions_to_create:
+                # #region agent log
+                log_data = {
+                    'sessionId': 'debug-session',
+                    'runId': 'run1',
+                    'hypothesisId': 'D',
+                    'location': 'views.py:3426',
+                    'message': 'Before final bulk_create',
+                    'data': {'remaining': len(transactions_to_create)},
+                    'timestamp': int(time.time() * 1000)
+                }
+                with open('.cursor/debug.log', 'a', encoding='utf-8') as f:
+                    f.write(json_module.dumps(log_data) + '\n')
+                # #endregion
+                
+                try:
+                    created_objs = Transaction.objects.bulk_create(transactions_to_create, ignore_conflicts=False)
+                    actual_created = len(created_objs) if created_objs else 0
+                    stats['created_transactions'] += actual_created
+                    
+                    # #region agent log
+                    log_data = {
+                        'sessionId': 'debug-session',
+                        'runId': 'run1',
+                        'hypothesisId': 'D',
+                        'location': 'views.py:3843',
+                        'message': 'After final bulk_create',
+                        'data': {
+                            'created': actual_created,
+                            'expected': len(transactions_to_create),
+                            'stats_created': stats['created_transactions']
+                        },
+                        'timestamp': int(time.time() * 1000)
+                    }
+                    with open('.cursor/debug.log', 'a', encoding='utf-8') as f:
+                        f.write(json_module.dumps(log_data) + '\n')
+                    # #endregion
+                except Exception as e:
+                    # Se for erro de UNIQUE constraint, tratar como duplicatas
+                    if 'UNIQUE constraint failed' in str(e) and 'import_hash' in str(e):
+                        # #region agent log
+                        log_data = {
+                            'sessionId': 'debug-session',
+                            'runId': 'run1',
+                            'hypothesisId': 'DUP_BULK',
+                            'location': 'views.py:3860',
+                            'message': 'UNIQUE constraint in final bulk_create - trying individual creates',
+                            'data': {
+                                'batch_size': len(transactions_to_create),
+                                'error': str(e)
+                            },
+                            'timestamp': int(time.time() * 1000)
+                        }
+                        with open('.cursor/debug.log', 'a', encoding='utf-8') as f:
+                            f.write(json_module.dumps(log_data) + '\n')
+                        # #endregion
+                        
+                        # Tentar criar uma por uma para identificar quais são duplicatas
+                        for trans_obj in transactions_to_create:
+                            try:
+                                Transaction.objects.create(
+                                    account=trans_obj.account,
+                                    beneficiary=trans_obj.beneficiary,
+                                    subcategory=trans_obj.subcategory,
+                                    transaction_type=trans_obj.transaction_type,
+                                    value=trans_obj.value,
+                                    transaction_date=trans_obj.transaction_date,
+                                    due_date=trans_obj.due_date,
+                                    purchase_date=trans_obj.purchase_date,
+                                    notes=trans_obj.notes,
+                                    import_hash=trans_obj.import_hash
+                                )
+                                stats['created_transactions'] += 1
+                            except Exception as individual_error:
+                                if 'UNIQUE constraint failed' in str(individual_error) and 'import_hash' in str(individual_error):
+                                    stats['duplicates'] += 1
+                                else:
+                                    stats['errors'].append(f'Erro ao criar transação individual: {str(individual_error)}')
+                    else:
+                        # #region agent log
+                        log_data = {
+                            'sessionId': 'debug-session',
+                            'runId': 'run1',
+                            'hypothesisId': 'ERROR',
+                            'location': 'views.py:3900',
+                            'message': 'Error in final bulk_create',
+                            'data': {
+                                'error': str(e),
+                                'error_type': type(e).__name__,
+                                'batch_size': len(transactions_to_create)
+                            },
+                            'timestamp': int(time.time() * 1000)
+                        }
+                        with open('.cursor/debug.log', 'a', encoding='utf-8') as f:
+                            f.write(json_module.dumps(log_data) + '\n')
+                        # #endregion
+                        stats['errors'].append(f'Erro ao criar lote final: {str(e)}')
+        
+        # #region agent log
+        log_data = {
+            'sessionId': 'debug-session',
+            'runId': 'run1',
+            'hypothesisId': 'A',
+            'location': 'views.py:3458',
+            'message': 'Exited atomic transaction block',
+            'data': {'stats': stats},
+            'timestamp': int(time.time() * 1000)
+        }
+        with open('.cursor/debug.log', 'a', encoding='utf-8') as f:
+            f.write(json_module.dumps(log_data) + '\n')
+        # #endregion
+        
+        # Fechar conexões antigas para evitar locks no SQLite
+        close_old_connections()
+        
+        # #region agent log
+        log_data = {
+            'sessionId': 'debug-session',
+            'runId': 'run1',
+            'hypothesisId': 'I',
+            'location': 'views.py:3465',
+            'message': 'After close_old_connections, before session modification',
+            'data': {},
+            'timestamp': int(time.time() * 1000)
+        }
+        with open('.cursor/debug.log', 'a', encoding='utf-8') as f:
+            f.write(json_module.dumps(log_data) + '\n')
+        # #endregion
+        
+        # Limpar sessão (após garantir que a transação foi commitada)
+        if 'money99_staging_data' in request.session:
+            del request.session['money99_staging_data']
+        if 'money99_staging_count' in request.session:
+            del request.session['money99_staging_count']
+        
+        # #region agent log
+        log_data = {
+            'sessionId': 'debug-session',
+            'runId': 'run1',
+            'hypothesisId': 'I',
+            'location': 'views.py:3475',
+            'message': 'After session modification, before redirect',
+            'data': {},
+            'timestamp': int(time.time() * 1000)
+        }
+        with open('.cursor/debug.log', 'a', encoding='utf-8') as f:
+            f.write(json_module.dumps(log_data) + '\n')
+        # #endregion
+        
+        # #region agent log
+        log_data = {
+            'sessionId': 'debug-session',
+            'runId': 'run1',
+            'hypothesisId': 'FINAL',
+            'location': 'views.py:3850',
+            'message': 'Import execution completed',
+            'data': {
+                'stats': stats,
+                'selected_transactions_count': len(selected_transactions)
+            },
+            'timestamp': int(time.time() * 1000)
+        }
+        with open('.cursor/debug.log', 'a', encoding='utf-8') as f:
+            f.write(json_module.dumps(log_data) + '\n')
+        # #endregion
+        
+        # Mensagens de sucesso
+        messages.success(request, 
+            f'Importação concluída! '
+            f'{stats["created_transactions"]} transações criadas, '
+            f'{stats["created_accounts"]} contas, '
+            f'{stats["created_beneficiaries"]} beneficiários, '
+            f'{stats["created_categories"]} categorias, '
+            f'{stats["created_subcategories"]} subcategorias. '
+            f'{stats["duplicates"]} duplicatas ignoradas.')
+        
+        if stats['errors']:
+            messages.warning(request, f'{len(stats["errors"])} erros encontrados durante a importação.')
+        
+        # #region agent log
+        log_data = {
+            'sessionId': 'debug-session',
+            'runId': 'run1',
+            'hypothesisId': 'E',
+            'location': 'views.py:3285',
+            'message': 'Before redirect to transaction_list',
+            'data': {},
+            'timestamp': int(time.time() * 1000)
+        }
+        with open('.cursor/debug.log', 'a', encoding='utf-8') as f:
+            f.write(json_module.dumps(log_data) + '\n')
+        # #endregion
+        
+        return redirect('finance:transaction_list')
+        
+    except Exception as e:
+        # #region agent log
+        log_data = {
+            'sessionId': 'debug-session',
+            'runId': 'run1',
+            'hypothesisId': 'F',
+            'location': 'views.py:3287',
+            'message': 'Exception caught',
+            'data': {'error': str(e), 'type': type(e).__name__},
+            'timestamp': int(time.time() * 1000)
+        }
+        with open('.cursor/debug.log', 'a', encoding='utf-8') as f:
+            f.write(json_module.dumps(log_data) + '\n')
+        # #endregion
+        
+        messages.error(request, f'Erro durante importação: {str(e)}')
+        return redirect('finance:money99_import_staging')

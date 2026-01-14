@@ -98,6 +98,11 @@
             border-bottom: 3px solid #EF5350;
             color: #C62828;
         }
+        .nav-link-money.active.nav-conectividade {
+            background-color: #D1C4E9; /* Roxo claro pastel */
+            border-bottom: 3px solid #9575CD;
+            color: #5E35B1;
+        }
         
         /* Cores do section-header baseadas no menu ativo */
         .section-header.nav-conteudo {
@@ -129,6 +134,9 @@
         }
         .section-header.nav-relatorios {
             background-color: #EF5350;
+        }
+        .section-header.nav-conectividade {
+            background-color: #9575CD;
         }
 
         /* Título da Seção (Ex: Gerenciador de Contas) */
@@ -212,6 +220,7 @@
         <a href="{% url 'finance:budget_list' %}" class="nav-link-money nav-orcamento {% if 'budget' in request.resolver_match.url_name %}active{% endif %}">Orçamento</a>
         <a href="{% url 'finance:cash_flow_item_list' %}" class="nav-link-money nav-fluxo-caixa {% if 'cash_flow' in request.resolver_match.url_name or 'cash-flow' in request.resolver_match.url_name or 'cash_flow_report' in request.resolver_match.url_name %}active{% endif %}">Fluxo de caixa</a>
         <a href="{% url 'finance:reports_index' %}" class="nav-link-money nav-relatorios {% if 'report' in request.resolver_match.url_name or request.resolver_match.url_name == 'account_statement' %}active{% endif %}">Relatórios</a>
+        <a href="{% url 'finance:money99_import_upload' %}" class="nav-link-money nav-conectividade {% if 'money99' in request.resolver_match.url_name %}active{% endif %}">Conectividade</a>
         <div class="ms-auto d-none d-md-block text-danger fw-bold">?</div>
     </nav>
 
@@ -272,7 +281,7 @@
                 sectionHeader.classList.remove(
                     'nav-conteudo', 'nav-contas', 'nav-beneficiarios', 'nav-categorias',
                     'nav-transacoes', 'nav-agendamentos', 'nav-investimentos',
-                    'nav-orcamento', 'nav-fluxo-caixa', 'nav-relatorios'
+                    'nav-orcamento', 'nav-fluxo-caixa', 'nav-relatorios', 'nav-conectividade'
                 );
                 
                 // Adicionar a classe correspondente ao menu ativo
@@ -296,6 +305,8 @@
                     sectionHeader.classList.add('nav-fluxo-caixa');
                 } else if (activeNav.classList.contains('nav-relatorios')) {
                     sectionHeader.classList.add('nav-relatorios');
+                } else if (activeNav.classList.contains('nav-conectividade')) {
+                    sectionHeader.classList.add('nav-conectividade');
                 }
             }
         });

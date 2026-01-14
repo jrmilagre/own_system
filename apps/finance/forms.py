@@ -876,8 +876,72 @@ class BudgetForm(forms.ModelForm):
             'budget_date': forms.DateInput(attrs={'type': 'date', 'required': True}),
             'amount': forms.NumberInput(attrs={'step': '0.01', 'required': True}),
         }
+
+
+class Money99ImportForm(forms.Form):
+    """Formulário para upload do arquivo transactions.txt do Money99"""
+    file = forms.FileField(
+        label='Arquivo transactions.txt',
+        help_text='Selecione o arquivo transactions.txt exportado do Money99',
+        widget=forms.FileInput(attrs={
+            'accept': '.txt',
+            'class': 'form-control',
+            'required': True
+        })
+    )
+
+
+class Money99StagingFilterForm(forms.Form):
+    """Formulário de filtros para a página de staging"""
+    date_start = forms.DateField(
+        required=False,
+        label='Data início',
+        widget=forms.DateInput(attrs={'type': 'date', 'class': 'form-control'})
+    )
+    date_end = forms.DateField(
+        required=False,
+        label='Data fim',
+        widget=forms.DateInput(attrs={'type': 'date', 'class': 'form-control'})
+    )
+    account = forms.CharField(
+        required=False,
+        label='Conta',
+        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Filtrar por conta...'})
+    )
+    beneficiary = forms.CharField(
+        required=False,
+        label='Beneficiário',
+        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Filtrar por beneficiário...'})
+    )
+    category = forms.CharField(
+        required=False,
+        label='Categoria',
+        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Filtrar por categoria...'})
+    )
+    transaction_type = forms.ChoiceField(
+        choices=[('', 'Todos'), ('CR', 'Crédito'), ('DB', 'Débito')],
+        required=False,
+        label='Tipo',
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    min_value = forms.DecimalField(
+        required=False,
+        label='Valor mínimo',
+        widget=forms.NumberInput(attrs={'step': '0.01', 'class': 'form-control'})
+    )
+    max_value = forms.DecimalField(
+        required=False,
+        label='Valor máximo',
+        widget=forms.NumberInput(attrs={'step': '0.01', 'class': 'form-control'})
+    )
+    import_status = forms.ChoiceField(
+        choices=[('', 'Todas'), ('imported', 'Já importadas'), ('not_imported', 'Não importadas')],
+        required=False,
+        label='Status de importação',
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Ordenar subcategorias por categoria e nome
-        self.fields['subcategory'].queryset = Subcategory.objects.all().select_related('category').order_by('category__category', 'subcategory')
+        # Este formulário usa campos CharField simples para filtros de texto
+        # Não há necessidade de configurar querysets
