@@ -131,8 +131,8 @@
                     {% endfor %}
                     
                     {% for transaction in transactions %}
-                    <tr>
-                        <td class="ps-3">
+                    <tr class="table-row-compact">
+                        <td class="ps-3 py-1">
                             <div class="d-flex align-items-center gap-2">
                                 {% if transaction.is_transfer %}
                                     <span style="font-size: 1.1rem;">🔄</span>
@@ -150,25 +150,25 @@
                                 </span>
                             </div>
                         </td>
-                        <td>{{ transaction.account }}</td>
-                        <td>
+                        <td class="py-1">{{ transaction.account }}</td>
+                        <td class="py-1">
                             {% if transaction.subcategory %}
                                 {{ transaction.subcategory }}
                             {% else %}
                                 <span class="text-muted">-</span>
                             {% endif %}
                         </td>
-                        <td>
+                        <td class="py-1">
                             <span class="badge {% if transaction.transaction_type == 'CR' %}bg-success{% else %}bg-danger{% endif %}">
                                 {{ transaction.get_transaction_type_display }}
                             </span>
                         </td>
-                        <td class="text-end">
+                        <td class="text-end py-1">
                             <span class="fw-bold {% if transaction.transaction_type == 'DB' %}text-danger{% else %}text-success{% endif %}" style="font-size: 0.95rem;">
                                 R$ {{ transaction.value|floatformat:2 }}
                             </span>
                         </td>
-                        <td>
+                        <td class="py-1">
                             {% if transaction.transaction_date %}
                                 {{ transaction.transaction_date|date:"d-m-Y" }}
                             {% elif transaction.due_date %}
@@ -177,12 +177,12 @@
                                 <span class="text-muted">-</span>
                             {% endif %}
                         </td>
-                        <td class="pe-3">
-                            <div class="btn-group btn-group-sm" role="group">
-                                <a href="{% url 'finance:transaction_update' transaction.pk %}" class="btn btn-outline-primary" title="Editar">
+                        <td class="pe-3 py-1">
+                            <div class="btn-group btn-group-sm compact-buttons" role="group">
+                                <a href="{% url 'finance:transaction_update' transaction.pk %}" class="btn btn-sm btn-outline-primary compact-btn" title="Editar">
                                     <i class="fas fa-edit"></i>
                                 </a>
-                                <a href="{% url 'finance:transaction_delete' transaction.pk %}" class="btn btn-outline-danger" title="Excluir">
+                                <a href="{% url 'finance:transaction_delete' transaction.pk %}" class="btn btn-sm btn-outline-danger compact-btn" title="Excluir">
                                     <i class="fas fa-trash"></i>
                                 </a>
                             </div>
@@ -249,6 +249,26 @@
 </nav>
 {% endif %}
 
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.table-row-compact td {
+    padding-top: 0.25rem !important;
+    padding-bottom: 0.25rem !important;
+    vertical-align: middle;
+}
+
+.compact-buttons .compact-btn {
+    padding: 0.15rem 0.4rem !important;
+    font-size: 0.75rem;
+    line-height: 1.2;
+}
+
+.compact-buttons .compact-btn i {
+    font-size: 0.75rem;
+}
+</style>
 {% endblock %}
 
 {% block extra_js %}

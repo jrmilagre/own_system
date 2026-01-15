@@ -54,16 +54,16 @@
                 </thead>
                 <tbody>
                     {% for subcategory in subcategories %}
-                    <tr>
-                        <td class="ps-3">
+                    <tr class="table-row-compact">
+                        <td class="ps-3 py-1">
                             <i class="fas fa-tags me-2 text-primary"></i>{{ subcategory.subcategory }}
                         </td>
-                        <td>
+                        <td class="py-1">
                             <span class="badge {% if subcategory.default_transaction_type == 'CR' %}bg-success{% else %}bg-danger{% endif %}">
                                 {{ subcategory.get_default_transaction_type_display }}
                             </span>
                         </td>
-                        <td>
+                        <td class="py-1">
                             {% if subcategory.mapping_count == 0 %}
                                 <span class="mapping-status mapping-not-mapped">
                                     <i class="fas fa-times-circle me-1"></i>Não mapeada
@@ -78,15 +78,15 @@
                                 </span>
                             {% endif %}
                         </td>
-                        <td class="pe-3">
-                            <div class="btn-group btn-group-sm" role="group">
-                                <a href="{% url 'finance:subcategory_update' category.pk subcategory.pk %}" class="btn btn-outline-primary" title="Editar">
+                        <td class="pe-3 py-1">
+                            <div class="btn-group btn-group-sm compact-buttons" role="group">
+                                <a href="{% url 'finance:subcategory_update' category.pk subcategory.pk %}" class="btn btn-sm btn-outline-primary compact-btn" title="Editar">
                                     <i class="fas fa-edit"></i>
                                 </a>
-                                <a href="{% url 'finance:subcategory_move' category.pk subcategory.pk %}" class="btn btn-outline-warning" title="Mover">
+                                <a href="{% url 'finance:subcategory_move' category.pk subcategory.pk %}" class="btn btn-sm btn-outline-warning compact-btn" title="Mover">
                                     <i class="fas fa-arrows-alt"></i>
                                 </a>
-                                <a href="{% url 'finance:subcategory_delete' category.pk subcategory.pk %}" class="btn btn-outline-danger" title="Deletar">
+                                <a href="{% url 'finance:subcategory_delete' category.pk subcategory.pk %}" class="btn btn-sm btn-outline-danger compact-btn" title="Deletar">
                                     <i class="fas fa-trash"></i>
                                 </a>
                             </div>
@@ -103,5 +103,25 @@
     <i class="fas fa-info-circle me-2"></i>Nenhuma subcategoria cadastrada para esta categoria.
 </div>
 {% endif %}
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.table-row-compact td {
+    padding-top: 0.25rem !important;
+    padding-bottom: 0.25rem !important;
+    vertical-align: middle;
+}
+
+.compact-buttons .compact-btn {
+    padding: 0.15rem 0.4rem !important;
+    font-size: 0.75rem;
+    line-height: 1.2;
+}
+
+.compact-buttons .compact-btn i {
+    font-size: 0.75rem;
+}
+</style>
 {% endblock %}
 

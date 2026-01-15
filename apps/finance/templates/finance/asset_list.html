@@ -29,32 +29,32 @@
                 </thead>
                 <tbody>
                     {% for asset in assets %}
-                    <tr>
-                        <td class="ps-3">
+                    <tr class="table-row-compact">
+                        <td class="ps-3 py-1">
                             <span class="font-monospace fw-bold" style="font-size: 0.85rem;">{{ asset.code }}</span>
                         </td>
-                        <td>
+                        <td class="py-1">
                             <span style="font-weight: 500;">{{ asset.name }}</span>
                         </td>
-                        <td>
+                        <td class="py-1">
                             <span class="badge bg-info">{{ asset.get_asset_type_display }}</span>
                         </td>
-                        <td>
+                        <td class="py-1">
                             {% if asset.sector %}
                                 <span class="text-muted">{{ asset.sector }}</span>
                             {% else %}
                                 <span class="text-muted">-</span>
                             {% endif %}
                         </td>
-                        <td>
+                        <td class="py-1">
                             <span class="badge bg-secondary">{{ asset.currency }}</span>
                         </td>
-                        <td class="pe-3">
-                            <div class="btn-group btn-group-sm" role="group">
-                                <a href="{% url 'finance:asset_update' asset.pk %}" class="btn btn-outline-primary" title="Editar">
+                        <td class="pe-3 py-1">
+                            <div class="btn-group btn-group-sm compact-buttons" role="group">
+                                <a href="{% url 'finance:asset_update' asset.pk %}" class="btn btn-sm btn-outline-primary compact-btn" title="Editar">
                                     <i class="fas fa-edit"></i>
                                 </a>
-                                <a href="{% url 'finance:asset_delete' asset.pk %}" class="btn btn-outline-danger" title="Deletar">
+                                <a href="{% url 'finance:asset_delete' asset.pk %}" class="btn btn-sm btn-outline-danger compact-btn" title="Deletar">
                                     <i class="fas fa-trash"></i>
                                 </a>
                             </div>
@@ -72,4 +72,24 @@
 </div>
 {% endif %}
 
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.table-row-compact td {
+    padding-top: 0.25rem !important;
+    padding-bottom: 0.25rem !important;
+    vertical-align: middle;
+}
+
+.compact-buttons .compact-btn {
+    padding: 0.15rem 0.4rem !important;
+    font-size: 0.75rem;
+    line-height: 1.2;
+}
+
+.compact-buttons .compact-btn i {
+    font-size: 0.75rem;
+}
+</style>
 {% endblock %}

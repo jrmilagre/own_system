@@ -52,9 +52,9 @@
                 </thead>
                 <tbody>
                     {% for category in categories %}
-                    <tr>
-                        <td class="ps-3 fw-bold">{{ category.category }}</td>
-                        <td>
+                    <tr class="table-row-compact">
+                        <td class="ps-3 fw-bold py-1">{{ category.category }}</td>
+                        <td class="py-1">
                             <a href="{% url 'finance:subcategory_list' category.pk %}" class="text-decoration-none">
                                 Ver Subcategorias ({{ category.subcategory_count }})
                             </a>
@@ -72,7 +72,7 @@
                             </div>
                             {% endif %}
                         </td>
-                        <td>
+                        <td class="py-1">
                             {% if category.subcategory_count > 0 %}
                                 Total: {{ category.subcategory_count }}
                                 {% if category.not_mapped_count > 0 or category.duplicate_count > 0 %}
@@ -86,10 +86,10 @@
                                 <small class="text-muted">Sem subcategorias</small>
                             {% endif %}
                         </td>
-                        <td class="pe-3">
-                            <div class="btn-group btn-group-sm" role="group">
-                                <a href="{% url 'finance:category_update' category.pk %}" class="btn btn-outline-primary">Editar</a>
-                                <a href="{% url 'finance:category_delete' category.pk %}" class="btn btn-outline-danger">Deletar</a>
+                        <td class="pe-3 py-1">
+                            <div class="btn-group btn-group-sm compact-buttons" role="group">
+                                <a href="{% url 'finance:category_update' category.pk %}" class="btn btn-sm btn-outline-primary compact-btn">Editar</a>
+                                <a href="{% url 'finance:category_delete' category.pk %}" class="btn btn-sm btn-outline-danger compact-btn">Deletar</a>
                             </div>
                         </td>
                     </tr>
@@ -104,4 +104,24 @@
     <i class="fas fa-info-circle me-2"></i>Nenhuma categoria cadastrada.
 </div>
 {% endif %}
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.table-row-compact td {
+    padding-top: 0.25rem !important;
+    padding-bottom: 0.25rem !important;
+    vertical-align: middle;
+}
+
+.compact-buttons .compact-btn {
+    padding: 0.15rem 0.4rem !important;
+    font-size: 0.75rem;
+    line-height: 1.2;
+}
+
+.compact-buttons .compact-btn i {
+    font-size: 0.75rem;
+}
+</style>
 {% endblock %}

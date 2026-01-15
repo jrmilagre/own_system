@@ -69,25 +69,25 @@
                 </thead>
                 <tbody>
                     {% for budget in page_obj %}
-                    <tr>
-                        <td class="ps-3">
+                    <tr class="table-row-compact">
+                        <td class="ps-3 py-1">
                             <span class="badge bg-info bg-opacity-10 text-info rounded me-2" style="font-size: 0.75rem; padding: 4px 8px;">
                                 {{ budget.subcategory.category.category }}
                             </span>
                             {{ budget.subcategory.subcategory }}
                         </td>
-                        <td>{{ budget.budget_date|date:"d-m-Y" }}</td>
-                        <td class="text-end pe-3">
+                        <td class="py-1">{{ budget.budget_date|date:"d-m-Y" }}</td>
+                        <td class="text-end pe-3 py-1">
                             <span class="fw-bold" style="font-size: 0.95rem;">
                                 R$ {{ budget.amount|floatformat:2 }}
                             </span>
                         </td>
-                        <td class="text-center">
-                            <div class="btn-group btn-group-sm" role="group">
-                                <a href="{% url 'finance:budget_update' budget.pk %}" class="btn btn-outline-primary" title="Editar">
+                        <td class="text-center py-1">
+                            <div class="btn-group btn-group-sm compact-buttons" role="group">
+                                <a href="{% url 'finance:budget_update' budget.pk %}" class="btn btn-sm btn-outline-primary compact-btn" title="Editar">
                                     <i class="fas fa-edit"></i>
                                 </a>
-                                <a href="{% url 'finance:budget_delete' budget.pk %}" class="btn btn-outline-danger" title="Excluir">
+                                <a href="{% url 'finance:budget_delete' budget.pk %}" class="btn btn-sm btn-outline-danger compact-btn" title="Excluir">
                                     <i class="fas fa-trash"></i>
                                 </a>
                             </div>
@@ -132,4 +132,24 @@
     </div>
     {% endif %}
 </div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.table-row-compact td {
+    padding-top: 0.25rem !important;
+    padding-bottom: 0.25rem !important;
+    vertical-align: middle;
+}
+
+.compact-buttons .compact-btn {
+    padding: 0.15rem 0.4rem !important;
+    font-size: 0.75rem;
+    line-height: 1.2;
+}
+
+.compact-buttons .compact-btn i {
+    font-size: 0.75rem;
+}
+</style>
 {% endblock %}
