@@ -22,6 +22,20 @@ from .forms import (
 from .money99_parser import Money99Parser
 from decimal import Decimal, InvalidOperation
 import json
+import os
+
+
+def safe_debug_log(log_data):
+    """
+    Função auxiliar para fazer logging de forma segura em produção.
+    Ignora erros de escrita de arquivo que podem ocorrer em ambientes como Render.
+    """
+    try:
+        os.makedirs('.cursor', exist_ok=True)
+        with open('.cursor/debug.log', 'a', encoding='utf-8') as f:
+            f.write(json_module.dumps(log_data) + '\n')
+    except (OSError, IOError, PermissionError):
+        pass  # Ignora erros de escrita em produção
 
 
 def index(request):
@@ -433,8 +447,6 @@ def subcategory_move(request, category_pk, pk):
 def transaction_list(request):
     """Lista de transações com filtros e paginação"""
     # #region agent log
-    import json as json_module
-    import time
     log_data = {
         'sessionId': 'debug-session',
         'runId': 'run1',
@@ -444,8 +456,7 @@ def transaction_list(request):
         'data': {},
         'timestamp': int(time.time() * 1000)
     }
-    with open('.cursor/debug.log', 'a', encoding='utf-8') as f:
-        f.write(json_module.dumps(log_data) + '\n')
+    safe_debug_log(log_data)
     # #endregion
     
     # Inicializar formulário de filtros
@@ -505,8 +516,7 @@ def transaction_list(request):
         'data': {'transaction_count': transactions.count() if hasattr(transactions, 'count') else len(list(transactions))},
         'timestamp': int(time.time() * 1000)
     }
-    with open('.cursor/debug.log', 'a', encoding='utf-8') as f:
-        f.write(json_module.dumps(log_data) + '\n')
+    safe_debug_log(log_data)
     # #endregion
     
     paginator = Paginator(transactions, 50)  # 50 transações por página
@@ -522,8 +532,7 @@ def transaction_list(request):
         'data': {'page_number': page_number},
         'timestamp': int(time.time() * 1000)
     }
-    with open('.cursor/debug.log', 'a', encoding='utf-8') as f:
-        f.write(json_module.dumps(log_data) + '\n')
+    safe_debug_log(log_data)
     # #endregion
     
     page_obj = paginator.get_page(page_number)
@@ -538,8 +547,7 @@ def transaction_list(request):
         'data': {},
         'timestamp': int(time.time() * 1000)
     }
-    with open('.cursor/debug.log', 'a', encoding='utf-8') as f:
-        f.write(json_module.dumps(log_data) + '\n')
+    safe_debug_log(log_data)
     # #endregion
     
     # Agrupar transações múltiplas
@@ -3295,8 +3303,7 @@ def money99_import_edit_item(request):
                 },
                 'timestamp': int(time.time() * 1000)
             }
-            with open('.cursor/debug.log', 'a', encoding='utf-8') as f:
-                f.write(json_module.dumps(log_data) + '\n')
+            safe_debug_log(log_data)
             # #endregion
             trans['selected'] = bool(value)
         else:
@@ -3393,8 +3400,7 @@ def money99_import_execute(request):
                 },
                 'timestamp': int(time.time() * 1000)
             }
-            with open('.cursor/debug.log', 'a', encoding='utf-8') as f:
-                f.write(json_module.dumps(log_data) + '\n')
+            safe_debug_log(log_data)
             # #endregion
             
             filtered_transactions = []
@@ -3420,8 +3426,7 @@ def money99_import_execute(request):
                                 },
                                 'timestamp': int(time.time() * 1000)
                             }
-                            with open('.cursor/debug.log', 'a', encoding='utf-8') as f:
-                                f.write(json_module.dumps(log_data) + '\n')
+                            safe_debug_log(log_data)
                         # #endregion
                         if trans['transaction_date'] < date_start:
                             continue
@@ -3446,8 +3451,7 @@ def money99_import_execute(request):
                                 },
                                 'timestamp': int(time.time() * 1000)
                             }
-                            with open('.cursor/debug.log', 'a', encoding='utf-8') as f:
-                                f.write(json_module.dumps(log_data) + '\n')
+                            safe_debug_log(log_data)
                         # #endregion
                         if trans['transaction_date'] > date_end:
                             continue
@@ -3490,8 +3494,7 @@ def money99_import_execute(request):
                             },
                             'timestamp': int(time.time() * 1000)
                         }
-                        with open('.cursor/debug.log', 'a', encoding='utf-8') as f:
-                            f.write(json_module.dumps(log_data) + '\n')
+                        safe_debug_log(log_data)
                     # #endregion
                     if category_filter not in cat.lower() and category_filter not in subcat.lower():
                         continue
@@ -3537,8 +3540,7 @@ def money99_import_execute(request):
                         },
                         'timestamp': int(time.time() * 1000)
                     }
-                    with open('.cursor/debug.log', 'a', encoding='utf-8') as f:
-                        f.write(json_module.dumps(log_data) + '\n')
+                    safe_debug_log(log_data)
                 # #endregion
             
             # #region agent log
@@ -3556,8 +3558,7 @@ def money99_import_execute(request):
                 },
                 'timestamp': int(time.time() * 1000)
             }
-            with open('.cursor/debug.log', 'a', encoding='utf-8') as f:
-                f.write(json_module.dumps(log_data) + '\n')
+            safe_debug_log(log_data)
             # #endregion
             
             # Usar apenas transações filtradas para verificar seleção
@@ -3582,8 +3583,7 @@ def money99_import_execute(request):
             },
             'timestamp': int(time.time() * 1000)
         }
-        with open('.cursor/debug.log', 'a', encoding='utf-8') as f:
-            f.write(json_module.dumps(log_data) + '\n')
+        safe_debug_log(log_data)
         # #endregion
         
         # Filtrar apenas transações selecionadas
@@ -3622,8 +3622,7 @@ def money99_import_execute(request):
             },
             'timestamp': int(time.time() * 1000)
         }
-        with open('.cursor/debug.log', 'a', encoding='utf-8') as f:
-            f.write(json_module.dumps(log_data) + '\n')
+        safe_debug_log(log_data)
         # #endregion
         
         checked_count = 0
@@ -3666,8 +3665,7 @@ def money99_import_execute(request):
                     },
                     'timestamp': int(time.time() * 1000)
                 }
-                with open('.cursor/debug.log', 'a', encoding='utf-8') as f:
-                    f.write(json_module.dumps(log_data) + '\n')
+            safe_debug_log(log_data)
             # #endregion
             
             if should_include:
@@ -3692,8 +3690,7 @@ def money99_import_execute(request):
                                 },
                                 'timestamp': int(time.time() * 1000)
                             }
-                            with open('.cursor/debug.log', 'a', encoding='utf-8') as f:
-                                f.write(json_module.dumps(log_data) + '\n')
+                            safe_debug_log(log_data)
                             # #endregion
                             continue
                     # Se já é date, manter como está
@@ -3716,8 +3713,7 @@ def money99_import_execute(request):
                                 },
                                 'timestamp': int(time.time() * 1000)
                             }
-                            with open('.cursor/debug.log', 'a', encoding='utf-8') as f:
-                                f.write(json_module.dumps(log_data) + '\n')
+                            safe_debug_log(log_data)
                             # #endregion
                             continue
                     # Se já é Decimal, manter como está
@@ -3739,8 +3735,7 @@ def money99_import_execute(request):
                         },
                         'timestamp': int(time.time() * 1000)
                     }
-                    with open('.cursor/debug.log', 'a', encoding='utf-8') as f:
-                        f.write(json_module.dumps(log_data) + '\n')
+                    safe_debug_log(log_data)
                 # #endregion
                 
                 selected_transactions.append(trans_copy)
@@ -3762,8 +3757,7 @@ def money99_import_execute(request):
             },
             'timestamp': int(time.time() * 1000)
         }
-        with open('.cursor/debug.log', 'a', encoding='utf-8') as f:
-            f.write(json_module.dumps(log_data) + '\n')
+        safe_debug_log(log_data)
         # #endregion
         
         if not selected_transactions:
@@ -3792,8 +3786,7 @@ def money99_import_execute(request):
             'data': {'selected_count': len(selected_transactions)},
             'timestamp': int(time.time() * 1000)
         }
-        with open('.cursor/debug.log', 'a', encoding='utf-8') as f:
-            f.write(json_module.dumps(log_data) + '\n')
+        safe_debug_log(log_data)
         # #endregion
         
         with db_transaction.atomic():
@@ -3824,8 +3817,7 @@ def money99_import_execute(request):
                 },
                 'timestamp': int(time.time() * 1000)
             }
-            with open('.cursor/debug.log', 'a', encoding='utf-8') as f:
-                f.write(json_module.dumps(log_data) + '\n')
+            safe_debug_log(log_data)
             # #endregion
             
             for i, trans_data in enumerate(selected_transactions, 1):
@@ -3911,8 +3903,7 @@ def money99_import_execute(request):
                                 },
                                 'timestamp': int(time.time() * 1000)
                             }
-                            with open('.cursor/debug.log', 'a', encoding='utf-8') as f:
-                                f.write(json_module.dumps(log_data) + '\n')
+                            safe_debug_log(log_data)
                         # #endregion
                         continue
                     
@@ -3946,8 +3937,7 @@ def money99_import_execute(request):
                             'data': {'batch_size': len(transactions_to_create)},
                             'timestamp': int(time.time() * 1000)
                         }
-                        with open('.cursor/debug.log', 'a', encoding='utf-8') as f:
-                            f.write(json_module.dumps(log_data) + '\n')
+                        safe_debug_log(log_data)
                         # #endregion
                         
                         try:
@@ -3969,8 +3959,7 @@ def money99_import_execute(request):
                                 },
                                 'timestamp': int(time.time() * 1000)
                             }
-                            with open('.cursor/debug.log', 'a', encoding='utf-8') as f:
-                                f.write(json_module.dumps(log_data) + '\n')
+                            safe_debug_log(log_data)
                             # #endregion
                         except Exception as e:
                             # Se for erro de UNIQUE constraint, tratar como duplicatas
@@ -3988,8 +3977,7 @@ def money99_import_execute(request):
                                     },
                                     'timestamp': int(time.time() * 1000)
                                 }
-                                with open('.cursor/debug.log', 'a', encoding='utf-8') as f:
-                                    f.write(json_module.dumps(log_data) + '\n')
+                                safe_debug_log(log_data)
                                 # #endregion
                                 
                                 # Tentar criar uma por uma para identificar quais são duplicatas
@@ -4028,8 +4016,7 @@ def money99_import_execute(request):
                                     },
                                     'timestamp': int(time.time() * 1000)
                                 }
-                                with open('.cursor/debug.log', 'a', encoding='utf-8') as f:
-                                    f.write(json_module.dumps(log_data) + '\n')
+                                safe_debug_log(log_data)
                                 # #endregion
                                 stats['errors'].append(f'Erro ao criar lote: {str(e)}')
                         transactions_to_create = []
@@ -4054,8 +4041,7 @@ def money99_import_execute(request):
                     'data': {'remaining': len(transactions_to_create)},
                     'timestamp': int(time.time() * 1000)
                 }
-                with open('.cursor/debug.log', 'a', encoding='utf-8') as f:
-                    f.write(json_module.dumps(log_data) + '\n')
+                safe_debug_log(log_data)
                 # #endregion
                 
                 try:
@@ -4077,8 +4063,7 @@ def money99_import_execute(request):
                         },
                         'timestamp': int(time.time() * 1000)
                     }
-                    with open('.cursor/debug.log', 'a', encoding='utf-8') as f:
-                        f.write(json_module.dumps(log_data) + '\n')
+                    safe_debug_log(log_data)
                     # #endregion
                 except Exception as e:
                     # Se for erro de UNIQUE constraint, tratar como duplicatas
@@ -4096,8 +4081,7 @@ def money99_import_execute(request):
                             },
                             'timestamp': int(time.time() * 1000)
                         }
-                        with open('.cursor/debug.log', 'a', encoding='utf-8') as f:
-                            f.write(json_module.dumps(log_data) + '\n')
+                        safe_debug_log(log_data)
                         # #endregion
                         
                         # Tentar criar uma por uma para identificar quais são duplicatas
@@ -4136,8 +4120,7 @@ def money99_import_execute(request):
                             },
                             'timestamp': int(time.time() * 1000)
                         }
-                        with open('.cursor/debug.log', 'a', encoding='utf-8') as f:
-                            f.write(json_module.dumps(log_data) + '\n')
+                        safe_debug_log(log_data)
                         # #endregion
                         stats['errors'].append(f'Erro ao criar lote final: {str(e)}')
         
@@ -4151,8 +4134,7 @@ def money99_import_execute(request):
             'data': {'stats': stats},
             'timestamp': int(time.time() * 1000)
         }
-        with open('.cursor/debug.log', 'a', encoding='utf-8') as f:
-            f.write(json_module.dumps(log_data) + '\n')
+        safe_debug_log(log_data)
         # #endregion
         
         # Fechar conexões antigas para evitar locks no SQLite
@@ -4168,8 +4150,7 @@ def money99_import_execute(request):
             'data': {},
             'timestamp': int(time.time() * 1000)
         }
-        with open('.cursor/debug.log', 'a', encoding='utf-8') as f:
-            f.write(json_module.dumps(log_data) + '\n')
+        safe_debug_log(log_data)
         # #endregion
         
         # Limpar sessão (após garantir que a transação foi commitada)
@@ -4188,8 +4169,7 @@ def money99_import_execute(request):
             'data': {},
             'timestamp': int(time.time() * 1000)
         }
-        with open('.cursor/debug.log', 'a', encoding='utf-8') as f:
-            f.write(json_module.dumps(log_data) + '\n')
+        safe_debug_log(log_data)
         # #endregion
         
         # #region agent log
@@ -4205,8 +4185,7 @@ def money99_import_execute(request):
             },
             'timestamp': int(time.time() * 1000)
         }
-        with open('.cursor/debug.log', 'a', encoding='utf-8') as f:
-            f.write(json_module.dumps(log_data) + '\n')
+        safe_debug_log(log_data)
         # #endregion
         
         # Mensagens de sucesso
@@ -4232,8 +4211,7 @@ def money99_import_execute(request):
             'data': {},
             'timestamp': int(time.time() * 1000)
         }
-        with open('.cursor/debug.log', 'a', encoding='utf-8') as f:
-            f.write(json_module.dumps(log_data) + '\n')
+        safe_debug_log(log_data)
         # #endregion
         
         return redirect('finance:transaction_list')
@@ -4249,8 +4227,7 @@ def money99_import_execute(request):
             'data': {'error': str(e), 'type': type(e).__name__},
             'timestamp': int(time.time() * 1000)
         }
-        with open('.cursor/debug.log', 'a', encoding='utf-8') as f:
-            f.write(json_module.dumps(log_data) + '\n')
+        safe_debug_log(log_data)
         # #endregion
         
         messages.error(request, f'Erro durante importação: {str(e)}')
