@@ -1389,7 +1389,6 @@ def multiple_scheduler_create(request):
             beneficiary = form.cleaned_data['beneficiary']
             due_date = form.cleaned_data.get('due_date')
             purchase_date = form.cleaned_data.get('purchase_date')
-            notes = form.cleaned_data.get('notes', '')
             recurrence_type = form.cleaned_data['recurrence_type']
             recurrence_interval = form.cleaned_data['recurrence_interval']
             termination_type = form.cleaned_data['termination_type']
@@ -1437,6 +1436,7 @@ def multiple_scheduler_create(request):
                             continue
                         
                         is_transfer = item_data.get('is_transfer', False)
+                        item_notes = item_data.get('notes', '')
                         
                         if is_transfer:
                             # Criar transferência (2 schedulers: débito e crédito)
@@ -1451,7 +1451,7 @@ def multiple_scheduler_create(request):
                                 value=value,
                                 due_date=due_date,
                                 purchase_date=purchase_date,
-                                notes=notes,
+                                notes=item_notes,
                                 recurrence_type=recurrence_type,
                                 recurrence_interval=recurrence_interval,
                                 termination_type=termination_type,
@@ -1473,7 +1473,7 @@ def multiple_scheduler_create(request):
                                 value=value,
                                 due_date=due_date,
                                 purchase_date=purchase_date,
-                                notes=notes,
+                                notes=item_notes,
                                 recurrence_type=recurrence_type,
                                 recurrence_interval=recurrence_interval,
                                 termination_type=termination_type,
@@ -1505,7 +1505,7 @@ def multiple_scheduler_create(request):
                                 value=value,
                                 due_date=due_date,
                                 purchase_date=purchase_date,
-                                notes=notes,
+                                notes=item_notes,
                                 recurrence_type=recurrence_type,
                                 recurrence_interval=recurrence_interval,
                                 termination_type=termination_type,
@@ -1593,7 +1593,6 @@ def multiple_scheduler_update(request, group_id):
             beneficiary = form.cleaned_data['beneficiary']
             due_date = form.cleaned_data.get('due_date')
             purchase_date = form.cleaned_data.get('purchase_date')
-            notes = form.cleaned_data.get('notes', '')
             recurrence_type = form.cleaned_data['recurrence_type']
             recurrence_interval = form.cleaned_data['recurrence_interval']
             termination_type = form.cleaned_data['termination_type']
@@ -1646,6 +1645,7 @@ def multiple_scheduler_update(request, group_id):
                             continue
                         
                         is_transfer = item_data.get('is_transfer', False)
+                        item_notes = item_data.get('notes', '')
                         
                         if is_transfer:
                             # Criar transferência (2 schedulers: débito e crédito)
@@ -1660,7 +1660,7 @@ def multiple_scheduler_update(request, group_id):
                                 value=value,
                                 due_date=due_date,
                                 purchase_date=purchase_date,
-                                notes=notes,
+                                notes=item_notes,
                                 recurrence_type=recurrence_type,
                                 recurrence_interval=recurrence_interval,
                                 termination_type=termination_type,
@@ -1682,7 +1682,7 @@ def multiple_scheduler_update(request, group_id):
                                 value=value,
                                 due_date=due_date,
                                 purchase_date=purchase_date,
-                                notes=notes,
+                                notes=item_notes,
                                 recurrence_type=recurrence_type,
                                 recurrence_interval=recurrence_interval,
                                 termination_type=termination_type,
@@ -1714,7 +1714,7 @@ def multiple_scheduler_update(request, group_id):
                                 value=value,
                                 due_date=due_date,
                                 purchase_date=purchase_date,
-                                notes=notes,
+                                notes=item_notes,
                                 recurrence_type=recurrence_type,
                                 recurrence_interval=recurrence_interval,
                                 termination_type=termination_type,
@@ -1781,6 +1781,7 @@ def multiple_scheduler_update(request, group_id):
                         'value': scheduler.value,
                         'is_transfer': True,
                         'destination_account': scheduler.destination_account,
+                        'notes': scheduler.notes,
                     })
                 # Scheduler de crédito não precisa ser adicionado (já representado pelo par)
             else:
@@ -1791,6 +1792,7 @@ def multiple_scheduler_update(request, group_id):
                     'value': scheduler.value,
                     'is_transfer': False,
                     'destination_account': None,
+                    'notes': scheduler.notes,
                 })
         
         # Criar formset com extra=0 quando editando para evitar item vazio

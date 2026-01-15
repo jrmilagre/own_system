@@ -153,17 +153,6 @@
                         <div class="text-danger small mt-1">{{ form.status.errors }}</div>
                     {% endif %}
                 </div>
-
-                <!-- Anotações -->
-                <div class="col-12">
-                    <label for="{{ form.notes.id_for_label }}" class="form-label">
-                        <i class="fas fa-sticky-note me-1 text-muted"></i>Anotações
-                    </label>
-                    {{ form.notes }}
-                    {% if form.notes.errors %}
-                        <div class="text-danger small mt-1">{{ form.notes.errors }}</div>
-                    {% endif %}
-                </div>
             </div>
 
             <!-- Itens do Agendamento -->
@@ -228,13 +217,27 @@
                                 </div>
 
                                 <!-- Tipo de Transação (Normal) -->
-                                <div class="col-md-6 normal-fields">
+                                <div class="col-md-3 normal-fields">
                                     <label for="{{ item_form.transaction_type.id_for_label }}" class="form-label">
                                         <i class="fas fa-arrows-alt-v me-1 text-secondary"></i>Tipo
                                     </label>
                                     {{ item_form.transaction_type }}
                                     {% if item_form.transaction_type.errors %}
                                         <div class="text-danger small mt-1">{{ item_form.transaction_type.errors }}</div>
+                                    {% endif %}
+                                </div>
+
+                                <!-- Valor -->
+                                <div class="col-md-3">
+                                    <label for="{{ item_form.value.id_for_label }}" class="form-label">
+                                        <i class="fas fa-money-bill-wave me-1 text-success"></i>Valor <span class="text-danger">*</span>
+                                    </label>
+                                    <div class="input-group">
+                                        <span class="input-group-text">R$</span>
+                                        {{ item_form.value }}
+                                    </div>
+                                    {% if item_form.value.errors %}
+                                        <div class="text-danger small mt-1">{{ item_form.value.errors }}</div>
                                     {% endif %}
                                 </div>
 
@@ -254,17 +257,14 @@
                                     {% endif %}
                                 </div>
 
-                                <!-- Valor -->
-                                <div class="col-md-6">
-                                    <label for="{{ item_form.value.id_for_label }}" class="form-label">
-                                        <i class="fas fa-money-bill-wave me-1 text-success"></i>Valor <span class="text-danger">*</span>
+                                <!-- Anotações -->
+                                <div class="col-12">
+                                    <label for="{{ item_form.notes.id_for_label }}" class="form-label">
+                                        <i class="fas fa-sticky-note me-1 text-muted"></i>Anotações
                                     </label>
-                                    <div class="input-group">
-                                        <span class="input-group-text">R$</span>
-                                        {{ item_form.value }}
-                                    </div>
-                                    {% if item_form.value.errors %}
-                                        <div class="text-danger small mt-1">{{ item_form.value.errors }}</div>
+                                    {{ item_form.notes }}
+                                    {% if item_form.notes.errors %}
+                                        <div class="text-danger small mt-1">{{ item_form.notes.errors }}</div>
                                     {% endif %}
                                 </div>
                             </div>
@@ -527,7 +527,7 @@ document.addEventListener('DOMContentLoaded', function() {
             });
             
             // Limpar valores
-            newForm.querySelectorAll('input[type="text"], input[type="number"], select').forEach(element => {
+            newForm.querySelectorAll('input[type="text"], input[type="number"], select, textarea').forEach(element => {
                 if (element.type !== 'checkbox' && element.type !== 'hidden') {
                     element.value = '';
                 } else if (element.type === 'checkbox') {

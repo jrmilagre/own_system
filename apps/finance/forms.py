@@ -374,6 +374,11 @@ class MultipleSchedulerItemForm(forms.Form):
         label='Conta de destino',
         required=False
     )
+    notes = forms.CharField(
+        label='Anotações',
+        required=False,
+        widget=forms.Textarea(attrs={'rows': 3})
+    )
 
     def clean(self):
         cleaned_data = super().clean()
