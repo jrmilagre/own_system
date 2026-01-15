@@ -33,6 +33,12 @@ DEBUG = os.getenv('DEBUG', 'False') == 'True'
 
 ALLOWED_HOSTS = ['*']
 
+# Adicione isso logo abaixo para evitar erros 403 no Render
+RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
+if RENDER_EXTERNAL_HOSTNAME:
+    ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
+    CSRF_TRUSTED_ORIGINS = [f'https://{RENDER_EXTERNAL_HOSTNAME}']
+
 
 # Application definition
 
@@ -48,6 +54,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -84,19 +91,13 @@ WSGI_APPLICATION = 'main.wsgi.application'
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 if DATABASE_URL:
-    # Replace the DATABASES section of your settings.py with this
-    tmpPostgres = urlparse(os.getenv("DATABASE_URL"))
-
+    import dj_database_url
     DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.postgresql',
-            'NAME': tmpPostgres.path.replace('/', ''),
-            'USER': tmpPostgres.username,
-            'PASSWORD': tmpPostgres.password,
-            'HOST': tmpPostgres.hostname,
-            'PORT': 5432,
-            'OPTIONS': dict(parse_qsl(tmpPostgres.query)),
-        }
+        'default': dj_database_url.config(
+            default=os.getenv('DATABASE_URL'),
+            conn_max_age=600,
+            ssl_require=True
+        )
     }
 else:
     # Se NÃO existir (seu PC local), usa SQLite
@@ -142,7 +143,16 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/4.2/howto/static-files/
 
+# Static files (CSS, JavaScript, Images)
 STATIC_URL = 'static/'
+
+# Isso garante que o caminho seja absoluto e amigável para Windows e Linux
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+
+# Você PRECISA desta lista para o Django saber onde estão seus CSS/JS manuais
+STATICFILES_DIRS = [
+    BASE_DIR / 'static', 
+]
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
@@ -152,3 +162,9 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # Increase max number of form fields to support budget form with many subcategories
 # Budget form has: subcategories * 12 months + csrf_token + year = 334 * 12 + 2 = 4010 fields
 DATA_UPLOAD_MAX_NUMBER_FIELDS = 5000
+
+STORAGES = {
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+}
