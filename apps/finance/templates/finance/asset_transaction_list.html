@@ -1,45 +1,146 @@
 {% extends 'finance/base.html' %}
 
+{% block section_name %}Transações de Ativos{% endblock %}
+
 {% block title %}Transações de Ativos{% endblock %}
 
 {% block content %}
-<h1>Transações de Ativos</h1>
-<a href="{% url 'finance:asset_transaction_create' %}"><button>Criar Nova Transação</button></a>
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h1 class="h4 mb-0">Transações de Ativos</h1>
+    <a href="{% url 'finance:asset_transaction_create' %}" class="btn btn-primary btn-sm">
+        <i class="fas fa-plus"></i> Criar Nova Transação de Ativo
+    </a>
+</div>
+
 {% if transactions %}
-    <table>
-        <thead>
-            <tr>
-                <th>Ativo</th>
-                <th>Conta</th>
-                <th>Tipo</th>
-                <th>Data</th>
-                <th>Quantidade</th>
-                <th>Preço</th>
-                <th>Valor Total</th>
-                <th>Rendimento</th>
-                <th>Ações</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for transaction in transactions %}
-            <tr>
-                <td>{{ transaction.asset.code }}</td>
-                <td>{{ transaction.account.name }}</td>
-                <td>{{ transaction.get_operation_type_display }}</td>
-                <td>{{ transaction.date }}</td>
-                <td>{{ transaction.quantity|default:"-" }}</td>
-                <td>{{ transaction.price|default:"-" }}</td>
-                <td>{{ transaction.total_value|default:"-" }}</td>
-                <td>{{ transaction.income_value|default:"-" }}</td>
-                <td>
-                    <a href="{% url 'finance:asset_transaction_update' transaction.pk %}"><button>Editar</button></a>
-                    <a href="{% url 'finance:asset_transaction_delete' transaction.pk %}"><button>Deletar</button></a>
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+<div class="card shadow-sm border-0">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover table-sm mb-0" style="font-size: 0.9rem;">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ps-3">Ativo</th>
+                        <th>Conta</th>
+                        <th>Tipo de Operação</th>
+                        <th>Data</th>
+                        <th class="text-end">Quantidade</th>
+                        <th class="text-end">Preço Unit.</th>
+                        <th class="text-end">Valor Total</th>
+                        <th class="text-end">Taxas</th>
+                        <th class="text-end">Rendimento</th>
+                        <th class="text-center pe-3">Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for transaction in transactions %}
+                    <tr class="table-row-compact">
+                        <td class="ps-3 py-1">
+                            <div class="d-flex align-items-center gap-2">
+                                <span style="font-size: 1.1rem;">📈</span>
+                                <div>
+                                    <span class="font-monospace fw-bold" style="font-size: 0.85rem;">{{ transaction.asset.code }}</span>
+                                    {% if transaction.asset.name %}
+                                    <br>
+                                    <small class="text-muted" style="font-size: 0.75rem;">{{ transaction.asset.name }}</small>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </td>
+                        <td class="py-1">
+                            <span style="font-weight: 500;">{{ transaction.account.name }}</span>
+                        </td>
+                        <td class="py-1">
+                            <span class="badge 
+                                {% if transaction.operation_type == 'BUY' %}bg-success
+                                {% elif transaction.operation_type == 'SELL' %}bg-danger
+                                {% elif transaction.operation_type == 'DIVIDEND' or transaction.operation_type == 'JCP' or transaction.operation_type == 'INTEREST' or transaction.operation_type == 'AMORTIZATION' %}bg-warning
+                                {% else %}bg-info{% endif %}">
+                                {{ transaction.get_operation_type_display }}
+                            </span>
+                        </td>
+                        <td class="py-1">
+                            {{ transaction.date|date:"d/m/Y" }}
+                        </td>
+                        <td class="text-end py-1">
+                            {% if transaction.quantity %}
+                                <span class="font-monospace">{{ transaction.quantity|floatformat:8 }}</span>
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end py-1">
+                            {% if transaction.price %}
+                                <span class="font-monospace">R$ {{ transaction.price|floatformat:4 }}</span>
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end py-1">
+                            {% if transaction.total_value %}
+                                <span class="fw-bold font-monospace" style="font-size: 0.95rem;">
+                                    R$ {{ transaction.total_value|floatformat:2 }}
+                                </span>
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end py-1">
+                            {% if transaction.fees %}
+                                <span class="text-danger font-monospace">R$ {{ transaction.fees|floatformat:2 }}</span>
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end py-1">
+                            {% if transaction.income_value %}
+                                <span class="text-success fw-bold font-monospace" style="font-size: 0.95rem;">
+                                    R$ {{ transaction.income_value|floatformat:2 }}
+                                </span>
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td class="pe-3 py-1">
+                            <div class="btn-group btn-group-sm compact-buttons" role="group">
+                                <a href="{% url 'finance:asset_transaction_update' transaction.pk %}" class="btn btn-sm btn-outline-primary compact-btn" title="Editar">
+                                    <i class="fas fa-edit"></i>
+                                </a>
+                                <a href="{% url 'finance:asset_transaction_delete' transaction.pk %}" class="btn btn-sm btn-outline-danger compact-btn" title="Excluir">
+                                    <i class="fas fa-trash"></i>
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
 {% else %}
-    <p>Nenhuma transação de ativo cadastrada.</p>
+<div class="alert alert-info">
+    <i class="fas fa-info-circle me-2"></i>Nenhuma transação de ativo cadastrada.
+</div>
 {% endif %}
+
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.table-row-compact td {
+    padding-top: 0.25rem !important;
+    padding-bottom: 0.25rem !important;
+    vertical-align: middle;
+}
+
+.compact-buttons .compact-btn {
+    padding: 0.15rem 0.4rem !important;
+    font-size: 0.75rem;
+    line-height: 1.2;
+}
+
+.compact-buttons .compact-btn i {
+    font-size: 0.75rem;
+}
+</style>
 {% endblock %}
