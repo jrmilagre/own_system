@@ -146,6 +146,8 @@
                                         {{ transaction.beneficiary }}
                                     {% elif transaction.subcategory %}
                                         {{ transaction.subcategory }}
+                                    {% elif transaction.is_transfer %}
+                                        Transação entre contas
                                     {% else %}
                                         Transação
                                     {% endif %}

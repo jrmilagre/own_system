@@ -128,7 +128,10 @@ class Account(BaseModel):
                         else:
                             description = trans.subcategory.subcategory
                     if not description:
-                        description = "Transação"
+                        if trans.is_transfer:
+                            description = "Transação entre contas"
+                        else:
+                            description = "Transação"
                 
                 movements.append({
                     'date': movement_date,

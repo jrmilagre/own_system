@@ -1,0 +1,16 @@
+<nav class="global-nav d-flex flex-wrap align-items-center">
+    <a href="{% url 'finance:index' %}" class="nav-link-money nav-conteudo {% if request.resolver_match.url_name == 'index' %}active{% endif %}">Conteúdo</a>
+    <a href="{% url 'finance:account_list' %}" class="nav-link-money nav-contas {% if 'account' in request.resolver_match.url_name or request.resolver_match.url_name == 'historico' %}active{% endif %}">Contas</a>
+    <a href="{% url 'finance:beneficiary_list' %}" class="nav-link-money nav-beneficiarios {% if 'beneficiary' in request.resolver_match.url_name %}active{% endif %}">Beneficiários</a>
+    <a href="{% url 'finance:category_list' %}" class="nav-link-money nav-categorias {% if 'category' in request.resolver_match.url_name or 'subcategory' in request.resolver_match.url_name %}active{% endif %}">Categorias</a>
+    <a href="{% url 'finance:transaction_list' %}" class="nav-link-money nav-transacoes {% if 'transaction' in request.resolver_match.url_name %}active{% endif %}">Transações</a>
+    <a href="{% url 'finance:scheduler_list' %}" class="nav-link-money nav-agendamentos {% if 'scheduler' in request.resolver_match.url_name %}active{% endif %}">Agendamentos</a>
+    <a href="{% url 'finance:asset_list' %}" class="nav-link-money nav-investimentos {% if 'asset' in request.resolver_match.url_name or 'asset_transaction' in request.resolver_match.url_name or 'asset_transaction_category_config' in request.resolver_match.url_name or 'inventory' in request.resolver_match.url_name %}active{% endif %}">Investimentos</a>
+    <a href="{% url 'finance:budget_list' %}" class="nav-link-money nav-orcamento {% if 'budget' in request.resolver_match.url_name %}active{% endif %}">Orçamento</a>
+    <a href="{% url 'finance:cash_flow_item_list' %}" class="nav-link-money nav-fluxo-caixa {% if 'cash_flow' in request.resolver_match.url_name or 'cash-flow' in request.resolver_match.url_name or 'cash_flow_report' in request.resolver_match.url_name %}active{% endif %}">Fluxo de caixa</a>
+    <a href="{% url 'finance:reports_index' %}" class="nav-link-money nav-relatorios {% if 'report' in request.resolver_match.url_name or request.resolver_match.url_name == 'account_statement' %}active{% endif %}">Relatórios</a>
+    <a href="{% url 'finance:money99_import_upload' %}" class="nav-link-money nav-conectividade {% if 'money99' in request.resolver_match.url_name %}active{% endif %}">Conectividade</a>
+    <button type="button" class="btn btn-sm btn-outline-secondary ms-auto" onclick="window.history.back();" title="Voltar">
+        <i class="fas fa-arrow-left me-1"></i><span class="d-none d-sm-inline">Voltar</span>
+    </button>
+</nav>
