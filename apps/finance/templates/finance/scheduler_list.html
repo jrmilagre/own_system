@@ -24,6 +24,7 @@
             <table class="table table-hover table-sm mb-0" style="font-size: 0.9rem;">
                 <thead class="table-light">
                     <tr>
+                        <th class="text-center" style="width: 50px;" title="Tipo de Agendamento"></th>
                         <th class="ps-3">Agendamento</th>
                         <th>Conta</th>
                         <th>Tipo</th>
@@ -37,88 +38,79 @@
                 </thead>
                 <tbody>
                     {% for group in multiple_groups %}
-                    <tr class="table-info multiple-group-header" data-group-id="{{ group.group_id }}">
-                        <td colspan="9" class="ps-3">
-                            <div class="d-flex align-items-center gap-2">
-                                <span style="font-size: 1.1rem;">📦</span>
-                                <strong>Agendamento Múltiplo</strong> 
-                                ({{ group.count }} item(ns), Total: R$ {{ group.total_value|floatformat:2 }})
-                            </div>
-                            <button type="button" class="btn btn-sm btn-outline-secondary ms-2 toggle-group" data-group-id="{{ group.group_id }}">
-                                <i class="fas fa-chevron-down"></i> Expandir/Colapsar
-                            </button>
-                        </td>
-                    </tr>
-                    <tr class="multiple-group-details" data-group-id="{{ group.group_id }}" style="display: none;">
-                        <td colspan="9" class="ps-4">
-                            <div class="table-responsive">
-                                <table class="table table-sm table-bordered mb-2">
-                                    <thead class="table-secondary">
-                                        <tr>
-                                            <th>Conta</th>
-                                            <th>Tipo</th>
-                                            <th>Valor</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {% for scheduler in group.schedulers %}
-                                        <tr>
-                                            <td>{{ scheduler.account }}</td>
-                                            <td>
-                                                <span class="badge {% if scheduler.transaction_type == 'CR' %}bg-success{% else %}bg-danger{% endif %}">
-                                                    {{ scheduler.get_transaction_type_display }}
-                                                </span>
-                                            </td>
-                                            <td class="text-end fw-bold {% if scheduler.transaction_type == 'DB' %}text-danger{% else %}text-success{% endif %}" style="font-size: 0.95rem;">
-                                                R$ {{ scheduler.value|floatformat:2 }}
-                                            </td>
-                                        </tr>
-                                        {% endfor %}
-                                    </tbody>
-                                </table>
-                            </div>
-                            <div class="mb-2">
-                                <p class="mb-1"><strong>Próxima Data:</strong> {{ group.representative.due_date|default:"-"|date:"d-m-Y" }}</p>
-                                <p class="mb-1"><strong>Recorrência:</strong> {{ group.representative.get_recurrence_type_display }} ({{ group.representative.recurrence_interval }})</p>
-                                <p class="mb-1">
-                                    <strong>Status:</strong> 
-                                    <span class="badge {% if group.representative.status == 'ACTIVE' %}bg-success{% elif group.representative.status == 'PAUSED' %}bg-warning{% else %}bg-secondary{% endif %}">
-                                        {{ group.representative.get_status_display }}
+                        {% for scheduler in group.schedulers %}
+                        <tr class="table-row-compact">
+                            <td class="text-center py-1">
+                                <span style="font-size: 1.2rem;" title="Agendamento Múltiplo">📦</span>
+                            </td>
+                            <td class="ps-3 py-1">
+                                <div class="d-flex align-items-center gap-2">
+                                    <span style="font-weight: 500;">
+                                        {% if scheduler.beneficiary %}
+                                            {{ scheduler.beneficiary }}
+                                        {% elif scheduler.subcategory %}
+                                            {{ scheduler.subcategory }}
+                                        {% else %}
+                                            Agendamento
+                                        {% endif %}
                                     </span>
-                                </p>
-                                <p class="mb-2">
-                                    <strong>Parcelas Restantes:</strong>
-                                    {% if group.representative.termination_type == 'INSTALLMENTS' %}
-                                        {{ group.representative.remaining_installments|default:"-" }}
-                                    {% elif group.representative.termination_type == 'FINAL_DATE' %}
-                                        Até {{ group.representative.final_date|default:"-"|date:"d-m-Y" }}
-                                    {% else %}
-                                        Infinito
-                                    {% endif %}
-                                </p>
-                                <div class="btn-group btn-group-sm" role="group">
-                                    <a href="{% url 'finance:multiple_scheduler_update' group.group_id %}" class="btn btn-outline-primary">
-                                        <i class="fas fa-edit"></i> Editar
+                                </div>
+                            </td>
+                        <td class="py-1">{{ scheduler.account }}</td>
+                        <td class="py-1">
+                            <span class="badge {% if scheduler.transaction_type == 'CR' %}bg-success{% else %}bg-danger{% endif %}">
+                                {{ scheduler.get_transaction_type_display }}
+                            </span>
+                        </td>
+                        <td class="text-end py-1">
+                            <span class="fw-bold {% if scheduler.transaction_type == 'DB' %}text-danger{% else %}text-success{% endif %}" style="font-size: 0.95rem;">
+                                R$ {{ scheduler.value|floatformat:2 }}
+                            </span>
+                        </td>
+                        <td class="py-1">{{ scheduler.due_date|default:"-"|date:"d-m-Y" }}</td>
+                        <td class="py-1">
+                            <small>{{ scheduler.get_recurrence_type_display }} ({{ scheduler.recurrence_interval }})</small>
+                        </td>
+                        <td class="py-1">
+                            <span class="badge {% if scheduler.status == 'ACTIVE' %}bg-success{% elif scheduler.status == 'PAUSED' %}bg-warning{% else %}bg-secondary{% endif %}">
+                                {{ scheduler.get_status_display }}
+                            </span>
+                        </td>
+                        <td class="py-1">
+                            {% if scheduler.termination_type == 'INSTALLMENTS' %}
+                                {{ scheduler.remaining_installments|default:"-" }}
+                            {% elif scheduler.termination_type == 'FINAL_DATE' %}
+                                <small>Até {{ scheduler.final_date|default:"-"|date:"d-m-Y" }}</small>
+                            {% else %}
+                                <span class="badge bg-info">Infinito</span>
+                            {% endif %}
+                        </td>
+                            <td class="pe-3 py-1">
+                                <div class="btn-group btn-group-sm compact-buttons" role="group">
+                                    <a href="{% url 'finance:multiple_scheduler_update' group.group_id %}" class="btn btn-sm btn-outline-primary compact-btn" title="Editar Agendamento Múltiplo">
+                                        <i class="fas fa-edit"></i>
                                     </a>
-                                    <a href="{% url 'finance:multiple_scheduler_delete' group.group_id %}" class="btn btn-outline-danger">
-                                        <i class="fas fa-trash"></i> Deletar
+                                    <a href="{% url 'finance:multiple_scheduler_delete' group.group_id %}" class="btn btn-sm btn-outline-danger compact-btn" title="Deletar Agendamento Múltiplo">
+                                        <i class="fas fa-trash"></i>
                                     </a>
-                                    {% if group.representative.status == 'ACTIVE' %}
-                                        <a href="{% url 'finance:multiple_scheduler_register' group.group_id %}" class="btn btn-outline-success">
-                                            <i class="fas fa-check"></i> Registrar
+                                    {% if scheduler.status == 'ACTIVE' %}
+                                        <a href="{% url 'finance:multiple_scheduler_register' group.group_id %}" class="btn btn-sm btn-outline-success compact-btn" title="Registrar Agendamento Múltiplo">
+                                            <i class="fas fa-check"></i>
                                         </a>
                                     {% endif %}
                                 </div>
-                            </div>
-                        </td>
-                    </tr>
+                            </td>
+                        </tr>
+                        {% endfor %}
                     {% endfor %}
                     
                     {% for scheduler in schedulers %}
                     <tr class="table-row-compact">
+                        <td class="text-center py-1">
+                            <span style="font-size: 1.2rem;" title="Agendamento Simples">📅</span>
+                        </td>
                         <td class="ps-3 py-1">
                             <div class="d-flex align-items-center gap-2">
-                                <span style="font-size: 1.1rem;">📅</span>
                                 <span style="font-weight: 500;">
                                     {% if scheduler.beneficiary %}
                                         {{ scheduler.beneficiary }}
@@ -207,29 +199,4 @@
     font-size: 0.75rem;
 }
 </style>
-{% endblock %}
-
-{% block extra_js %}
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    document.querySelectorAll('.toggle-group').forEach(button => {
-        button.addEventListener('click', function() {
-            const groupId = this.getAttribute('data-group-id');
-            const detailsRow = document.querySelector(`.multiple-group-details[data-group-id="${groupId}"]`);
-            const icon = this.querySelector('i');
-            if (detailsRow) {
-                if (detailsRow.style.display === 'none') {
-                    detailsRow.style.display = '';
-                    if (icon) icon.classList.remove('fa-chevron-down');
-                    if (icon) icon.classList.add('fa-chevron-up');
-                } else {
-                    detailsRow.style.display = 'none';
-                    if (icon) icon.classList.remove('fa-chevron-up');
-                    if (icon) icon.classList.add('fa-chevron-down');
-                }
-            }
-        });
-    });
-});
-</script>
 {% endblock %}
