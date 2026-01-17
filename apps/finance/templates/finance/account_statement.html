@@ -2,6 +2,44 @@
 
 {% block section_name %}{% if account %}{{ account.name }} ({{ account.get_account_type_display }}){% else %}Extrato de Contas{% endif %}{% endblock %}
 
+{% block sidebar %}
+<h6 class="px-3 text-uppercase text-muted" style="font-size: 0.7rem; color: #888 !important;">Relatórios</h6>
+<ul class="nav flex-column">
+    <li class="nav-item">
+        <a href="{% url 'finance:reports_index' %}">
+            <i class="fas fa-home me-2"></i>Início
+        </a>
+    </li>
+</ul>
+
+<h6 class="px-3 text-uppercase text-muted mt-3" style="font-size: 0.7rem; color: #888 !important;">Contas</h6>
+<ul class="nav flex-column">
+    <li class="nav-item">
+        <a href="{% url 'finance:account_statement' %}" class="active">
+            <i class="fas fa-file-alt me-2"></i>Extrato
+        </a>
+    </li>
+</ul>
+
+<h6 class="px-3 text-uppercase text-muted mt-3" style="font-size: 0.7rem; color: #888 !important;">Ativos</h6>
+<ul class="nav flex-column">
+    <li class="nav-item">
+        <a href="{% url 'finance:asset_stock_position_report' %}">
+            <i class="fas fa-chart-bar me-2"></i>Posição de Estoque
+        </a>
+    </li>
+</ul>
+
+<h6 class="px-3 text-uppercase text-muted mt-3" style="font-size: 0.7rem; color: #888 !important;">Fluxo de Caixa</h6>
+<ul class="nav flex-column">
+    <li class="nav-item">
+        <a href="{% url 'finance:cash_flow_report' %}">
+            <i class="fas fa-chart-line me-2"></i>Relatório de Fluxo de Caixa
+        </a>
+    </li>
+</ul>
+{% endblock %}
+
 {% block content %}
 {% if account %}
 <div class="mb-3" style="height: 150px; background: #fdfdfd; border: 1px solid #eee;">

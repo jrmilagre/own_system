@@ -2,6 +2,21 @@
 
 {% block section_name %}Transações de Ativos{% endblock %}
 
+{% block sidebar %}
+<h6 class="px-3 text-uppercase text-muted" style="font-size: 0.7rem; color: #888 !important;">Investimentos</h6>
+<ul class="nav flex-column">
+    <li class="nav-item">
+        <a href="{% url 'finance:asset_list' %}"><i class="fas fa-briefcase me-2"></i> Ativos</a>
+    </li>
+    <li class="nav-item">
+        <a href="{% url 'finance:asset_transaction_list' %}"><i class="fas fa-exchange-alt me-2"></i> Transações de ativos</a>
+    </li>
+    <li class="nav-item">
+        <a href="{% url 'finance:asset_transaction_category_config_list' %}"><i class="fas fa-cog me-2"></i> Configurações</a>
+    </li>
+</ul>
+{% endblock %}
+
 {% block title %}Transações de Ativos{% endblock %}
 
 {% block content %}

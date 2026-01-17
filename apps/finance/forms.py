@@ -1,6 +1,6 @@
 from django import forms
 from django.forms import formset_factory, inlineformset_factory, BaseFormSet
-from .models import Account, Beneficiary, Category, Subcategory, Transaction, Scheduler, Asset, AssetTransaction, AssetPosition, Inventory, CashFlowItem, Budget
+from .models import Account, Beneficiary, Category, Subcategory, Transaction, Scheduler, Asset, AssetTransaction, AssetPosition, Inventory, CashFlowItem, Budget, AssetTransactionCategoryConfig
 
 
 class AccountForm(forms.ModelForm):
@@ -732,55 +732,22 @@ class InventoryForm(forms.ModelForm):
 
 class CashFlowCalculationRuleForm(forms.Form):
     """Formulário para cada regra de cálculo"""
-    RULE_TYPE_CHOICES = [
-        ('subcategory', 'Por Subcategoria'),
-        ('asset_operation', 'Por Operação de Ativo'),
-    ]
     
-    rule_type = forms.ChoiceField(
-        choices=RULE_TYPE_CHOICES,
-        label='Tipo de Regra',
-        required=True,
-        widget=forms.Select(attrs={'class': 'rule-type-select'})
-    )
-    
-    # Campos para regra de subcategoria
+    # Campo para regra de subcategoria
     subcategory = forms.ModelChoiceField(
         queryset=Subcategory.objects.all().order_by('category__category', 'subcategory'),
         label='Subcategoria',
-        required=False,
-        widget=forms.Select(attrs={'class': 'subcategory-field'})
-    )
-    
-    # Campos para regra de operação de ativo
-    asset_operation_type = forms.ChoiceField(
-        choices=AssetTransaction.OPERATION_TYPE_CHOICES,
-        label='Tipo de Operação',
-        required=False,
-        widget=forms.Select(attrs={'class': 'asset-operation-field'})
-    )
-    
-    asset_type = forms.ChoiceField(
-        choices=Asset.ASSET_TYPE_CHOICES,
-        label='Tipo de Ativo (opcional)',
-        required=False,
-        widget=forms.Select(attrs={'class': 'asset-type-field'})
+        required=True,
+        widget=forms.Select(attrs={'class': 'subcategory-field form-select'})
     )
     
     def clean(self):
         cleaned_data = super().clean()
-        rule_type = cleaned_data.get('rule_type')
         
-        if rule_type == 'subcategory':
-            if not cleaned_data.get('subcategory'):
-                raise forms.ValidationError({
-                    'subcategory': 'Subcategoria é obrigatória para este tipo de regra.'
-                })
-        elif rule_type == 'asset_operation':
-            if not cleaned_data.get('asset_operation_type'):
-                raise forms.ValidationError({
-                    'asset_operation_type': 'Tipo de operação é obrigatório para este tipo de regra.'
-                })
+        if not cleaned_data.get('subcategory'):
+            raise forms.ValidationError({
+                'subcategory': 'Subcategoria é obrigatória.'
+            })
         
         return cleaned_data
 
@@ -822,25 +789,13 @@ class CashFlowItemForm(forms.ModelForm):
             for form in self.rules_formset:
                 # Verificar se o form tem dados válidos e não foi deletado
                 if form.is_valid() and form.cleaned_data and not form.cleaned_data.get('DELETE', False):
-                    rule_type = form.cleaned_data.get('rule_type')
-                    if rule_type:  # Só adicionar se tiver tipo
-                        rule_dict = {'type': rule_type}
-                        
-                        if rule_type == 'subcategory':
-                            subcategory = form.cleaned_data.get('subcategory')
-                            if subcategory:
-                                rule_dict['subcategory_id'] = subcategory.id
-                        elif rule_type == 'asset_operation':
-                            operation_type = form.cleaned_data.get('asset_operation_type')
-                            if operation_type:
-                                rule_dict['operation_type'] = operation_type
-                            asset_type = form.cleaned_data.get('asset_type')
-                            if asset_type:
-                                rule_dict['asset_type'] = asset_type
-                        
-                        # Só adicionar se tiver dados válidos
-                        if len(rule_dict) > 1:  # Mais que apenas 'type'
-                            rules_data.append(rule_dict)
+                    subcategory = form.cleaned_data.get('subcategory')
+                    if subcategory:
+                        rule_dict = {
+                            'type': 'subcategory',
+                            'subcategory_id': subcategory.id
+                        }
+                        rules_data.append(rule_dict)
             
             instance.calculation_rules = rules_data
         
@@ -1003,5 +958,67 @@ class SubcategoryMoveForm(forms.Form):
                 raise forms.ValidationError({
                     'destination_subcategory': 'A subcategoria de destino deve ser diferente da origem.'
                 })
+        
+        return cleaned_data
+
+
+class AssetTransactionCategoryConfigForm(forms.ModelForm):
+    class Meta:
+        model = AssetTransactionCategoryConfig
+        fields = [
+            'operation_type',
+            'asset_type',
+            'subcategory_principal',
+            'transaction_type_principal',
+            'subcategory_fees',
+            'transaction_type_fees',
+        ]
+        widgets = {
+            'operation_type': forms.Select(attrs={'class': 'form-select', 'required': True}),
+            'asset_type': forms.Select(attrs={'class': 'form-select'}),
+            'subcategory_principal': forms.Select(attrs={'class': 'form-select', 'required': True}),
+            'transaction_type_principal': forms.Select(attrs={'class': 'form-select', 'required': True}),
+            'subcategory_fees': forms.Select(attrs={'class': 'form-select'}),
+            'transaction_type_fees': forms.Select(attrs={'class': 'form-select'}),
+        }
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Ordenar subcategorias por categoria e nome
+        self.fields['subcategory_principal'].queryset = Subcategory.objects.all().select_related('category').order_by('category__category', 'subcategory')
+        self.fields['subcategory_fees'].queryset = Subcategory.objects.all().select_related('category').order_by('category__category', 'subcategory')
+        
+        # Adicionar labels mais descritivos
+        self.fields['subcategory_principal'].label = 'Subcategoria Principal'
+        self.fields['subcategory_fees'].label = 'Subcategoria de Taxas (opcional)'
+        
+        # Tornar asset_type opcional (pode ser None para aplicar a todos)
+        self.fields['asset_type'].required = False
+        self.fields['subcategory_fees'].required = False
+        self.fields['transaction_type_fees'].required = False
+    
+    def clean(self):
+        cleaned_data = super().clean()
+        operation_type = cleaned_data.get('operation_type')
+        asset_type = cleaned_data.get('asset_type')
+        
+        # Verificar se já existe uma configuração com a mesma combinação
+        if self.instance.pk:
+            # Se estiver editando, excluir a própria instância da verificação
+            existing = AssetTransactionCategoryConfig.objects.filter(
+                operation_type=operation_type,
+                asset_type=asset_type
+            ).exclude(pk=self.instance.pk).first()
+        else:
+            existing = AssetTransactionCategoryConfig.objects.filter(
+                operation_type=operation_type,
+                asset_type=asset_type
+            ).first()
+        
+        if existing:
+            asset_type_display = existing.get_asset_type_display() if existing.asset_type else "Todos os tipos"
+            raise forms.ValidationError(
+                f'Já existe uma configuração para {existing.get_operation_type_display()} - {asset_type_display}.'
+            )
         
         return cleaned_data

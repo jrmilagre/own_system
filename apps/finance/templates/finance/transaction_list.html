@@ -131,10 +131,12 @@
                     {% endfor %}
                     
                     {% for transaction in transactions %}
-                    <tr class="table-row-compact">
+                    <tr class="table-row-compact {% if transaction.asset_transaction %}table-warning{% endif %}">
                         <td class="ps-3 py-1">
                             <div class="d-flex align-items-center gap-2">
-                                {% if transaction.is_transfer %}
+                                {% if transaction.asset_transaction %}
+                                    <span style="font-size: 1.1rem;">📈</span>
+                                {% elif transaction.is_transfer %}
                                     <span style="font-size: 1.1rem;">🔄</span>
                                 {% else %}
                                     <span style="font-size: 1.1rem;">💸</span>
@@ -148,6 +150,11 @@
                                         Transação
                                     {% endif %}
                                 </span>
+                                {% if transaction.asset_transaction %}
+                                    <span class="badge bg-warning text-dark ms-2" title="Transação gerada automaticamente de transação de ativo">
+                                        <i class="fas fa-info-circle"></i> De Ativo
+                                    </span>
+                                {% endif %}
                             </div>
                         </td>
                         <td class="py-1">{{ transaction.account }}</td>
@@ -178,14 +185,25 @@
                             {% endif %}
                         </td>
                         <td class="pe-3 py-1">
-                            <div class="btn-group btn-group-sm compact-buttons" role="group">
-                                <a href="{% url 'finance:transaction_update' transaction.pk %}" class="btn btn-sm btn-outline-primary compact-btn" title="Editar">
-                                    <i class="fas fa-edit"></i>
-                                </a>
-                                <a href="{% url 'finance:transaction_delete' transaction.pk %}" class="btn btn-sm btn-outline-danger compact-btn" title="Excluir">
-                                    <i class="fas fa-trash"></i>
-                                </a>
-                            </div>
+                            {% if transaction.asset_transaction %}
+                                <div class="btn-group btn-group-sm compact-buttons" role="group">
+                                    <a href="{% url 'finance:asset_transaction_update' transaction.asset_transaction.pk %}" class="btn btn-sm btn-outline-info compact-btn" title="Editar transação de ativo">
+                                        <i class="fas fa-briefcase"></i>
+                                    </a>
+                                </div>
+                                <small class="d-block text-muted mt-1" style="font-size: 0.7rem;">
+                                    <i class="fas fa-lock"></i> Bloqueada
+                                </small>
+                            {% else %}
+                                <div class="btn-group btn-group-sm compact-buttons" role="group">
+                                    <a href="{% url 'finance:transaction_update' transaction.pk %}" class="btn btn-sm btn-outline-primary compact-btn" title="Editar">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
+                                    <a href="{% url 'finance:transaction_delete' transaction.pk %}" class="btn btn-sm btn-outline-danger compact-btn" title="Excluir">
+                                        <i class="fas fa-trash"></i>
+                                    </a>
+                                </div>
+                            {% endif %}
                         </td>
                     </tr>
                     {% endfor %}

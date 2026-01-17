@@ -113,43 +113,13 @@
                             <div style="display: none;">{{ rule_form.DELETE }}</div>
                             {% endif %}
                             <div class="row g-3">
-                                <div class="col-md-6">
-                                    <label for="{{ rule_form.rule_type.id_for_label }}" class="form-label">
-                                        <i class="fas fa-tag me-1 text-primary"></i>Tipo de Regra <span class="text-danger">*</span>
-                                    </label>
-                                    {{ rule_form.rule_type }}
-                                    {% if rule_form.rule_type.errors %}
-                                        <div class="text-danger small mt-1">{{ rule_form.rule_type.errors }}</div>
-                                    {% endif %}
-                                </div>
-
-                                <div class="col-md-6 subcategory-fields" style="display: none;">
+                                <div class="col-md-12">
                                     <label for="{{ rule_form.subcategory.id_for_label }}" class="form-label">
                                         <i class="fas fa-tags me-1 text-warning"></i>Subcategoria <span class="text-danger">*</span>
                                     </label>
                                     {{ rule_form.subcategory }}
                                     {% if rule_form.subcategory.errors %}
                                         <div class="text-danger small mt-1">{{ rule_form.subcategory.errors }}</div>
-                                    {% endif %}
-                                </div>
-
-                                <div class="col-md-6 asset-operation-fields" style="display: none;">
-                                    <label for="{{ rule_form.asset_operation_type.id_for_label }}" class="form-label">
-                                        <i class="fas fa-exchange-alt me-1 text-info"></i>Tipo de Operação <span class="text-danger">*</span>
-                                    </label>
-                                    {{ rule_form.asset_operation_type }}
-                                    {% if rule_form.asset_operation_type.errors %}
-                                        <div class="text-danger small mt-1">{{ rule_form.asset_operation_type.errors }}</div>
-                                    {% endif %}
-                                </div>
-
-                                <div class="col-md-6 asset-operation-fields" style="display: none;">
-                                    <label for="{{ rule_form.asset_type.id_for_label }}" class="form-label">
-                                        <i class="fas fa-briefcase me-1 text-secondary"></i>Tipo de Ativo <span class="text-danger">*</span>
-                                    </label>
-                                    {{ rule_form.asset_type }}
-                                    {% if rule_form.asset_type.errors %}
-                                        <div class="text-danger small mt-1">{{ rule_form.asset_type.errors }}</div>
                                     {% endif %}
                                 </div>
                             </div>
@@ -257,35 +227,7 @@ document.addEventListener('DOMContentLoaded', function() {
         updateFormVisibility();
     }
     
-    // Mostrar/ocultar campos baseado no tipo de regra
-    function setupRuleTypeListeners() {
-        document.querySelectorAll('[id^="id_rules-"][id$="-rule_type"]').forEach(select => {
-            select.addEventListener('change', function() {
-                const ruleForm = this.closest('.rule-form');
-                const ruleType = this.value;
-                
-                // Ocultar todos os campos
-                ruleForm.querySelectorAll('.subcategory-fields, .asset-operation-fields')
-                    .forEach(field => field.style.display = 'none');
-                
-                // Mostrar campos relevantes
-                if (ruleType === 'subcategory') {
-                    ruleForm.querySelectorAll('.subcategory-fields')
-                        .forEach(field => field.style.display = 'block');
-                } else if (ruleType === 'asset_operation') {
-                    ruleForm.querySelectorAll('.asset-operation-fields')
-                        .forEach(field => field.style.display = 'block');
-                }
-            });
-            
-            // Trigger inicial
-            if (select.value) {
-                select.dispatchEvent(new Event('change'));
-            }
-        });
-    }
-    
-    setupRuleTypeListeners();
+    // Não é mais necessário mostrar/ocultar campos, pois agora só temos subcategoria
     
     // Adicionar nova regra
     const addRuleButton = document.getElementById('add-rule');

@@ -10,12 +10,12 @@ from datetime import datetime, date
 import uuid
 import json as json_module
 import time
-from .models import Account, Beneficiary, Category, Subcategory, Transaction, Scheduler, Asset, AssetTransaction, AssetPosition, Budget, Inventory, CashFlowItem
+from .models import Account, Beneficiary, Category, Subcategory, Transaction, Scheduler, Asset, AssetTransaction, AssetPosition, Budget, Inventory, CashFlowItem, AssetTransactionCategoryConfig
 from .forms import (
     AccountForm, BeneficiaryForm, CategoryForm, SubcategoryForm, TransactionForm, SchedulerForm,
     MultipleTransactionForm, MultipleTransactionItemForm, MultipleTransactionItemFormSet,
     MultipleSchedulerForm, MultipleSchedulerItemForm, MultipleSchedulerItemFormSet,
-    MultipleSchedulerRegisterItemFormSet, AssetForm, AssetTransactionForm, AssetPositionForm, InventoryForm,
+    MultipleSchedulerRegisterItemFormSet, AssetForm, AssetTransactionForm, AssetPositionForm, InventoryForm, AssetTransactionCategoryConfigForm,
     CashFlowItemForm, CashFlowCalculationRuleFormSet, TransactionFilterForm, BudgetForm,
     Money99ImportForm, Money99StagingFilterForm, SubcategoryMoveForm
 )
@@ -101,6 +101,25 @@ def quick_create_subcategory(request):
                 'id': subcategory.id,
                 'name': str(subcategory),
                 'category_id': subcategory.category.id
+            })
+        else:
+            return JsonResponse({
+                'success': False,
+                'errors': form.errors
+            }, status=400)
+    return JsonResponse({'success': False, 'error': 'Method not allowed'}, status=405)
+
+
+def quick_create_asset(request):
+    """Cria um ativo rapidamente via AJAX"""
+    if request.method == 'POST':
+        form = AssetForm(request.POST)
+        if form.is_valid():
+            asset = form.save()
+            return JsonResponse({
+                'success': True,
+                'id': asset.id,
+                'name': f"{asset.code} - {asset.name}"
             })
         else:
             return JsonResponse({
@@ -683,7 +702,10 @@ def transaction_create(request):
                 messages.success(request, 'Transferência criada com sucesso!')
             else:
                 # Criar transação normal
-                form.save()
+                transaction = form.save(commit=False)
+                # Garantir que asset_transaction nunca seja definido manualmente
+                transaction.asset_transaction = None
+                transaction.save()
                 messages.success(request, 'Transação criada com sucesso!')
             
             return redirect('finance:transaction_list')
@@ -699,6 +721,11 @@ def transaction_create(request):
 def transaction_update(request, pk):
     """Editar transação existente"""
     transaction = get_object_or_404(Transaction, pk=pk)
+    
+    # Bloquear edição de transações oriundas de transações de ativos
+    if transaction.asset_transaction:
+        messages.error(request, 'Esta transação foi gerada automaticamente a partir de uma transação de ativo. Para editá-la, edite a transação de ativo correspondente.')
+        return redirect('finance:transaction_list')
     
     # Se a transação faz parte de uma transação múltipla, redirecionar para o formulário de transação múltipla
     if transaction.is_multiple and transaction.multiple_transaction_group_id:
@@ -759,7 +786,12 @@ def transaction_update(request, pk):
                     messages.error(request, 'Transação vinculada não encontrada.')
             else:
                 # Atualizar transação normal
-                form.save()
+                transaction = form.save(commit=False)
+                # Garantir que asset_transaction nunca seja alterado manualmente
+                # (preservar o valor original se existir, mas não permitir criar novo)
+                original_asset_transaction = transaction.asset_transaction
+                transaction.asset_transaction = original_asset_transaction  # Manter o valor original
+                transaction.save()
                 messages.success(request, 'Transação atualizada com sucesso!')
             
             return redirect('finance:transaction_list')
@@ -803,6 +835,12 @@ def transaction_update(request, pk):
 def transaction_delete(request, pk):
     """Deletar transação"""
     transaction = get_object_or_404(Transaction, pk=pk)
+    
+    # Bloquear deleção de transações oriundas de transações de ativos
+    if transaction.asset_transaction:
+        messages.error(request, 'Esta transação foi gerada automaticamente a partir de uma transação de ativo. Para deletá-la, delete a transação de ativo correspondente.')
+        return redirect('finance:transaction_list')
+    
     if request.method == 'POST':
         if transaction.is_transfer:
             # Deletar ambas as transações da transferência
@@ -2196,6 +2234,53 @@ def asset_transaction_delete(request, pk):
     return render(request, 'finance/asset_transaction_confirm_delete.html', {'transaction': transaction})
 
 
+# AssetTransactionCategoryConfig Views
+def asset_transaction_category_config_list(request):
+    """Lista de configurações de categoria para transações de ativos"""
+    configs = AssetTransactionCategoryConfig.objects.all().select_related(
+        'subcategory_principal', 'subcategory_principal__category',
+        'subcategory_fees', 'subcategory_fees__category'
+    ).order_by('operation_type', 'asset_type')
+    return render(request, 'finance/asset_transaction_category_config_list.html', {'configs': configs})
+
+
+def asset_transaction_category_config_create(request):
+    """Criar nova configuração de categoria"""
+    if request.method == 'POST':
+        form = AssetTransactionCategoryConfigForm(request.POST)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Configuração criada com sucesso!')
+            return redirect('finance:asset_transaction_category_config_list')
+    else:
+        form = AssetTransactionCategoryConfigForm()
+    return render(request, 'finance/asset_transaction_category_config_form.html', {'form': form})
+
+
+def asset_transaction_category_config_update(request, pk):
+    """Editar configuração existente"""
+    config = get_object_or_404(AssetTransactionCategoryConfig, pk=pk)
+    if request.method == 'POST':
+        form = AssetTransactionCategoryConfigForm(request.POST, instance=config)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Configuração atualizada com sucesso!')
+            return redirect('finance:asset_transaction_category_config_list')
+    else:
+        form = AssetTransactionCategoryConfigForm(instance=config)
+    return render(request, 'finance/asset_transaction_category_config_form.html', {'form': form, 'config': config})
+
+
+def asset_transaction_category_config_delete(request, pk):
+    """Deletar configuração"""
+    config = get_object_or_404(AssetTransactionCategoryConfig, pk=pk)
+    if request.method == 'POST':
+        config.delete()
+        messages.success(request, 'Configuração deletada com sucesso!')
+        return redirect('finance:asset_transaction_category_config_list')
+    return render(request, 'finance/asset_transaction_category_config_confirm_delete.html', {'config': config})
+
+
 # AssetPosition Views
 def asset_position_create(request):
     """Criar nova posição de ativo"""
@@ -2309,8 +2394,16 @@ def account_statement(request, account_id=None):
                     elif movement.get('credit'):
                         amount = float(movement['credit'])
                     
+                    # ID da transação (pode ser Transaction ou AssetTransaction relacionado)
+                    trans_id = None
+                    if movement.get('transaction'):
+                        trans_id = movement['transaction'].id
+                    elif movement.get('asset_transaction'):
+                        # Se houver asset_transaction, usar o ID dele (para compatibilidade)
+                        trans_id = movement['asset_transaction'].id
+                    
                     transactions.append({
-                        'id': movement.get('transaction').id if movement.get('transaction') else (movement.get('asset_transaction').id if movement.get('asset_transaction') else None),
+                        'id': trans_id,
                         'date': movement['date'],
                         'description': movement['description'],
                         'amount': amount,
@@ -2925,13 +3018,12 @@ def cash_flow_item_update(request, pk):
         # Popular formset com regras existentes
         initial_data = []
         for rule in item.calculation_rules:
-            rule_data = {'rule_type': rule.get('type')}
+            # Apenas processar regras de subcategoria
             if rule.get('type') == 'subcategory':
-                rule_data['subcategory'] = rule.get('subcategory_id')
-            elif rule.get('type') == 'asset_operation':
-                rule_data['asset_operation_type'] = rule.get('operation_type')
-                rule_data['asset_type'] = rule.get('asset_type', '')
-            initial_data.append(rule_data)
+                rule_data = {
+                    'subcategory': rule.get('subcategory_id')
+                }
+                initial_data.append(rule_data)
         
         rules_formset = CashFlowCalculationRuleFormSet(prefix='rules', initial=initial_data)
     

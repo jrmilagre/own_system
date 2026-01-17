@@ -54,6 +54,7 @@ urlpatterns = [
     path('api/quick-create/account/', views.quick_create_account, name='quick_create_account'),
     path('api/quick-create/beneficiary/', views.quick_create_beneficiary, name='quick_create_beneficiary'),
     path('api/quick-create/subcategory/', views.quick_create_subcategory, name='quick_create_subcategory'),
+    path('api/quick-create/asset/', views.quick_create_asset, name='quick_create_asset'),
     # Asset URLs
     path('assets/', views.asset_list, name='asset_list'),
     path('assets/create/', views.asset_create, name='asset_create'),
@@ -64,6 +65,11 @@ urlpatterns = [
     path('asset-transactions/create/', views.asset_transaction_create, name='asset_transaction_create'),
     path('asset-transactions/<int:pk>/update/', views.asset_transaction_update, name='asset_transaction_update'),
     path('asset-transactions/<int:pk>/delete/', views.asset_transaction_delete, name='asset_transaction_delete'),
+    # AssetTransactionCategoryConfig URLs
+    path('asset-transaction-category-configs/', views.asset_transaction_category_config_list, name='asset_transaction_category_config_list'),
+    path('asset-transaction-category-configs/create/', views.asset_transaction_category_config_create, name='asset_transaction_category_config_create'),
+    path('asset-transaction-category-configs/<int:pk>/update/', views.asset_transaction_category_config_update, name='asset_transaction_category_config_update'),
+    path('asset-transaction-category-configs/<int:pk>/delete/', views.asset_transaction_category_config_delete, name='asset_transaction_category_config_delete'),
     # AssetPosition URLs
     path('asset-positions/create/', views.asset_position_create, name='asset_position_create'),
     path('asset-positions/<int:pk>/update/', views.asset_position_update, name='asset_position_update'),

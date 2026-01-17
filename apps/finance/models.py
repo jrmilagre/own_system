@@ -43,6 +43,7 @@ class Account(BaseModel):
         """
         Calcula o saldo da conta até uma data específica.
         Se date=None, calcula o saldo atual (todas as movimentações).
+        Nota: As transações de ativos agora geram Transactions normais automaticamente.
         """
         from django.db.models import Q
         from decimal import Decimal
@@ -54,7 +55,7 @@ class Account(BaseModel):
         if date:
             date_filter = Q(transaction_date__lte=date) | Q(transaction_date__isnull=True, due_date__lte=date)
         
-        # Transações normais
+        # Transações (inclui as geradas automaticamente de AssetTransactions)
         transactions = Transaction.objects.filter(account=self)
         if date:
             transactions = transactions.filter(date_filter)
@@ -64,15 +65,6 @@ class Account(BaseModel):
                 balance += trans.value
             elif trans.transaction_type == 'DB':
                 balance -= trans.value
-        
-        # Movimentações de ativos que afetam dinheiro
-        asset_transactions = AssetTransaction.objects.filter(account=self)
-        if date:
-            asset_transactions = asset_transactions.filter(date__lte=date)
-        
-        for asset_trans in asset_transactions:
-            net_value = asset_trans.get_net_value()
-            balance += net_value  # get_net_value() já retorna negativo para saídas
         
         return balance
     
@@ -116,12 +108,27 @@ class Account(BaseModel):
             movement_date = trans.transaction_date or trans.due_date
             if movement_date:  # Só adicionar se tiver data
                 description = ""
-                if trans.beneficiary:
-                    description = str(trans.beneficiary)
-                if trans.subcategory:
-                    description += f" - {trans.subcategory.subcategory}"
-                if not description:
-                    description = "Transação"
+                
+                # Se a transação foi gerada de uma AssetTransaction, incluir informação do ativo
+                if trans.asset_transaction:
+                    asset_trans = trans.asset_transaction
+                    description = f"{asset_trans.get_operation_type_display()} - {asset_trans.asset.code}"
+                    if asset_trans.notes:
+                        description += f" ({asset_trans.notes})"
+                    # Adicionar informação de subcategoria se houver
+                    if trans.subcategory:
+                        description += f" - {trans.subcategory.subcategory}"
+                else:
+                    # Transação normal
+                    if trans.beneficiary:
+                        description = str(trans.beneficiary)
+                    if trans.subcategory:
+                        if description:
+                            description += f" - {trans.subcategory.subcategory}"
+                        else:
+                            description = trans.subcategory.subcategory
+                    if not description:
+                        description = "Transação"
                 
                 movements.append({
                     'date': movement_date,
@@ -130,31 +137,7 @@ class Account(BaseModel):
                     'debit': trans.value if trans.transaction_type == 'DB' else None,
                     'credit': trans.value if trans.transaction_type == 'CR' else None,
                     'transaction': trans,
-                    'asset_transaction': None,
-                })
-        
-        # Movimentações de ativos que afetam dinheiro
-        asset_transactions = AssetTransaction.objects.filter(account=self)
-        if start_date:
-            asset_transactions = asset_transactions.filter(date__gte=start_date)
-        if end_date:
-            asset_transactions = asset_transactions.filter(date__lte=end_date)
-        
-        for asset_trans in asset_transactions:
-            net_value = asset_trans.get_net_value()
-            if net_value != 0:  # Apenas operações que afetam dinheiro
-                description = f"{asset_trans.get_operation_type_display()} - {asset_trans.asset.code}"
-                if asset_trans.notes:
-                    description += f" ({asset_trans.notes})"
-                
-                movements.append({
-                    'date': asset_trans.date,
-                    'type': 'ASSET',
-                    'description': description,
-                    'debit': abs(net_value) if net_value < 0 else None,
-                    'credit': net_value if net_value > 0 else None,
-                    'transaction': None,
-                    'asset_transaction': asset_trans,
+                    'asset_transaction': trans.asset_transaction,  # Referência ao AssetTransaction se houver
                 })
         
         # Ordenar por data
@@ -428,6 +411,15 @@ class Transaction(BaseModel):
         null=True,
         blank=True,
         help_text='Hash MD5 gerado a partir dos dados originais da importação para prevenir duplicatas'
+    )
+    asset_transaction = models.ForeignKey(
+        'AssetTransaction',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='transactions',
+        verbose_name='Transação de Ativo',
+        help_text='Transação de ativo relacionada (criada automaticamente)'
     )
 
     class Meta:
@@ -806,6 +798,94 @@ class Scheduler(BaseModel):
 # Os modelos foram removidos apÃ³s migraÃ§Ã£o de dados
 
 
+class AssetTransactionCategoryConfig(BaseModel):
+    """Modelo para configurar categorias/subcategorias para cada tipo de operação de ativo"""
+    
+    OPERATION_TYPE_CHOICES = [
+        ('BUY', 'Compra'),
+        ('SELL', 'Venda'),
+        ('DIVIDEND', 'Dividendo'),
+        ('JCP', 'Juros sobre Capital Próprio'),
+        ('BONUS', 'Bonificação'),
+        ('SPLIT', 'Desdobramento'),
+        ('GROUP', 'Grupamento'),
+        ('SUB', 'Subscrição'),
+        ('CAPITAL_INCREASE', 'Aumento de Capital'),
+        ('RIGHTS_EXERCISE', 'Exercício de Direitos'),
+        ('AMORTIZATION', 'Amortização'),
+        ('INTEREST', 'Juros (Renda Fixa)'),
+        ('REDEMPTION', 'Resgate (Renda Fixa)'),
+    ]
+    
+    ASSET_TYPE_CHOICES = [
+        ('STOCK', 'Ação'),
+        ('FII', 'Fundo Imobiliário'),
+        ('ETF', 'ETF'),
+        ('BOND', 'Renda Fixa'),
+        ('REIT', 'REIT'),
+        ('CRYPTO', 'Criptomoeda'),
+        ('OTHER', 'Outro'),
+    ]
+    
+    operation_type = models.CharField(
+        'Tipo de operação',
+        max_length=20,
+        choices=OPERATION_TYPE_CHOICES,
+        help_text='Tipo de operação de ativo (BUY, SELL, DIVIDEND, etc.)'
+    )
+    asset_type = models.CharField(
+        'Tipo de ativo',
+        max_length=10,
+        choices=ASSET_TYPE_CHOICES,
+        null=True,
+        blank=True,
+        help_text='Tipo de ativo específico (opcional). Se None, aplica a todos os tipos.'
+    )
+    subcategory_principal = models.ForeignKey(
+        Subcategory,
+        on_delete=models.CASCADE,
+        verbose_name='Subcategoria Principal',
+        related_name='asset_configs_principal',
+        help_text='Subcategoria para o valor principal da operação (ex: Compra de investimento > Fundo imobiliário)'
+    )
+    transaction_type_principal = models.CharField(
+        'Tipo de transação principal',
+        max_length=2,
+        choices=[('CR', 'Crédito'), ('DB', 'Débito')],
+        default='DB',
+        help_text='Tipo de transação para o valor principal'
+    )
+    subcategory_fees = models.ForeignKey(
+        Subcategory,
+        on_delete=models.CASCADE,
+        verbose_name='Subcategoria de Taxas',
+        related_name='asset_configs_fees',
+        null=True,
+        blank=True,
+        help_text='Subcategoria para taxas (ex: Taxas financeiras > Corretagem). Se None, não cria transação de taxas.'
+    )
+    transaction_type_fees = models.CharField(
+        'Tipo de transação de taxas',
+        max_length=2,
+        choices=[('CR', 'Crédito'), ('DB', 'Débito')],
+        default='DB',
+        help_text='Tipo de transação para taxas (geralmente DB)'
+    )
+    
+    class Meta:
+        verbose_name = 'Configuração de Categoria para Transação de Ativo'
+        verbose_name_plural = 'Configurações de Categoria para Transações de Ativos'
+        ordering = ('operation_type', 'asset_type')
+        unique_together = [['operation_type', 'asset_type']]
+        indexes = [
+            models.Index(fields=['operation_type', 'asset_type']),
+        ]
+    
+    def __str__(self):
+        asset_type_str = f" - {self.get_asset_type_display()}" if self.asset_type else " - Todos"
+        return f"{self.get_operation_type_display()}{asset_type_str}"
+
+
 class Asset(BaseModel):
     """Modelo para representar um ativo financeiro"""
     
@@ -1059,7 +1139,91 @@ class AssetTransaction(BaseModel):
             # Operações que não envolvem dinheiro
             self.total_value = 0
         
+        # Verificar se é uma atualização (já existe no banco)
+        is_update = self.pk is not None
+        
+        # Salvar o AssetTransaction primeiro
         super().save(*args, **kwargs)
+        
+        # Criar/atualizar Transactions relacionadas
+        self._create_or_update_related_transactions(is_update)
+    
+    def _create_or_update_related_transactions(self, is_update):
+        """Cria ou atualiza as Transactions relacionadas baseado na configuração de categorias"""
+        from decimal import Decimal
+        
+        # Operações que não afetam o fluxo de caixa não geram Transactions
+        if self.operation_type in ['BONUS', 'SPLIT', 'GROUP', 'CAPITAL_INCREASE', 'RIGHTS_EXERCISE']:
+            # Deletar Transactions existentes se houver
+            if is_update:
+                Transaction.objects.filter(asset_transaction=self).delete()
+            return
+        
+        # Buscar configuração de categorias
+        # Primeiro tenta buscar por operation_type + asset_type específico
+        config = AssetTransactionCategoryConfig.objects.filter(
+            operation_type=self.operation_type,
+            asset_type=self.asset.asset_type
+        ).first()
+        
+        # Se não encontrar, busca por operation_type apenas (asset_type=None)
+        if not config:
+            config = AssetTransactionCategoryConfig.objects.filter(
+                operation_type=self.operation_type,
+                asset_type__isnull=True
+            ).first()
+        
+        # Se não encontrar configuração, não cria Transactions
+        if not config:
+            # Deletar Transactions existentes se houver (caso a configuração foi removida)
+            if is_update:
+                Transaction.objects.filter(asset_transaction=self).delete()
+            return
+        
+        # Deletar Transactions antigas se for atualização
+        if is_update:
+            Transaction.objects.filter(asset_transaction=self).delete()
+        
+        # Calcular valores
+        calculated_base = self.quantity * self.price
+        
+        # Determinar valor principal baseado no tipo de operação
+        if self.operation_type in ['BUY', 'SELL', 'SUB', 'REDEMPTION']:
+            principal_value = calculated_base
+        elif self.operation_type in ['DIVIDEND', 'JCP', 'INTEREST', 'AMORTIZATION']:
+            principal_value = self.income_value
+        else:
+            principal_value = Decimal('0')
+        
+        # Criar Transaction principal se houver valor
+        if principal_value > 0:
+            Transaction.objects.create(
+                account=self.account,
+                beneficiary=None,  # Transações de ativos não têm beneficiário
+                subcategory=config.subcategory_principal,
+                transaction_type=config.transaction_type_principal,
+                value=principal_value,
+                due_date=self.date,
+                transaction_date=self.date,
+                purchase_date=None,
+                notes=f"Gerado automaticamente de: {self.asset.code} - {self.get_operation_type_display()}",
+                asset_transaction=self
+            )
+        
+        # Criar Transaction de taxas se houver fees e subcategory_fees configurada
+        if self.fees > 0 and config.subcategory_fees:
+            Transaction.objects.create(
+                account=self.account,
+                beneficiary=None,
+                subcategory=config.subcategory_fees,
+                transaction_type=config.transaction_type_fees,
+                value=self.fees,
+                due_date=self.date,
+                transaction_date=self.date,
+                purchase_date=None,
+                notes=f"Taxas de: {self.asset.code} - {self.get_operation_type_display()}",
+                asset_transaction=self
+            )
     
     def get_net_value(self):
         """Retorna o valor líquido da operação para o fluxo de caixa
@@ -1385,17 +1549,13 @@ class CashFlowItem(BaseModel):
         Por subcategoria:
         [{"type": "subcategory", "subcategory_id": 5}]
         
-        Por operação de ativo:
-        [{"type": "asset_operation", "operation_type": "DIVIDEND"}]
-        
-        Por operação + tipo de ativo:
-        [{"type": "asset_operation", "operation_type": "BUY", "asset_type": "STOCK"}]
-        
         Múltiplas regras (soma todas):
         [
             {"type": "subcategory", "subcategory_id": 5},
-            {"type": "asset_operation", "operation_type": "DIVIDEND"}
+            {"type": "subcategory", "subcategory_id": 10}
         ]
+        
+        Nota: As transações de ativos agora geram Transactions normais que podem ser categorizadas por subcategoria.
         """
     )
     order = models.IntegerField(
@@ -1728,12 +1888,7 @@ class CashFlowItem(BaseModel):
                         subcategory_id, start_date, end_date, account
                     )
                     total += value
-                
-                elif rule_type == 'asset_operation':
-                    value = self._calculate_by_asset_operation(
-                        rule, start_date, end_date, account
-                    )
-                    total += value
+                # Nota: asset_operation foi removido - transações de ativos agora geram Transactions normais
             
             return total
         

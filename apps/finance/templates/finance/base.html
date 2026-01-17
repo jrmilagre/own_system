@@ -32,6 +32,12 @@
             background-color: var(--money-header-bg);
             border-bottom: 2px solid #ccc;
             padding: 0 1rem;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1030;
+            width: 100%;
         }
         .nav-link-money {
             color: #333;
@@ -145,6 +151,22 @@
             color: white;
             padding: 5px 15px;
             font-weight: 600;
+            position: fixed;
+            top: 41px; /* Altura do global-nav (aproximadamente 41px) */
+            left: 0;
+            right: 0;
+            z-index: 1029;
+            width: 100%;
+        }
+        
+        /* Ajustar body e container para compensar os headers fixos */
+        body {
+            padding-top: 81px; /* Altura do global-nav (41px) + section-header (40px) */
+        }
+        
+        /* Ajustar o container-fluid para não ficar escondido atrás dos headers */
+        .container-fluid {
+            margin-top: 0;
         }
 
         /* Barra Lateral Contextual */
@@ -153,6 +175,10 @@
             color: #ddd;
             min-height: calc(100vh - 80px);
             font-size: 0.85rem;
+            position: sticky;
+            top: 80px; /* Altura dos headers fixos */
+            max-height: calc(100vh - 80px);
+            overflow-y: auto;
         }
         .sidebar a {
             color: #bbb;
@@ -164,6 +190,12 @@
         .sidebar a:hover { 
             background-color: #222; 
             color: #fff; 
+        }
+        .sidebar a.active {
+            background-color: #333;
+            color: #fff;
+            font-weight: 500;
+            border-left: 3px solid #00BCD4;
         }
         
         /* Mensagens do Django */
@@ -216,7 +248,7 @@
         <a href="{% url 'finance:category_list' %}" class="nav-link-money nav-categorias {% if 'category' in request.resolver_match.url_name or 'subcategory' in request.resolver_match.url_name %}active{% endif %}">Categorias</a>
         <a href="{% url 'finance:transaction_list' %}" class="nav-link-money nav-transacoes {% if 'transaction' in request.resolver_match.url_name %}active{% endif %}">Transações</a>
         <a href="{% url 'finance:scheduler_list' %}" class="nav-link-money nav-agendamentos {% if 'scheduler' in request.resolver_match.url_name %}active{% endif %}">Agendamentos</a>
-        <a href="{% url 'finance:asset_list' %}" class="nav-link-money nav-investimentos {% if 'asset' in request.resolver_match.url_name or 'inventory' in request.resolver_match.url_name %}active{% endif %}">Investimentos</a>
+        <a href="{% url 'finance:asset_list' %}" class="nav-link-money nav-investimentos {% if 'asset' in request.resolver_match.url_name or 'asset_transaction' in request.resolver_match.url_name or 'asset_transaction_category_config' in request.resolver_match.url_name or 'inventory' in request.resolver_match.url_name %}active{% endif %}">Investimentos</a>
         <a href="{% url 'finance:budget_list' %}" class="nav-link-money nav-orcamento {% if 'budget' in request.resolver_match.url_name %}active{% endif %}">Orçamento</a>
         <a href="{% url 'finance:cash_flow_item_list' %}" class="nav-link-money nav-fluxo-caixa {% if 'cash_flow' in request.resolver_match.url_name or 'cash-flow' in request.resolver_match.url_name or 'cash_flow_report' in request.resolver_match.url_name %}active{% endif %}">Fluxo de caixa</a>
         <a href="{% url 'finance:reports_index' %}" class="nav-link-money nav-relatorios {% if 'report' in request.resolver_match.url_name or request.resolver_match.url_name == 'account_statement' %}active{% endif %}">Relatórios</a>

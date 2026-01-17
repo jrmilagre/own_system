@@ -4,6 +4,44 @@
 
 {% block title %}Relatório de Fluxo de Caixa{% endblock %}
 
+{% block sidebar %}
+<h6 class="px-3 text-uppercase text-muted" style="font-size: 0.7rem; color: #888 !important;">Relatórios</h6>
+<ul class="nav flex-column">
+    <li class="nav-item">
+        <a href="{% url 'finance:reports_index' %}">
+            <i class="fas fa-home me-2"></i>Início
+        </a>
+    </li>
+</ul>
+
+<h6 class="px-3 text-uppercase text-muted mt-3" style="font-size: 0.7rem; color: #888 !important;">Contas</h6>
+<ul class="nav flex-column">
+    <li class="nav-item">
+        <a href="{% url 'finance:account_statement' %}">
+            <i class="fas fa-file-alt me-2"></i>Extrato
+        </a>
+    </li>
+</ul>
+
+<h6 class="px-3 text-uppercase text-muted mt-3" style="font-size: 0.7rem; color: #888 !important;">Ativos</h6>
+<ul class="nav flex-column">
+    <li class="nav-item">
+        <a href="{% url 'finance:asset_stock_position_report' %}">
+            <i class="fas fa-chart-bar me-2"></i>Posição de Estoque
+        </a>
+    </li>
+</ul>
+
+<h6 class="px-3 text-uppercase text-muted mt-3" style="font-size: 0.7rem; color: #888 !important;">Fluxo de Caixa</h6>
+<ul class="nav flex-column">
+    <li class="nav-item">
+        <a href="{% url 'finance:cash_flow_report' %}" class="active">
+            <i class="fas fa-chart-line me-2"></i>Relatório de Fluxo de Caixa
+        </a>
+    </li>
+</ul>
+{% endblock %}
+
 {% block content %}
 <div class="card shadow-sm border-0 mb-3">
     <div class="card-header bg-light">

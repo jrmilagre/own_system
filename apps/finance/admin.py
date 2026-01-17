@@ -309,3 +309,31 @@ class CashFlowItemAdmin(admin.ModelAdmin):
             'fields': ('calculation_type', 'accumulates_in', 'calculation_rules')
         }),
     )
+
+
+@admin.register(AssetTransactionCategoryConfig)
+class AssetTransactionCategoryConfigAdmin(admin.ModelAdmin):
+    list_display = (
+        'operation_type',
+        'asset_type',
+        'subcategory_principal',
+        'transaction_type_principal',
+        'subcategory_fees',
+        'transaction_type_fees',
+        'created_at',
+        'updated_at',
+    )
+    search_fields = ('operation_type', 'asset_type', 'subcategory_principal__subcategory', 'subcategory_fees__subcategory')
+    list_filter = ('operation_type', 'asset_type', 'transaction_type_principal', 'transaction_type_fees', 'created_at')
+    ordering = ('operation_type', 'asset_type')
+    fieldsets = (
+        ('Configuração', {
+            'fields': ('operation_type', 'asset_type')
+        }),
+        ('Transação Principal', {
+            'fields': ('subcategory_principal', 'transaction_type_principal')
+        }),
+        ('Transação de Taxas', {
+            'fields': ('subcategory_fees', 'transaction_type_fees')
+        }),
+    )

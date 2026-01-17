@@ -22,7 +22,12 @@
                     <label for="{{ form.asset.id_for_label }}" class="form-label">
                         <i class="fas fa-chart-line me-1 text-primary"></i>Ativo <span class="text-danger">*</span>
                     </label>
-                    {{ form.asset }}
+                    <div class="input-group">
+                        {{ form.asset }}
+                        <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#quickCreateAssetModal" title="Criar novo ativo">
+                            <i class="fas fa-plus"></i>
+                        </button>
+                    </div>
                     {% if form.asset.errors %}
                         <div class="text-danger small mt-1">{{ form.asset.errors }}</div>
                     {% endif %}
@@ -33,7 +38,12 @@
                     <label for="{{ form.account.id_for_label }}" class="form-label">
                         <i class="fas fa-university me-1 text-info"></i>Conta <span class="text-danger">*</span>
                     </label>
-                    {{ form.account }}
+                    <div class="input-group">
+                        {{ form.account }}
+                        <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#quickCreateAccountModal" title="Criar nova conta">
+                            <i class="fas fa-plus"></i>
+                        </button>
+                    </div>
                     {% if form.account.errors %}
                         <div class="text-danger small mt-1">{{ form.account.errors }}</div>
                     {% endif %}
@@ -163,6 +173,110 @@
                 </div>
             </div>
         </form>
+    </div>
+</div>
+
+<!-- Modal: Criar Ativo Rápido -->
+<div class="modal fade" id="quickCreateAssetModal" tabindex="-1" aria-labelledby="quickCreateAssetModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="quickCreateAssetModalLabel">
+                    <i class="fas fa-chart-line me-2"></i>Criar Novo Ativo
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="quickCreateAssetForm">
+                    <div class="mb-3">
+                        <label for="asset_code" class="form-label">Código <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="asset_code" name="code" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="asset_name" class="form-label">Nome <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="asset_name" name="name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="asset_type" class="form-label">Tipo de Ativo <span class="text-danger">*</span></label>
+                        <select class="form-select" id="asset_type" name="asset_type" required>
+                            <option value="STOCK">Ação</option>
+                            <option value="FII">Fundo Imobiliário</option>
+                            <option value="ETF">ETF</option>
+                            <option value="BOND">Renda Fixa</option>
+                            <option value="REIT">REIT</option>
+                            <option value="CRYPTO">Criptomoeda</option>
+                            <option value="OTHER">Outro</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="asset_sector" class="form-label">Setor</label>
+                        <input type="text" class="form-control" id="asset_sector" name="sector">
+                    </div>
+                    <div class="mb-3">
+                        <label for="asset_currency" class="form-label">Moeda <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="asset_currency" name="currency" value="BRL" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="asset_notes" class="form-label">Observações</label>
+                        <textarea class="form-control" id="asset_notes" name="notes" rows="3"></textarea>
+                    </div>
+                    <div id="assetErrorMsg" class="text-danger small mb-2" style="display: none;"></div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="saveAssetBtn">
+                    <i class="fas fa-save me-1"></i>Salvar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Criar Conta Rápida -->
+<div class="modal fade" id="quickCreateAccountModal" tabindex="-1" aria-labelledby="quickCreateAccountModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="quickCreateAccountModalLabel">
+                    <i class="fas fa-university me-2"></i>Criar Nova Conta
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="quickCreateAccountForm">
+                    <div class="mb-3">
+                        <label for="account_name" class="form-label">Nome da Conta <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="account_name" name="name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="account_type" class="form-label">Tipo <span class="text-danger">*</span></label>
+                        <select class="form-select" id="account_type" name="account_type" required>
+                            <option value="INVEST" selected>Investimento</option>
+                            <option value="BANK">Banco</option>
+                            <option value="CASH">Dinheiro</option>
+                            <option value="CREDCARD">Cartão de crédito</option>
+                            <option value="FIXED">Imobilizado</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="account_currency" class="form-label">Moeda <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="account_currency" name="currency" value="Real brasileiro" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="account_opening_balance" class="form-label">Saldo de Abertura <span class="text-danger">*</span></label>
+                        <input type="number" class="form-control" id="account_opening_balance" name="opening_balance" step="0.01" value="0" required>
+                    </div>
+                    <div id="accountErrorMsg" class="text-danger small mb-2" style="display: none;"></div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="saveAccountBtn">
+                    <i class="fas fa-save me-1"></i>Salvar
+                </button>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -298,6 +412,100 @@ document.addEventListener('DOMContentLoaded', function() {
             recalculateOnQuantityChange();
         });
     }
+    
+    // Quick Create Functions
+    function addOptionToSelect(selectId, value, text) {
+        const select = document.getElementById(selectId);
+        if (select) {
+            const option = document.createElement('option');
+            option.value = value;
+            option.textContent = text;
+            select.appendChild(option);
+            select.value = value;
+        }
+    }
+    
+    // Quick Create Asset
+    document.getElementById('saveAssetBtn')?.addEventListener('click', function() {
+        const form = document.getElementById('quickCreateAssetForm');
+        const formData = new FormData(form);
+        const errorMsg = document.getElementById('assetErrorMsg');
+        const btn = this;
+        
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Salvando...';
+        errorMsg.style.display = 'none';
+        
+        fetch('{% url "finance:quick_create_asset" %}', {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                addOptionToSelect('id_asset', data.id, data.name);
+                const modal = bootstrap.Modal.getInstance(document.getElementById('quickCreateAssetModal'));
+                modal.hide();
+                form.reset();
+            } else {
+                errorMsg.textContent = Object.values(data.errors || {}).flat().join(', ') || 'Erro ao criar ativo';
+                errorMsg.style.display = 'block';
+            }
+        })
+        .catch(error => {
+            errorMsg.textContent = 'Erro ao criar ativo: ' + error.message;
+            errorMsg.style.display = 'block';
+        })
+        .finally(() => {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-save me-1"></i>Salvar';
+        });
+    });
+    
+    // Quick Create Account
+    document.getElementById('saveAccountBtn')?.addEventListener('click', function() {
+        const form = document.getElementById('quickCreateAccountForm');
+        const formData = new FormData(form);
+        const errorMsg = document.getElementById('accountErrorMsg');
+        const btn = this;
+        
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Salvando...';
+        errorMsg.style.display = 'none';
+        
+        fetch('{% url "finance:quick_create_account" %}', {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                addOptionToSelect('id_account', data.id, data.name);
+                const modal = bootstrap.Modal.getInstance(document.getElementById('quickCreateAccountModal'));
+                modal.hide();
+                form.reset();
+                // Resetar o tipo para INVEST
+                document.getElementById('account_type').value = 'INVEST';
+            } else {
+                errorMsg.textContent = Object.values(data.errors || {}).flat().join(', ') || 'Erro ao criar conta';
+                errorMsg.style.display = 'block';
+            }
+        })
+        .catch(error => {
+            errorMsg.textContent = 'Erro ao criar conta: ' + error.message;
+            errorMsg.style.display = 'block';
+        })
+        .finally(() => {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-save me-1"></i>Salvar';
+        });
+    });
 });
 </script>
 {% endblock %}

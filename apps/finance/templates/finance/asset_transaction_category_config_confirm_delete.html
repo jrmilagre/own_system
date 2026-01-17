@@ -1,0 +1,107 @@
+{% extends 'finance/base.html' %}
+
+{% block section_name %}Deletar Configuração{% endblock %}
+
+{% block sidebar %}
+<h6 class="px-3 text-uppercase text-muted" style="font-size: 0.7rem; color: #888 !important;">Investimentos</h6>
+<ul class="nav flex-column">
+    <li class="nav-item">
+        <a href="{% url 'finance:asset_list' %}"><i class="fas fa-briefcase me-2"></i> Ativos</a>
+    </li>
+    <li class="nav-item">
+        <a href="{% url 'finance:asset_transaction_list' %}"><i class="fas fa-exchange-alt me-2"></i> Transações de ativos</a>
+    </li>
+    <li class="nav-item">
+        <a href="{% url 'finance:asset_transaction_category_config_list' %}"><i class="fas fa-cog me-2"></i> Configurações</a>
+    </li>
+</ul>
+{% endblock %}
+
+{% block title %}Deletar Configuração{% endblock %}
+
+{% block content %}
+<div class="card shadow-sm border-0">
+    <div class="card-header bg-danger text-white">
+        <h5 class="mb-0">
+            <i class="fas fa-exclamation-triangle me-2"></i>Confirmar Exclusão
+        </h5>
+    </div>
+    <div class="card-body">
+        <p class="mb-3">Tem certeza que deseja deletar a configuração abaixo?</p>
+        
+        <div class="table-responsive mb-4">
+            <table class="table table-bordered">
+                <tbody>
+                    <tr>
+                        <th width="200">Tipo de Operação:</th>
+                        <td>
+                            <span class="badge bg-primary">{{ config.get_operation_type_display }}</span>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Tipo de Ativo:</th>
+                        <td>
+                            {% if config.asset_type %}
+                                <span class="badge bg-info">{{ config.get_asset_type_display }}</span>
+                            {% else %}
+                                <span class="text-muted">Todos os tipos</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Subcategoria Principal:</th>
+                        <td>
+                            <strong>{{ config.subcategory_principal.category.category }} > {{ config.subcategory_principal.subcategory }}</strong>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Tipo Principal:</th>
+                        <td>
+                            <span class="badge {% if config.transaction_type_principal == 'CR' %}bg-success{% else %}bg-danger{% endif %}">
+                                {{ config.get_transaction_type_principal_display }}
+                            </span>
+                        </td>
+                    </tr>
+                    {% if config.subcategory_fees %}
+                    <tr>
+                        <th>Subcategoria de Taxas:</th>
+                        <td>
+                            <strong>{{ config.subcategory_fees.category.category }} > {{ config.subcategory_fees.subcategory }}</strong>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Tipo de Taxas:</th>
+                        <td>
+                            <span class="badge {% if config.transaction_type_fees == 'CR' %}bg-success{% else %}bg-danger{% endif %}">
+                                {{ config.get_transaction_type_fees_display }}
+                            </span>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <th>Subcategoria de Taxas:</th>
+                        <td><span class="text-muted">Não configurada</span></td>
+                    </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+        
+        <p class="text-danger small mb-4">
+            <i class="fas fa-info-circle me-1"></i>Esta ação não pode ser desfeita.
+        </p>
+        
+        <form method="post">
+            {% csrf_token %}
+            <div class="d-flex gap-2">
+                <a href="{% url 'finance:asset_transaction_category_config_list' %}" class="btn btn-secondary">
+                    <i class="fas fa-times me-1"></i>Cancelar
+                </a>
+                <button type="submit" class="btn btn-danger">
+                    <i class="fas fa-trash me-1"></i>Confirmar Exclusão
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

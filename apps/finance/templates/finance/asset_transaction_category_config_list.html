@@ -1,0 +1,128 @@
+{% extends 'finance/base.html' %}
+
+{% block section_name %}Configurações de Categoria para Transações de Ativos{% endblock %}
+
+{% block sidebar %}
+<h6 class="px-3 text-uppercase text-muted" style="font-size: 0.7rem; color: #888 !important;">Investimentos</h6>
+<ul class="nav flex-column">
+    <li class="nav-item">
+        <a href="{% url 'finance:asset_list' %}"><i class="fas fa-briefcase me-2"></i> Ativos</a>
+    </li>
+    <li class="nav-item">
+        <a href="{% url 'finance:asset_transaction_list' %}"><i class="fas fa-exchange-alt me-2"></i> Transações de ativos</a>
+    </li>
+    <li class="nav-item">
+        <a href="{% url 'finance:asset_transaction_category_config_list' %}"><i class="fas fa-cog me-2"></i> Configurações</a>
+    </li>
+</ul>
+{% endblock %}
+
+{% block title %}Configurações de Categoria para Transações de Ativos{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h1 class="h4 mb-0">Configurações de Categoria para Transações de Ativos</h1>
+    <div class="d-flex gap-2">
+        <a href="{% url 'finance:asset_transaction_category_config_create' %}" class="btn btn-primary btn-sm">
+            <i class="fas fa-plus"></i> Criar Nova Configuração
+        </a>
+    </div>
+</div>
+
+{% if configs %}
+<div class="card shadow-sm border-0">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover table-sm mb-0" style="font-size: 0.9rem;">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ps-3">Tipo de Operação</th>
+                        <th>Tipo de Ativo</th>
+                        <th>Subcategoria Principal</th>
+                        <th>Tipo Principal</th>
+                        <th>Subcategoria Taxas</th>
+                        <th>Tipo Taxas</th>
+                        <th class="pe-3">Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for config in configs %}
+                    <tr class="table-row-compact">
+                        <td class="ps-3 py-1">
+                            <span class="badge bg-primary">{{ config.get_operation_type_display }}</span>
+                        </td>
+                        <td class="py-1">
+                            {% if config.asset_type %}
+                                <span class="badge bg-info">{{ config.get_asset_type_display }}</span>
+                            {% else %}
+                                <span class="text-muted">Todos</span>
+                            {% endif %}
+                        </td>
+                        <td class="py-1">
+                            <small>{{ config.subcategory_principal.category.category }} > {{ config.subcategory_principal.subcategory }}</small>
+                        </td>
+                        <td class="py-1">
+                            <span class="badge {% if config.transaction_type_principal == 'CR' %}bg-success{% else %}bg-danger{% endif %}">
+                                {{ config.get_transaction_type_principal_display }}
+                            </span>
+                        </td>
+                        <td class="py-1">
+                            {% if config.subcategory_fees %}
+                                <small>{{ config.subcategory_fees.category.category }} > {{ config.subcategory_fees.subcategory }}</small>
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td class="py-1">
+                            {% if config.subcategory_fees %}
+                                <span class="badge {% if config.transaction_type_fees == 'CR' %}bg-success{% else %}bg-danger{% endif %}">
+                                    {{ config.get_transaction_type_fees_display }}
+                                </span>
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td class="pe-3 py-1">
+                            <div class="btn-group btn-group-sm compact-buttons" role="group">
+                                <a href="{% url 'finance:asset_transaction_category_config_update' config.pk %}" class="btn btn-sm btn-outline-primary compact-btn" title="Editar">
+                                    <i class="fas fa-edit"></i>
+                                </a>
+                                <a href="{% url 'finance:asset_transaction_category_config_delete' config.pk %}" class="btn btn-sm btn-outline-danger compact-btn" title="Deletar">
+                                    <i class="fas fa-trash"></i>
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="alert alert-info">
+    <i class="fas fa-info-circle me-2"></i>Nenhuma configuração cadastrada.
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.table-row-compact td {
+    padding-top: 0.25rem !important;
+    padding-bottom: 0.25rem !important;
+    vertical-align: middle;
+}
+
+.compact-buttons .compact-btn {
+    padding: 0.15rem 0.4rem !important;
+    font-size: 0.75rem;
+    line-height: 1.2;
+}
+
+.compact-buttons .compact-btn i {
+    font-size: 0.75rem;
+}
+</style>
+{% endblock %}
