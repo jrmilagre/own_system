@@ -1,22 +1,119 @@
 {% extends 'finance/base.html' %}
 
+{% block section_name %}Deletar Agendamento Múltiplo{% endblock %}
+
 {% block title %}Deletar Agendamento Múltiplo{% endblock %}
 
 {% block content %}
-<h1>Deletar Agendamento Múltiplo</h1>
+<div class="card shadow-sm border-0">
+    <div class="card-header bg-danger text-white">
+        <h5 class="mb-0">
+            <i class="fas fa-exclamation-triangle me-2"></i>Confirmar Exclusão
+        </h5>
+    </div>
+    <div class="card-body">
+        <p class="mb-3">Tem certeza que deseja deletar este agendamento múltiplo?</p>
+        
+        {% if first_scheduler %}
+        <div class="table-responsive mb-4">
+            <table class="table table-bordered">
+                <tbody>
+                    <tr>
+                        <th width="150">Total de Itens:</th>
+                        <td><strong>{{ schedulers.count }}</strong></td>
+                    </tr>
+                    <tr>
+                        <th>Recorrência:</th>
+                        <td>{{ first_scheduler.get_recurrence_type_display }} ({{ first_scheduler.recurrence_interval }})</td>
+                    </tr>
+                    <tr>
+                        <th>Status:</th>
+                        <td>
+                            <span class="badge {% if first_scheduler.status == 'ACTIVE' %}bg-success{% elif first_scheduler.status == 'PAUSED' %}bg-warning{% else %}bg-secondary{% endif %}">
+                                {{ first_scheduler.get_status_display }}
+                            </span>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Próximo Vencimento:</th>
+                        <td>{{ first_scheduler.due_date|default:"-"|date:"d/m/Y" }}</td>
+                    </tr>
+                    <tr>
+                        <th>Término:</th>
+                        <td>
+                            {% if first_scheduler.termination_type == 'INSTALLMENTS' %}
+                                {{ first_scheduler.remaining_installments|default:"-" }} parcela(s) restante(s)
+                            {% elif first_scheduler.termination_type == 'FINAL_DATE' %}
+                                Até {{ first_scheduler.final_date|default:"-"|date:"d/m/Y" }}
+                            {% else %}
+                                <span class="badge bg-info">Infinito</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Registros Realizados:</th>
+                        <td>{{ first_scheduler.registered_count }}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
 
-<p>Tem certeza que deseja deletar este agendamento múltiplo?</p>
-
-<p><strong>Itens:</strong> {{ schedulers.count }}</p>
-{% if first_scheduler %}
-<p><strong>Recorrência:</strong> {{ first_scheduler.get_recurrence_type_display }}</p>
-<p><strong>Registros realizados:</strong> {{ first_scheduler.registered_count }}</p>
-{% endif %}
-
-<form method="post">
-    {% csrf_token %}
-    <button type="submit">Confirmar Deletar</button>
-    <a href="{% url 'finance:scheduler_list' %}">Cancelar</a>
-</form>
+        {% if schedulers %}
+        <div class="mb-4">
+            <h6 class="mb-2"><strong>Itens do Agendamento:</strong></h6>
+            <div class="table-responsive">
+                <table class="table table-sm table-bordered">
+                    <thead class="table-secondary">
+                        <tr>
+                            <th>Conta</th>
+                            <th>Tipo</th>
+                            <th>Valor</th>
+                            {% if first_scheduler.is_transfer %}
+                            <th>Conta Destino</th>
+                            {% endif %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for scheduler in schedulers %}
+                        <tr>
+                            <td>{{ scheduler.account }}</td>
+                            <td>
+                                <span class="badge {% if scheduler.transaction_type == 'CR' %}bg-success{% else %}bg-danger{% endif %}">
+                                    {{ scheduler.get_transaction_type_display }}
+                                </span>
+                            </td>
+                            <td class="fw-bold {% if scheduler.transaction_type == 'DB' %}text-danger{% else %}text-success{% endif %}">
+                                R$ {{ scheduler.value|floatformat:2 }}
+                            </td>
+                            {% if first_scheduler.is_transfer %}
+                            <td>{{ scheduler.destination_account|default:"-" }}</td>
+                            {% endif %}
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
+        
+        <p class="text-danger small mb-4">
+            <i class="fas fa-info-circle me-1"></i>Esta ação não pode ser desfeita.
+            <br><i class="fas fa-info-circle me-1"></i>Todos os {{ schedulers.count }} item(ns) do agendamento múltiplo serão deletados.
+        </p>
+        
+        <form method="post">
+            {% csrf_token %}
+            <div class="d-flex gap-2">
+                <a href="{% url 'finance:scheduler_list' %}" class="btn btn-secondary">
+                    <i class="fas fa-times me-1"></i>Cancelar
+                </a>
+                <button type="submit" class="btn btn-danger">
+                    <i class="fas fa-trash me-1"></i>Confirmar Exclusão
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
 {% endblock %}
 
