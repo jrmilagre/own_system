@@ -19,6 +19,7 @@ class Account(BaseModel):
         ('BANK', 'Banco'),
         ('INVEST', 'Investimento'),
         ('CREDCARD', 'Cartão de crédito'),
+        ('FIXED', 'Imobilizado'),
     ]
 
     name = models.CharField('Nome da conta', max_length=100)
