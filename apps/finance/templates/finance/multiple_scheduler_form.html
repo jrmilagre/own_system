@@ -201,7 +201,7 @@
                                 </div>
 
                                 <!-- Subcategoria (Normal) -->
-                                <div class="col-md-6 normal-fields">
+                                <div class="col-md-4 normal-fields">
                                     <label for="{{ item_form.subcategory.id_for_label }}" class="form-label">
                                         <i class="fas fa-tags me-1 text-warning"></i>Subcategoria
                                     </label>
@@ -217,7 +217,7 @@
                                 </div>
 
                                 <!-- Tipo de Transação (Normal) -->
-                                <div class="col-md-3 normal-fields">
+                                <div class="col-md-2 normal-fields">
                                     <label for="{{ item_form.transaction_type.id_for_label }}" class="form-label">
                                         <i class="fas fa-arrows-alt-v me-1 text-secondary"></i>Tipo
                                     </label>
@@ -241,6 +241,17 @@
                                     {% endif %}
                                 </div>
 
+                                <!-- Anotações -->
+                                <div class="col-md-3">
+                                    <label for="{{ item_form.notes.id_for_label }}" class="form-label">
+                                        <i class="fas fa-sticky-note me-1 text-muted"></i>Anotações
+                                    </label>
+                                    {{ item_form.notes }}
+                                    {% if item_form.notes.errors %}
+                                        <div class="text-danger small mt-1">{{ item_form.notes.errors }}</div>
+                                    {% endif %}
+                                </div>
+
                                 <!-- Conta de Destino (Transferência) -->
                                 <div class="col-md-6 transfer-fields" style="display: none;">
                                     <label for="{{ item_form.destination_account.id_for_label }}" class="form-label">
@@ -254,17 +265,6 @@
                                     </div>
                                     {% if item_form.destination_account.errors %}
                                         <div class="text-danger small mt-1">{{ item_form.destination_account.errors }}</div>
-                                    {% endif %}
-                                </div>
-
-                                <!-- Anotações -->
-                                <div class="col-12">
-                                    <label for="{{ item_form.notes.id_for_label }}" class="form-label">
-                                        <i class="fas fa-sticky-note me-1 text-muted"></i>Anotações
-                                    </label>
-                                    {{ item_form.notes }}
-                                    {% if item_form.notes.errors %}
-                                        <div class="text-danger small mt-1">{{ item_form.notes.errors }}</div>
                                     {% endif %}
                                 </div>
                             </div>
@@ -454,6 +454,13 @@
 
 .item-form[style*="display: none"] {
     display: none !important;
+}
+
+/* Textarea de anotações mais compacto */
+textarea[name*="notes"] {
+    resize: vertical;
+    min-height: 60px;
+    max-height: 100px;
 }
 </style>
 {% endblock %}

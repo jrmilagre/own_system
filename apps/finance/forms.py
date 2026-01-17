@@ -43,6 +43,11 @@ class SubcategoryForm(forms.ModelForm):
             'default_transaction_type': forms.Select(attrs={'required': True}),
         }
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Ordenar categoria alfabeticamente
+        self.fields['category'].queryset = Category.objects.all().order_by('category')
+
 
 class TransactionForm(forms.ModelForm):
     is_transfer = forms.BooleanField(
@@ -51,13 +56,13 @@ class TransactionForm(forms.ModelForm):
         widget=forms.CheckboxInput()
     )
     source_account = forms.ModelChoiceField(
-        queryset=Account.objects.all(),
+        queryset=Account.objects.all().order_by('name'),
         required=False,
         label='Conta de origem',
         widget=forms.Select(attrs={'required': False})
     )
     destination_account = forms.ModelChoiceField(
-        queryset=Account.objects.all(),
+        queryset=Account.objects.all().order_by('name'),
         required=False,
         label='Conta de destino',
         widget=forms.Select(attrs={'required': False})
@@ -83,6 +88,10 @@ class TransactionForm(forms.ModelForm):
         # Tornar account não obrigatório por padrão (será validado no clean)
         self.fields['account'].required = False
         self.fields['transaction_type'].required = False
+        # Ordenar campos alfabeticamente
+        self.fields['account'].queryset = Account.objects.all().order_by('name')
+        self.fields['beneficiary'].queryset = Beneficiary.objects.all().order_by('full_name')
+        self.fields['subcategory'].queryset = Subcategory.objects.all().order_by('category__category', 'subcategory')
 
     def clean(self):
         cleaned_data = super().clean()
@@ -139,13 +148,13 @@ class TransactionForm(forms.ModelForm):
 class TransferTransactionForm(forms.Form):
     """Formulário específico para transferências entre contas"""
     source_account = forms.ModelChoiceField(
-        queryset=Account.objects.all(),
+        queryset=Account.objects.all().order_by('name'),
         required=True,
         label='Conta de origem',
         widget=forms.Select(attrs={'required': True})
     )
     destination_account = forms.ModelChoiceField(
-        queryset=Account.objects.all(),
+        queryset=Account.objects.all().order_by('name'),
         required=True,
         label='Conta de destino',
         widget=forms.Select(attrs={'required': True})
@@ -218,6 +227,13 @@ class SchedulerForm(forms.ModelForm):
             'status': forms.Select(attrs={'required': True}),
         }
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Ordenar campos alfabeticamente
+        self.fields['account'].queryset = Account.objects.all().order_by('name')
+        self.fields['beneficiary'].queryset = Beneficiary.objects.all().order_by('full_name')
+        self.fields['subcategory'].queryset = Subcategory.objects.all().order_by('category__category', 'subcategory')
+
     def clean(self):
         cleaned_data = super().clean()
         recurrence_type = cleaned_data.get('recurrence_type')
@@ -257,7 +273,7 @@ class MultipleTransactionItemForm(forms.Form):
         required=True
     )
     subcategory = forms.ModelChoiceField(
-        queryset=Subcategory.objects.all(),
+        queryset=Subcategory.objects.all().order_by('category__category', 'subcategory'),
         label='Subcategoria',
         required=False
     )
@@ -274,7 +290,7 @@ class MultipleTransactionItemForm(forms.Form):
         widget=forms.CheckboxInput()
     )
     destination_account = forms.ModelChoiceField(
-        queryset=Account.objects.all(),
+        queryset=Account.objects.all().order_by('name'),
         label='Conta de destino',
         required=False
     )
@@ -314,12 +330,12 @@ MultipleTransactionItemFormSet = formset_factory(
 class MultipleTransactionForm(forms.Form):
     """Formulário base para transação múltipla com campos compartilhados"""
     account = forms.ModelChoiceField(
-        queryset=Account.objects.all(),
+        queryset=Account.objects.all().order_by('name'),
         label='Conta',
         required=True
     )
     beneficiary = forms.ModelChoiceField(
-        queryset=Beneficiary.objects.all(),
+        queryset=Beneficiary.objects.all().order_by('full_name'),
         label='Beneficiário',
         required=True
     )
@@ -353,7 +369,7 @@ class MultipleSchedulerItemForm(forms.Form):
         required=False  # Será validado no clean() baseado em is_transfer
     )
     subcategory = forms.ModelChoiceField(
-        queryset=Subcategory.objects.all(),
+        queryset=Subcategory.objects.all().order_by('category__category', 'subcategory'),
         label='Subcategoria',
         required=False
     )
@@ -370,14 +386,14 @@ class MultipleSchedulerItemForm(forms.Form):
         widget=forms.CheckboxInput()
     )
     destination_account = forms.ModelChoiceField(
-        queryset=Account.objects.all(),
+        queryset=Account.objects.all().order_by('name'),
         label='Conta de destino',
         required=False
     )
     notes = forms.CharField(
         label='Anotações',
         required=False,
-        widget=forms.Textarea(attrs={'rows': 3})
+        widget=forms.Textarea(attrs={'rows': 2, 'class': 'form-control'})
     )
 
     def clean(self):
@@ -443,12 +459,12 @@ MultipleSchedulerItemFormSet = formset_factory(
 class MultipleSchedulerForm(forms.Form):
     """Formulário base para agendamento múltiplo com campos compartilhados"""
     account = forms.ModelChoiceField(
-        queryset=Account.objects.all(),
+        queryset=Account.objects.all().order_by('name'),
         label='Conta',
         required=True
     )
     beneficiary = forms.ModelChoiceField(
-        queryset=Beneficiary.objects.all(),
+        queryset=Beneficiary.objects.all().order_by('full_name'),
         label='Beneficiário',
         required=True
     )
@@ -528,7 +544,7 @@ class MultipleSchedulerForm(forms.Form):
 class MultipleSchedulerRegisterItemForm(forms.Form):
     """Formulário para editar item antes do registro"""
     subcategory = forms.ModelChoiceField(
-        queryset=Subcategory.objects.all(),
+        queryset=Subcategory.objects.all().order_by('category__category', 'subcategory'),
         label='Subcategoria',
         required=False
     )
@@ -550,7 +566,7 @@ class MultipleSchedulerRegisterItemForm(forms.Form):
         widget=forms.CheckboxInput()
     )
     destination_account = forms.ModelChoiceField(
-        queryset=Account.objects.all(),
+        queryset=Account.objects.all().order_by('name'),
         label='Conta de destino',
         required=False
     )
@@ -627,8 +643,8 @@ class AssetTransactionForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Filtrar contas do tipo INVEST para o campo account
-        self.fields['account'].queryset = Account.objects.filter(account_type='INVEST')
+        # Filtrar contas do tipo INVEST para o campo account e ordenar
+        self.fields['account'].queryset = Account.objects.filter(account_type='INVEST').order_by('name')
         # Tornar transaction opcional
         self.fields['transaction'].required = False
         # Limitar a 200 transações mais recentes para evitar lentidão na renderização
@@ -682,8 +698,8 @@ class AssetPositionForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Filtrar contas do tipo INVEST para o campo account
-        self.fields['account'].queryset = Account.objects.filter(account_type='INVEST')
+        # Filtrar contas do tipo INVEST para o campo account e ordenar
+        self.fields['account'].queryset = Account.objects.filter(account_type='INVEST').order_by('name')
 
 
 class InventoryForm(forms.ModelForm):
@@ -730,7 +746,7 @@ class CashFlowCalculationRuleForm(forms.Form):
     
     # Campos para regra de subcategoria
     subcategory = forms.ModelChoiceField(
-        queryset=Subcategory.objects.all(),
+        queryset=Subcategory.objects.all().order_by('category__category', 'subcategory'),
         label='Subcategoria',
         required=False,
         widget=forms.Select(attrs={'class': 'subcategory-field'})
@@ -882,6 +898,11 @@ class BudgetForm(forms.ModelForm):
             'amount': forms.NumberInput(attrs={'step': '0.01', 'required': True}),
         }
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Ordenar subcategoria alfabeticamente
+        self.fields['subcategory'].queryset = Subcategory.objects.all().order_by('category__category', 'subcategory')
+
 
 class Money99ImportForm(forms.Form):
     """Formulário para upload do arquivo transactions.txt do Money99"""
@@ -955,7 +976,7 @@ class Money99StagingFilterForm(forms.Form):
 class SubcategoryMoveForm(forms.Form):
     """Formulário para mover subcategoria - seleciona subcategoria destino"""
     destination_subcategory = forms.ModelChoiceField(
-        queryset=Subcategory.objects.all(),
+        queryset=Subcategory.objects.all().order_by('category__category', 'subcategory'),
         label='Subcategoria de destino',
         required=True,
         widget=forms.Select(attrs={'required': True, 'class': 'form-select'})
