@@ -233,6 +233,11 @@ class SchedulerForm(forms.ModelForm):
         self.fields['account'].queryset = Account.objects.all().order_by('name')
         self.fields['beneficiary'].queryset = Beneficiary.objects.all().order_by('full_name')
         self.fields['subcategory'].queryset = Subcategory.objects.all().order_by('category__category', 'subcategory')
+        # Forçar avaliação dos querysets para evitar problemas com cursor do banco
+        # durante a renderização do template
+        list(self.fields['account'].queryset)
+        list(self.fields['beneficiary'].queryset)
+        list(self.fields['subcategory'].queryset)
 
     def clean(self):
         cleaned_data = super().clean()
@@ -294,6 +299,15 @@ class MultipleTransactionItemForm(forms.Form):
         label='Conta de destino',
         required=False
     )
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Forçar avaliação dos querysets para evitar problemas com cursor do banco
+        # durante a renderização do template
+        if self.fields['subcategory'].queryset:
+            list(self.fields['subcategory'].queryset)
+        if self.fields['destination_account'].queryset:
+            list(self.fields['destination_account'].queryset)
 
     def clean(self):
         cleaned_data = super().clean()
@@ -339,6 +353,15 @@ class MultipleTransactionForm(forms.Form):
         label='Beneficiário',
         required=True
     )
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Forçar avaliação dos querysets para evitar problemas com cursor do banco
+        # durante a renderização do template
+        if self.fields['account'].queryset:
+            list(self.fields['account'].queryset)
+        if self.fields['beneficiary'].queryset:
+            list(self.fields['beneficiary'].queryset)
     due_date = forms.DateField(
         label='Data do vencimento',
         required=False,
@@ -395,6 +418,15 @@ class MultipleSchedulerItemForm(forms.Form):
         required=False,
         widget=forms.Textarea(attrs={'rows': 2, 'class': 'form-control'})
     )
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Forçar avaliação dos querysets para evitar problemas com cursor do banco
+        # durante a renderização do template
+        if self.fields['subcategory'].queryset:
+            list(self.fields['subcategory'].queryset)
+        if self.fields['destination_account'].queryset:
+            list(self.fields['destination_account'].queryset)
 
     def clean(self):
         cleaned_data = super().clean()
@@ -468,6 +500,15 @@ class MultipleSchedulerForm(forms.Form):
         label='Beneficiário',
         required=True
     )
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Forçar avaliação dos querysets para evitar problemas com cursor do banco
+        # durante a renderização do template
+        if self.fields['account'].queryset:
+            list(self.fields['account'].queryset)
+        if self.fields['beneficiary'].queryset:
+            list(self.fields['beneficiary'].queryset)
     due_date = forms.DateField(
         label='Data do vencimento',
         required=False,
@@ -487,7 +528,7 @@ class MultipleSchedulerForm(forms.Form):
         choices=Scheduler.RECURRENCE_TYPE_CHOICES,
         label='Tipo de recorrência',
         required=True,
-        initial='MONTHLY'
+        initial='NONE'
     )
     recurrence_interval = forms.IntegerField(
         label='Intervalo da recorrência',
@@ -831,6 +872,19 @@ class TransactionFilterForm(forms.Form):
         label='Subcategoria',
         widget=forms.Select(attrs={'class': 'form-control'})
     )
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Forçar avaliação dos querysets para evitar problemas com cursor do banco
+        # durante a renderização do template
+        if self.fields['account'].queryset:
+            list(self.fields['account'].queryset)
+        if self.fields['beneficiary'].queryset:
+            list(self.fields['beneficiary'].queryset)
+        if self.fields['category'].queryset:
+            list(self.fields['category'].queryset)
+        if self.fields['subcategory'].queryset:
+            list(self.fields['subcategory'].queryset)
     date_start = forms.DateField(
         required=False,
         label='Data início',
