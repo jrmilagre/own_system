@@ -897,6 +897,63 @@ class TransactionFilterForm(forms.Form):
     )
 
 
+class SchedulerFilterForm(forms.Form):
+    """Formulário de filtros para a lista de agendamentos"""
+    account = forms.ModelChoiceField(
+        queryset=Account.objects.all().order_by('name'),
+        required=False,
+        label='Conta',
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    beneficiary = forms.ModelChoiceField(
+        queryset=Beneficiary.objects.all().order_by('full_name'),
+        required=False,
+        label='Beneficiário',
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    category = forms.ModelChoiceField(
+        queryset=Category.objects.all().order_by('category'),
+        required=False,
+        label='Categoria',
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    subcategory = forms.ModelChoiceField(
+        queryset=Subcategory.objects.all().order_by('category__category', 'subcategory'),
+        required=False,
+        label='Subcategoria',
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    status = forms.ChoiceField(
+        choices=[('', 'Todos')] + Scheduler.STATUS_CHOICES,
+        required=False,
+        label='Status',
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    date_start = forms.DateField(
+        required=False,
+        label='Data início',
+        widget=forms.DateInput(attrs={'type': 'date', 'class': 'form-control'})
+    )
+    date_end = forms.DateField(
+        required=False,
+        label='Data fim',
+        widget=forms.DateInput(attrs={'type': 'date', 'class': 'form-control'})
+    )
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Forçar avaliação dos querysets para evitar problemas com cursor do banco
+        # durante a renderização do template
+        if self.fields['account'].queryset:
+            list(self.fields['account'].queryset)
+        if self.fields['beneficiary'].queryset:
+            list(self.fields['beneficiary'].queryset)
+        if self.fields['category'].queryset:
+            list(self.fields['category'].queryset)
+        if self.fields['subcategory'].queryset:
+            list(self.fields['subcategory'].queryset)
+
+
 class BudgetForm(forms.ModelForm):
     class Meta:
         model = Budget

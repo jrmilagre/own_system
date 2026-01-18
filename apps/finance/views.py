@@ -16,7 +16,7 @@ from .forms import (
     MultipleTransactionForm, MultipleTransactionItemForm, MultipleTransactionItemFormSet,
     MultipleSchedulerForm, MultipleSchedulerItemForm, MultipleSchedulerItemFormSet,
     MultipleSchedulerRegisterItemFormSet, AssetForm, AssetTransactionForm, AssetPositionForm, InventoryForm, AssetTransactionCategoryConfigForm,
-    CashFlowItemForm, CashFlowCalculationRuleFormSet, TransactionFilterForm, BudgetForm,
+    CashFlowItemForm, CashFlowCalculationRuleFormSet, TransactionFilterForm, SchedulerFilterForm, BudgetForm,
     Money99ImportForm, Money99StagingFilterForm, SubcategoryMoveForm
 )
 from .money99_parser import Money99Parser
@@ -862,14 +862,64 @@ def transaction_delete(request, pk):
 
 # Scheduler Views
 def scheduler_list(request):
-    """Lista de agendamentos (normais e múltiplos)"""
+    """Lista de agendamentos com filtros e paginação"""
+    # Inicializar formulário de filtros
+    filter_form = SchedulerFilterForm(request.GET)
+    
+    # Query base
     schedulers = Scheduler.objects.all().select_related('account', 'beneficiary', 'subcategory', 'destination_account')
+    
+    # Aplicar filtros
+    if filter_form.is_valid():
+        account = filter_form.cleaned_data.get('account')
+        beneficiary = filter_form.cleaned_data.get('beneficiary')
+        category = filter_form.cleaned_data.get('category')
+        subcategory = filter_form.cleaned_data.get('subcategory')
+        status = filter_form.cleaned_data.get('status')
+        date_start = filter_form.cleaned_data.get('date_start')
+        date_end = filter_form.cleaned_data.get('date_end')
+        
+        if account:
+            schedulers = schedulers.filter(account=account)
+        
+        if beneficiary:
+            schedulers = schedulers.filter(beneficiary=beneficiary)
+        
+        if category:
+            schedulers = schedulers.filter(subcategory__category=category)
+        
+        if subcategory:
+            schedulers = schedulers.filter(subcategory=subcategory)
+        
+        if status:
+            schedulers = schedulers.filter(status=status)
+        
+        if date_start or date_end:
+            date_filter = Q()
+            if date_start and date_end:
+                # Ambos definidos: due_date deve estar no intervalo
+                date_filter = Q(due_date__gte=date_start) & Q(due_date__lte=date_end)
+            elif date_start:
+                # Apenas date_start: due_date >= date_start
+                date_filter = Q(due_date__gte=date_start)
+            elif date_end:
+                # Apenas date_end: due_date <= date_end
+                date_filter = Q(due_date__lte=date_end)
+            schedulers = schedulers.filter(date_filter)
+    
+    # Ordenar
+    schedulers = schedulers.order_by('-due_date', '-created_at')
+    
+    # Paginação
+    paginator = Paginator(schedulers, 50)  # 50 agendamentos por página
+    page_number = request.GET.get('page', 1)
+    page_obj = paginator.get_page(page_number)
     
     # Agrupar agendamentos múltiplos
     multiple_groups = {}
     single_schedulers = []
     
-    for scheduler in schedulers:
+    for scheduler in page_obj:
         if scheduler.is_multiple and scheduler.multiple_scheduler_group_id:
             group_id = str(scheduler.multiple_scheduler_group_id)
             if group_id not in multiple_groups:
@@ -896,9 +946,37 @@ def scheduler_list(request):
         # Ordenar por ID para manter ordem
         group_data['schedulers'].sort(key=lambda x: x.id)
     
+    # Ordenar grupos múltiplos por data de vencimento decrescente
+    multiple_groups_list = list(multiple_groups.values())
+    multiple_groups_list.sort(
+        key=lambda x: (
+            x['representative'].due_date or 
+            x['representative'].created_at or 
+            date.min
+        ),
+        reverse=True
+    )
+    
+    # Calcular subtotal da página
+    subtotal = Decimal('0')
+    
+    # Somar agendamentos simples
+    for scheduler in single_schedulers:
+        if scheduler.transaction_type == 'CR':
+            subtotal += scheduler.value
+        elif scheduler.transaction_type == 'DB':
+            subtotal -= scheduler.value
+    
+    # Somar grupos múltiplos
+    for group_data in multiple_groups_list:
+        subtotal += Decimal(str(group_data['total_value']))
+    
     return render(request, 'finance/scheduler_list.html', {
         'schedulers': single_schedulers,
-        'multiple_groups': list(multiple_groups.values())
+        'multiple_groups': multiple_groups_list,
+        'filter_form': filter_form,
+        'page_obj': page_obj,
+        'subtotal': subtotal
     })
 
 

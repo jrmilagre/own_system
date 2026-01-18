@@ -17,6 +17,53 @@
     </div>
 </div>
 
+<!-- Formulário de Filtros -->
+<div class="card shadow-sm border-0 mb-3">
+    <div class="card-header bg-light">
+        <h5 class="mb-0"><i class="fas fa-filter me-2"></i>Filtros</h5>
+    </div>
+    <div class="card-body">
+        <form method="get" action="{% url 'finance:scheduler_list' %}" class="row g-3">
+            <div class="col-md-6 col-lg-2">
+                <label for="{{ filter_form.account.id_for_label }}" class="form-label">{{ filter_form.account.label }}</label>
+                {{ filter_form.account }}
+            </div>
+            <div class="col-md-6 col-lg-2">
+                <label for="{{ filter_form.beneficiary.id_for_label }}" class="form-label">{{ filter_form.beneficiary.label }}</label>
+                {{ filter_form.beneficiary }}
+            </div>
+            <div class="col-md-6 col-lg-2">
+                <label for="{{ filter_form.category.id_for_label }}" class="form-label">{{ filter_form.category.label }}</label>
+                {{ filter_form.category }}
+            </div>
+            <div class="col-md-6 col-lg-2">
+                <label for="{{ filter_form.subcategory.id_for_label }}" class="form-label">{{ filter_form.subcategory.label }}</label>
+                {{ filter_form.subcategory }}
+            </div>
+            <div class="col-md-6 col-lg-2">
+                <label for="{{ filter_form.status.id_for_label }}" class="form-label">{{ filter_form.status.label }}</label>
+                {{ filter_form.status }}
+            </div>
+            <div class="col-md-6 col-lg-2">
+                <label for="{{ filter_form.date_start.id_for_label }}" class="form-label">{{ filter_form.date_start.label }}</label>
+                {{ filter_form.date_start }}
+            </div>
+            <div class="col-md-6 col-lg-2">
+                <label for="{{ filter_form.date_end.id_for_label }}" class="form-label">{{ filter_form.date_end.label }}</label>
+                {{ filter_form.date_end }}
+            </div>
+            <div class="col-12">
+                <button type="submit" class="btn btn-primary btn-sm">
+                    <i class="fas fa-search me-1"></i>Filtrar
+                </button>
+                <a href="{% url 'finance:scheduler_list' %}" class="btn btn-secondary btn-sm">
+                    <i class="fas fa-times me-1"></i>Limpar
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
 {% if multiple_groups or schedulers %}
 <div class="card shadow-sm border-0">
     <div class="card-body p-0">
@@ -56,35 +103,39 @@
                                     </span>
                                 </div>
                             </td>
-                        <td class="py-1">{{ scheduler.account }}</td>
-                        <td class="py-1">
-                            <span class="badge {% if scheduler.transaction_type == 'CR' %}bg-success{% else %}bg-danger{% endif %}">
-                                {{ scheduler.get_transaction_type_display }}
-                            </span>
-                        </td>
-                        <td class="text-end py-1">
-                            <span class="fw-bold {% if scheduler.transaction_type == 'DB' %}text-danger{% else %}text-success{% endif %}" style="font-size: 0.95rem;">
-                                R$ {{ scheduler.value|floatformat:2 }}
-                            </span>
-                        </td>
-                        <td class="py-1">{{ scheduler.due_date|default:"-"|date:"d-m-Y" }}</td>
-                        <td class="py-1">
-                            <small>{{ scheduler.get_recurrence_type_display }} ({{ scheduler.recurrence_interval }})</small>
-                        </td>
-                        <td class="py-1">
-                            <span class="badge {% if scheduler.status == 'ACTIVE' %}bg-success{% elif scheduler.status == 'PAUSED' %}bg-warning{% else %}bg-secondary{% endif %}">
-                                {{ scheduler.get_status_display }}
-                            </span>
-                        </td>
-                        <td class="py-1">
-                            {% if scheduler.termination_type == 'INSTALLMENTS' %}
-                                {{ scheduler.remaining_installments|default:"-" }}
-                            {% elif scheduler.termination_type == 'FINAL_DATE' %}
-                                <small>Até {{ scheduler.final_date|default:"-"|date:"d-m-Y" }}</small>
-                            {% else %}
-                                <span class="badge bg-info">Infinito</span>
-                            {% endif %}
-                        </td>
+                            <td class="py-1">{{ scheduler.account }}</td>
+                            <td class="py-1">
+                                <span class="badge {% if scheduler.transaction_type == 'CR' %}bg-success{% else %}bg-danger{% endif %}">
+                                    {{ scheduler.get_transaction_type_display }}
+                                </span>
+                            </td>
+                            <td class="text-end py-1">
+                                <span class="fw-bold {% if scheduler.transaction_type == 'DB' %}text-danger{% else %}text-success{% endif %}" style="font-size: 0.95rem;">
+                                    R$ {{ scheduler.value|floatformat:2 }}
+                                </span>
+                            </td>
+                            <td class="py-1">{{ scheduler.due_date|default:"-"|date:"d-m-Y" }}</td>
+                            <td class="py-1">
+                                <small>{{ scheduler.get_recurrence_type_display }} ({{ scheduler.recurrence_interval }})</small>
+                            </td>
+                            <td class="py-1">
+                                <span class="badge {% if scheduler.status == 'ACTIVE' %}bg-success{% elif scheduler.status == 'PAUSED' %}bg-warning{% else %}bg-secondary{% endif %}">
+                                    {{ scheduler.get_status_display }}
+                                </span>
+                            </td>
+                            <td class="py-1">
+                                {% if scheduler.recurrence_type == 'NONE' %}
+                                    <span class="text-muted">-</span>
+                                {% else %}
+                                    {% with installment_info=scheduler.get_installment_info %}
+                                        {% if installment_info %}
+                                            <span class="badge bg-primary">{{ installment_info.current|stringformat:"03d" }}/{{ installment_info.total|stringformat:"03d" }}</span>
+                                        {% else %}
+                                            <span class="badge bg-info">Infinito</span>
+                                        {% endif %}
+                                    {% endwith %}
+                                {% endif %}
+                            </td>
                             <td class="pe-3 py-1">
                                 <div class="btn-group btn-group-sm compact-buttons" role="group">
                                     <a href="{% url 'finance:multiple_scheduler_update' group.group_id %}" class="btn btn-sm btn-outline-primary compact-btn" title="Editar Agendamento Múltiplo">
@@ -143,12 +194,16 @@
                             </span>
                         </td>
                         <td class="py-1">
-                            {% if scheduler.termination_type == 'INSTALLMENTS' %}
-                                {{ scheduler.remaining_installments|default:"-" }}
-                            {% elif scheduler.termination_type == 'FINAL_DATE' %}
-                                <small>Até {{ scheduler.final_date|default:"-"|date:"d-m-Y" }}</small>
+                            {% if scheduler.recurrence_type == 'NONE' %}
+                                <span class="text-muted">-</span>
                             {% else %}
-                                <span class="badge bg-info">Infinito</span>
+                                {% with installment_info=scheduler.get_installment_info %}
+                                    {% if installment_info %}
+                                        <span class="badge bg-primary">{{ installment_info.current|stringformat:"03d" }}/{{ installment_info.total|stringformat:"03d" }}</span>
+                                    {% else %}
+                                        <span class="badge bg-info">Infinito</span>
+                                    {% endif %}
+                                {% endwith %}
                             {% endif %}
                         </td>
                         <td class="pe-3 py-1">
@@ -169,6 +224,13 @@
                     </tr>
                     {% endfor %}
                 </tbody>
+                <tfoot class="table-light">
+                    <tr>
+                        <td colspan="4" class="text-end fw-bold">Subtotal (página):</td>
+                        <td class="text-end fw-bold">R$ {{ subtotal|floatformat:2 }}</td>
+                        <td colspan="5"></td>
+                    </tr>
+                </tfoot>
             </table>
         </div>
     </div>
@@ -177,6 +239,48 @@
 <div class="alert alert-info">
     <i class="fas fa-info-circle me-2"></i>Nenhum agendamento cadastrado.
 </div>
+{% endif %}
+
+<!-- Paginação -->
+{% if page_obj.has_other_pages %}
+<nav aria-label="Paginação de agendamentos" class="mt-3">
+    <ul class="pagination justify-content-center">
+        {% if page_obj.has_previous %}
+            <li class="page-item">
+                <a class="page-link" href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page=1">
+                    <i class="fas fa-angle-double-left"></i> Primeira
+                </a>
+            </li>
+            <li class="page-item">
+                <a class="page-link" href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ page_obj.previous_page_number }}">
+                    <i class="fas fa-angle-left"></i> Anterior
+                </a>
+            </li>
+        {% endif %}
+        
+        <li class="page-item active">
+            <span class="page-link">
+                Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}
+            </span>
+        </li>
+        
+        {% if page_obj.has_next %}
+            <li class="page-item">
+                <a class="page-link" href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ page_obj.next_page_number }}">
+                    Próxima <i class="fas fa-angle-right"></i>
+                </a>
+            </li>
+            <li class="page-item">
+                <a class="page-link" href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ page_obj.paginator.num_pages }}">
+                    Última <i class="fas fa-angle-double-right"></i>
+                </a>
+            </li>
+        {% endif %}
+    </ul>
+    <div class="text-center text-muted small">
+        Mostrando {{ page_obj.start_index }} a {{ page_obj.end_index }} de {{ page_obj.paginator.count }} agendamento(s)
+    </div>
+</nav>
 {% endif %}
 
 {% endblock %}
@@ -200,3 +304,4 @@
 }
 </style>
 {% endblock %}
+

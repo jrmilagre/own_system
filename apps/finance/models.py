@@ -697,6 +697,66 @@ class Scheduler(BaseModel):
         self.status = 'COMPLETED'
         self.save()
 
+    def get_installment_info(self):
+        """
+        Retorna informações sobre as parcelas no formato {'current': int, 'total': int} ou None.
+        Para agendamentos únicos (NONE) ou infinitos, retorna None.
+        """
+        if self.recurrence_type == 'NONE':
+            return None
+        
+        if self.termination_type == 'INSTALLMENTS':
+            if self.remaining_installments is None:
+                return None
+            total = self.remaining_installments + self.registered_count
+            current = self.registered_count + 1
+            return {'current': current, 'total': total}
+        
+        elif self.termination_type == 'FINAL_DATE':
+            if not self.final_date:
+                return None
+            
+            # Usar original_due_date se disponível, senão usar due_date atual
+            # Se não tiver original_due_date, precisamos calcular a partir do due_date atual
+            # retrocedendo registered_count vezes
+            start_date = self.original_due_date
+            if not start_date and self.due_date:
+                # Calcular a data inicial retrocedendo registered_count vezes
+                start_date = self.due_date
+                for _ in range(self.registered_count):
+                    if self.recurrence_type == 'DAILY':
+                        start_date = start_date - relativedelta(days=self.recurrence_interval)
+                    elif self.recurrence_type == 'WEEKLY':
+                        start_date = start_date - relativedelta(weeks=self.recurrence_interval)
+                    elif self.recurrence_type == 'MONTHLY':
+                        start_date = start_date - relativedelta(months=self.recurrence_interval)
+                    elif self.recurrence_type == 'YEARLY':
+                        start_date = start_date - relativedelta(years=self.recurrence_interval)
+            
+            if not start_date:
+                return None
+            
+            # Calcular total de parcelas entre start_date e final_date
+            total = 0
+            current_date = start_date
+            while current_date <= self.final_date:
+                total += 1
+                if self.recurrence_type == 'DAILY':
+                    current_date = current_date + relativedelta(days=self.recurrence_interval)
+                elif self.recurrence_type == 'WEEKLY':
+                    current_date = current_date + relativedelta(weeks=self.recurrence_interval)
+                elif self.recurrence_type == 'MONTHLY':
+                    current_date = current_date + relativedelta(months=self.recurrence_interval)
+                elif self.recurrence_type == 'YEARLY':
+                    current_date = current_date + relativedelta(years=self.recurrence_interval)
+                else:
+                    break
+            
+            current = self.registered_count + 1
+            return {'current': current, 'total': total}
+        
+        return None
+
     def calculate_next_due_date_from_current(self):
         """Calcula a próxima data baseada na due_date atual + intervalo.
         Usado no método register() para atualizar a próxima data após registrar.

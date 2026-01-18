@@ -16,16 +16,6 @@
         <form method="post" class="needs-validation" novalidate>
             {% csrf_token %}
             
-            <!-- Toggle Recorrência -->
-            <div class="mb-4">
-                <div class="form-check form-switch">
-                    <input type="checkbox" class="form-check-input" id="is_recurring" name="is_recurring">
-                    <label class="form-check-label" for="is_recurring">
-                        <strong>É um agendamento recorrente</strong>
-                    </label>
-                </div>
-            </div>
-            
             <div class="row g-3">
                 <!-- Conta -->
                 <div class="col-md-6">
@@ -186,6 +176,16 @@
                     {% if form.status.errors %}
                         <div class="text-danger small mt-1">{{ form.status.errors }}</div>
                     {% endif %}
+                </div>
+
+                <!-- Toggle Recorrência -->
+                <div class="col-md-6">
+                    <div class="form-check form-switch mt-4">
+                        <input type="checkbox" class="form-check-input" id="is_recurring" name="is_recurring">
+                        <label class="form-check-label" for="is_recurring">
+                            <strong>É um agendamento recorrente</strong>
+                        </label>
+                    </div>
                 </div>
 
                 <!-- Anotações -->
