@@ -10,6 +10,7 @@ from datetime import datetime, date
 import uuid
 import json as json_module
 import time
+import hashlib
 from .models import Account, Beneficiary, Category, Subcategory, Transaction, Scheduler, Asset, AssetTransaction, AssetPosition, Budget, Inventory, CashFlowItem, AssetTransactionCategoryConfig
 from .forms import (
     AccountForm, BeneficiaryForm, CategoryForm, SubcategoryForm, TransactionForm, SchedulerForm,
@@ -2624,38 +2625,92 @@ def budget_manage(request):
     # Buscar orçamentos do ano selecionado
     budgets = Budget.objects.filter(
         budget_date__year=selected_year
-    ).select_related('subcategory', 'subcategory__category')
+    ).select_related('subcategory', 'subcategory__category').order_by('subcategory', 'notes', 'budget_date')
     
-    # Criar dicionário para acesso rápido: key = (subcategory_id, month) -> amount
-    budgets_dict = {}
+    # Agrupar orçamentos por (subcategory, notes) - permite múltiplas linhas por subcategoria
+    # key = (subcategory_id, notes_hash) -> lista de budgets
+    budgets_by_row = {}
     for budget in budgets:
-        key = (budget.subcategory_id, budget.month)
-        budgets_dict[key] = budget.amount
+        # Usar hash das notes como identificador único da linha (None ou '' vira '')
+        notes_key = budget.notes or ''
+        # Criar hash simples para usar como identificador no formulário
+        notes_hash = hashlib.md5(notes_key.encode('utf-8')).hexdigest()[:8] if notes_key else 'default'
+        row_key = (budget.subcategory_id, notes_hash, notes_key)
+        
+        if row_key not in budgets_by_row:
+            budgets_by_row[row_key] = {
+                'notes': notes_key,
+                'notes_hash': notes_hash,
+                'budgets': {}
+            }
+        # Armazenar budget por mês
+        budgets_by_row[row_key]['budgets'][budget.month] = budget
     
-    # Preparar dados para o template
+    # Otimizar: Calcular médias do ano anterior em uma única query
+    from django.db.models import Avg
+    previous_year = selected_year - 1
+    subcategory_ids = [s.id for s in subcategories]
+    avg_previous_dict = {}
+    if subcategory_ids:
+        avg_results = Budget.objects.filter(
+            subcategory_id__in=subcategory_ids,
+            budget_date__year=previous_year
+        ).values('subcategory_id').annotate(avg=Avg('amount'))
+        for result in avg_results:
+            avg_previous_dict[result['subcategory_id']] = result['avg'] or Decimal('0.00')
+    
+    # Preparar dados para o template - agrupar por subcategoria primeiro
     budget_data = []
     for subcategory in subcategories:
-        # Calcular média do ano anterior
-        avg_previous = Budget.get_average_previous_year(subcategory, selected_year)
+        # Usar média calculada em bulk (muito mais rápido)
+        avg_previous = avg_previous_dict.get(subcategory.id, Decimal('0.00'))
         
-        # Obter valores dos 12 meses
-        months_data = []
-        total_year = Decimal('0.00')
-        for month in range(1, 13):
-            key = (subcategory.id, month)
-            amount = budgets_dict.get(key, Decimal('0.00'))
-            months_data.append({
-                'month': month,
-                'amount': amount
+        # Buscar todas as linhas (rows) para esta subcategoria
+        subcategory_rows = []
+        for row_key, row_data in budgets_by_row.items():
+            subcategory_id, notes_hash, notes = row_key
+            if subcategory_id == subcategory.id:
+                # Obter valores dos 12 meses para esta linha
+                months_data = []
+                total_year = Decimal('0.00')
+                for month in range(1, 13):
+                    budget = row_data['budgets'].get(month)
+                    amount = budget.amount if budget else Decimal('0.00')
+                    months_data.append({
+                        'month': month,
+                        'amount': amount,
+                        'budget_id': budget.id if budget else None
+                    })
+                    total_year += amount
+                
+                subcategory_rows.append({
+                    'notes': row_data['notes'],
+                    'notes_hash': row_data['notes_hash'],
+                    'months': months_data,
+                    'total_year': total_year
+                })
+        
+        # Se não houver nenhuma linha para esta subcategoria, criar uma linha vazia
+        if not subcategory_rows:
+            months_data = []
+            for month in range(1, 13):
+                months_data.append({
+                    'month': month,
+                    'amount': Decimal('0.00'),
+                    'budget_id': None
+                })
+            subcategory_rows.append({
+                'notes': '',
+                'notes_hash': 'default',
+                'months': months_data,
+                'total_year': Decimal('0.00')
             })
-            total_year += amount
         
         budget_data.append({
             'subcategory': subcategory,
             'default_transaction_type': subcategory.default_transaction_type,
             'avg_previous_year': avg_previous,
-            'months': months_data,
-            'total_year': total_year
+            'rows': subcategory_rows  # Múltiplas linhas por subcategoria
         })
     
     # Calcular totais separados por tipo
@@ -2707,36 +2762,110 @@ def budget_manage(request):
         # #endregion
         
         with db_transaction.atomic():
-            # Processar cada subcategoria
+            # Coletar todas as linhas (rows) por subcategoria
+            # Formato dos campos: budget_{subcategory_id}_{notes_hash}_{month} e notes_{subcategory_id}_{notes_hash}
+            rows_by_subcategory = {}
+            
             for subcategory in subcategories:
-                for month in range(1, 13):
-                    field_name = f"budget_{subcategory.id}_{month}"
-                    value = request.POST.get(field_name, '').strip()
+                rows_by_subcategory[subcategory.id] = {}
+                
+                # Buscar todos os campos de anotações para esta subcategoria
+                for key in request.POST.keys():
+                    if key.startswith(f'notes_{subcategory.id}_'):
+                        notes_hash = key.replace(f'notes_{subcategory.id}_', '')
+                        notes = request.POST.get(key, '').strip()
+                        rows_by_subcategory[subcategory.id][notes_hash] = {
+                            'notes': notes,
+                            'months': {}
+                        }
+                
+                # Buscar todos os campos de valores para esta subcategoria
+                for key in request.POST.keys():
+                    if key.startswith(f'budget_{subcategory.id}_'):
+                        # Formato: budget_{subcategory_id}_{notes_hash}_{month}
+                        parts = key.split('_')
+                        if len(parts) >= 4:
+                            notes_hash = parts[2]
+                            month = int(parts[3])
+                            value = request.POST.get(key, '').strip()
+                            
+                            if notes_hash not in rows_by_subcategory[subcategory.id]:
+                                rows_by_subcategory[subcategory.id][notes_hash] = {
+                                    'notes': '',
+                                    'months': {}
+                                }
+                            
+                            rows_by_subcategory[subcategory.id][notes_hash]['months'][month] = value
+            
+            # Buscar todos os orçamentos existentes para este ano (para comparar e deletar os removidos)
+            existing_budgets = Budget.objects.filter(
+                budget_date__year=year,
+                subcategory__in=subcategories
+            )
+            
+            # Criar conjunto de (subcategory_id, month, notes) que foram enviados no POST
+            submitted_budgets = set()
+            
+            # Processar cada subcategoria e suas linhas
+            for subcategory in subcategories:
+                if subcategory.id not in rows_by_subcategory:
+                    # Se não há linhas enviadas para esta subcategoria, deletar todos os orçamentos dela
+                    Budget.objects.filter(
+                        subcategory=subcategory,
+                        budget_date__year=year
+                    ).delete()
+                    continue
+                
+                for notes_hash, row_data in rows_by_subcategory[subcategory.id].items():
+                    notes = row_data['notes']
                     
-                    if value:
-                        try:
-                            # Converter valor (tratar vírgula/ponto decimal)
-                            value = value.replace(',', '.')
-                            amount = Decimal(value)
-                            
-                            # Criar budget_date usando date(year, month, 1) (sempre dia 1)
-                            budget_date = date(year, month, 1)
-                            
-                            # Usar update_or_create com subcategory e budget_date
-                            Budget.objects.update_or_create(
+                    # Processar cada mês desta linha
+                    for month in range(1, 13):
+                        value = row_data['months'].get(month, '').strip()
+                        budget_date = date(year, month, 1)
+                        
+                        if value:
+                            try:
+                                # Converter valor (tratar vírgula/ponto decimal)
+                                value = value.replace(',', '.')
+                                amount = Decimal(value)
+                                
+                                # Adicionar ao conjunto de budgets enviados
+                                submitted_budgets.add((subcategory.id, month, notes))
+                                
+                                # Usar update_or_create para evitar problemas de constraint
+                                Budget.objects.update_or_create(
+                                    subcategory=subcategory,
+                                    budget_date=budget_date,
+                                    notes=notes,
+                                    defaults={'amount': amount}
+                                )
+                            except (ValueError, InvalidOperation):
+                                pass  # Ignorar valores inválidos
+                        else:
+                            # Se o campo estiver vazio, remover o orçamento específico desta linha
+                            Budget.objects.filter(
                                 subcategory=subcategory,
                                 budget_date=budget_date,
-                                defaults={'amount': amount}
-                            )
-                        except (ValueError, InvalidOperation):
-                            pass  # Ignorar valores inválidos
-                    else:
-                        # Se o campo estiver vazio, remover o orçamento se existir
-                        budget_date = date(year, month, 1)
+                                notes=notes
+                            ).delete()
+                    
+                    # Se a linha não tem valores nem anotações, remover todos os budgets desta linha
+                    has_values = any(row_data['months'].get(m, '').strip() for m in range(1, 13))
+                    if not has_values and not notes:
+                        # Remover todos os budgets desta linha (mesmo notes_hash)
                         Budget.objects.filter(
                             subcategory=subcategory,
-                            budget_date=budget_date
+                            budget_date__year=year,
+                            notes=notes
                         ).delete()
+            
+            # Deletar orçamentos que existem no banco mas não foram enviados no POST (linhas removidas)
+            for budget in existing_budgets:
+                key = (budget.subcategory_id, budget.month, budget.notes or '')
+                if key not in submitted_budgets:
+                    # Este orçamento não foi enviado no POST, então foi removido
+                    budget.delete()
             
             # #region agent log
             try:

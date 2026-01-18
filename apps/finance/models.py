@@ -252,15 +252,22 @@ class Budget(BaseModel):
         decimal_places=2,
         default=0
     )
+    notes = models.TextField(
+        'Anotações',
+        blank=True,
+        null=True,
+        help_text='Anotações sobre o orçamento'
+    )
     
     class Meta:
         verbose_name = 'Orçamento'
         verbose_name_plural = 'Orçamentos'
-        ordering = ('budget_date', 'subcategory')
-        unique_together = [['subcategory', 'budget_date']]
+        ordering = ('budget_date', 'subcategory', 'notes')
+        # Removido unique_together para permitir múltiplos orçamentos por subcategoria/mês com notes diferentes
         indexes = [
             models.Index(fields=['subcategory', 'budget_date']),
             models.Index(fields=['budget_date']),
+            models.Index(fields=['subcategory', 'budget_date', 'notes']),
         ]
     
     def __str__(self):

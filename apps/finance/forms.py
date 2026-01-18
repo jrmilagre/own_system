@@ -957,11 +957,12 @@ class SchedulerFilterForm(forms.Form):
 class BudgetForm(forms.ModelForm):
     class Meta:
         model = Budget
-        fields = ['subcategory', 'budget_date', 'amount']
+        fields = ['subcategory', 'budget_date', 'amount', 'notes']
         widgets = {
             'subcategory': forms.Select(attrs={'required': True}),
             'budget_date': forms.DateInput(attrs={'type': 'date', 'required': True}),
             'amount': forms.NumberInput(attrs={'step': '0.01', 'required': True}),
+            'notes': forms.Textarea(attrs={'rows': 3, 'placeholder': 'Digite suas anotações aqui...'}),
         }
 
     def __init__(self, *args, **kwargs):

@@ -62,10 +62,12 @@
                             <th rowspan="2" class="align-middle text-center" style="width: 180px;">Subcategoria</th>
                             <th rowspan="2" class="align-middle text-center" style="width: 80px;">Tipo</th>
                             <th rowspan="2" class="align-middle text-center" style="width: 100px;">Média<br>Ano Anterior</th>
+                            <th rowspan="2" class="align-middle text-center" style="width: 200px;">Anotações</th>
                             {% for month_num, month_name in months %}
                                 <th class="text-center" style="width: 85px;">{{ month_name }}</th>
                             {% endfor %}
                             <th rowspan="2" class="align-middle text-center" style="width: 100px;">Total<br>Anual</th>
+                            <th rowspan="2" class="align-middle text-center" style="width: 60px;">Ações</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -73,7 +75,7 @@
                         {% for category_group in categories_grouped %}
                             <!-- Cabeçalho da Categoria -->
                             <tr class="category-header table-secondary" data-category-id="{{ category_group.grouper.id }}">
-                                <td class="ps-2" colspan="3">
+                                <td class="ps-2" colspan="4">
                                     <strong style="font-size: 0.85rem;">
                                         <i class="fas fa-folder me-1"></i>{{ category_group.grouper.category }}
                                     </strong>
@@ -86,52 +88,96 @@
                                 <td class="text-end pe-2">
                                     <strong class="category-total" data-category-id="{{ category_group.grouper.id }}" style="font-size: 0.85rem;">R$ 0.00</strong>
                                 </td>
+                                <td></td>
                             </tr>
                             <!-- Subcategorias da Categoria -->
                             {% for item in category_group.list %}
-                                <tr class="category-row category-{{ category_group.grouper.id }} {% if item.default_transaction_type == 'CR' %}table-success{% else %}table-danger{% endif %}" data-category-id="{{ category_group.grouper.id }}">
-                                    <td class="ps-4">
-                                        <strong style="font-size: 0.85rem;">{{ item.subcategory.subcategory }}</strong>
-                                    </td>
-                                    <td class="text-center">
-                                        {% if item.default_transaction_type == 'CR' %}
-                                            <span class="badge bg-success" style="font-size: 0.75rem;">↑</span>
+                                {% for row in item.rows %}
+                                    <tr class="category-row category-{{ category_group.grouper.id }} budget-row {% if item.default_transaction_type == 'CR' %}table-success{% else %}table-danger{% endif %}" 
+                                        data-category-id="{{ category_group.grouper.id }}"
+                                        data-subcategory-id="{{ item.subcategory.id }}"
+                                        data-notes-hash="{{ row.notes_hash }}">
+                                        {% if forloop.first %}
+                                            <td class="ps-4" rowspan="{{ item.rows|length }}">
+                                                <strong style="font-size: 0.85rem;">{{ item.subcategory.subcategory }}</strong>
+                                            </td>
+                                            <td class="text-center" rowspan="{{ item.rows|length }}">
+                                                {% if item.default_transaction_type == 'CR' %}
+                                                    <span class="badge bg-success" style="font-size: 0.75rem;">↑</span>
+                                                {% else %}
+                                                    <span class="badge bg-danger" style="font-size: 0.75rem;">↓</span>
+                                                {% endif %}
+                                            </td>
+                                            <td class="text-end pe-2" rowspan="{{ item.rows|length }}">
+                                                <span class="text-muted" style="font-size: 0.8rem;">R$ {{ item.avg_previous_year|floatformat:2 }}</span>
+                                            </td>
                                         {% else %}
-                                            <span class="badge bg-danger" style="font-size: 0.75rem;">↓</span>
+                                            <!-- Células vazias para manter estrutura quando não é primeira linha -->
+                                            <!-- O rowspan das células acima cobre estas posições -->
                                         {% endif %}
-                                    </td>
-                                    <td class="text-end pe-2">
-                                        <span class="text-muted" style="font-size: 0.8rem;">R$ {{ item.avg_previous_year|floatformat:2 }}</span>
-                                    </td>
-                                    {% for month in item.months %}
-                                        <td class="p-1">
+                                        <td class="p-1 text-start">
                                             <input type="text" 
-                                                   name="budget_{{ item.subcategory.id }}_{{ month.month }}"
-                                                   value="{% if month.amount %}{{ month.amount|floatformat:2 }}{% endif %}"
-                                                   class="form-control form-control-sm budget-input text-end"
-                                                   data-subcategory="{{ item.subcategory.id }}"
-                                                   data-category="{{ category_group.grouper.id }}"
-                                                   data-month="{{ month.month }}"
-                                                   data-type="{{ item.default_transaction_type }}"
-                                                   placeholder="0.00"
-                                                   style="font-size: 0.8rem; padding: 0.2rem 0.4rem;">
+                                                   name="notes_{{ item.subcategory.id }}_{{ row.notes_hash }}"
+                                                   value="{{ row.notes }}"
+                                                   class="form-control form-control-sm notes-input"
+                                                   placeholder="Digite as anotações..."
+                                                   style="font-size: 0.75rem; padding: 0.2rem 0.3rem; text-align: left !important;">
                                         </td>
-                                    {% endfor %}
-                                    <td class="text-end pe-2">
-                                        <strong class="total-row" data-subcategory="{{ item.subcategory.id }}" style="font-size: 0.85rem;">
-                                            R$ {{ item.total_year|floatformat:2 }}
-                                        </strong>
+                                        {% for month in row.months %}
+                                            <td class="p-1">
+                                                <input type="text" 
+                                                       name="budget_{{ item.subcategory.id }}_{{ row.notes_hash }}_{{ month.month }}"
+                                                       value="{% if month.amount %}{{ month.amount|floatformat:2 }}{% endif %}"
+                                                       class="form-control form-control-sm budget-input text-end"
+                                                       data-subcategory="{{ item.subcategory.id }}"
+                                                       data-category="{{ category_group.grouper.id }}"
+                                                       data-month="{{ month.month }}"
+                                                       data-type="{{ item.default_transaction_type }}"
+                                                       data-notes-hash="{{ row.notes_hash }}"
+                                                       placeholder="0.00"
+                                                       style="font-size: 0.8rem; padding: 0.2rem 0.4rem;">
+                                            </td>
+                                        {% endfor %}
+                                        <td class="text-end pe-2">
+                                            <strong class="total-row" 
+                                                    data-subcategory="{{ item.subcategory.id }}"
+                                                    data-notes-hash="{{ row.notes_hash }}" 
+                                                    style="font-size: 0.85rem;">
+                                                R$ {{ row.total_year|floatformat:2 }}
+                                            </strong>
+                                        </td>
+                                        <td class="text-center">
+                                            <button type="button" 
+                                                    class="btn btn-sm btn-outline-danger remove-row-btn" 
+                                                    data-subcategory-id="{{ item.subcategory.id }}"
+                                                    data-notes-hash="{{ row.notes_hash }}"
+                                                    title="Remover linha"
+                                                    style="font-size: 0.7rem; padding: 0.1rem 0.3rem;">
+                                                <i class="fas fa-times"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                                <!-- Botão para adicionar nova linha -->
+                                <tr class="add-row-tr" data-subcategory-id="{{ item.subcategory.id }}" data-category-id="{{ category_group.grouper.id }}">
+                                    <td colspan="4" class="text-center py-2">
+                                        <button type="button" 
+                                                class="btn btn-sm btn-outline-primary add-row-btn" 
+                                                data-subcategory-id="{{ item.subcategory.id }}"
+                                                data-category-id="{{ category_group.grouper.id }}"
+                                                data-transaction-type="{{ item.default_transaction_type }}"
+                                                title="Adicionar nova linha">
+                                            <i class="fas fa-plus me-1"></i>Adicionar Linha
+                                        </button>
                                     </td>
+                                    <td colspan="15"></td>
                                 </tr>
                             {% endfor %}
                         {% endfor %}
                     </tbody>
                     <tfoot class="table-light">
                         <tr>
-                            <td colspan="2" class="ps-2"><strong style="font-size: 0.85rem;">Total Receitas</strong></td>
-                            <td class="text-end pe-2">
-                                <strong id="totalAvgPreviousCredit" style="font-size: 0.85rem;">R$ 0.00</strong>
-                            </td>
+                            <td colspan="4" class="ps-2"><strong style="font-size: 0.85rem;">Total Receitas</strong></td>
                             {% for month_num, month_name in months %}
                                 <td class="text-end pe-2">
                                     <strong class="total-column-credit" data-month="{{ month_num }}" style="font-size: 0.85rem;">
@@ -142,12 +188,10 @@
                             <td class="text-end pe-2">
                                 <strong id="totalCredit" style="font-size: 0.85rem;">R$ 0.00</strong>
                             </td>
+                            <td></td>
                         </tr>
                         <tr>
-                            <td colspan="2" class="ps-2"><strong style="font-size: 0.85rem;">Total Despesas</strong></td>
-                            <td class="text-end pe-2">
-                                <strong id="totalAvgPreviousDebit" style="font-size: 0.85rem;">R$ 0.00</strong>
-                            </td>
+                            <td colspan="4" class="ps-2"><strong style="font-size: 0.85rem;">Total Despesas</strong></td>
                             {% for month_num, month_name in months %}
                                 <td class="text-end pe-2">
                                     <strong class="total-column-debit" data-month="{{ month_num }}" style="font-size: 0.85rem;">
@@ -158,12 +202,10 @@
                             <td class="text-end pe-2">
                                 <strong id="totalDebit" style="font-size: 0.85rem;">R$ 0.00</strong>
                             </td>
+                            <td></td>
                         </tr>
                         <tr class="table-info">
-                            <td colspan="2" class="ps-2"><strong style="font-size: 0.85rem;">Saldo (Receitas - Despesas)</strong></td>
-                            <td class="text-end pe-2">
-                                <strong id="totalAvgPreviousBalance" style="font-size: 0.85rem;">R$ 0.00</strong>
-                            </td>
+                            <td colspan="4" class="ps-2"><strong style="font-size: 0.85rem;">Saldo (Receitas - Despesas)</strong></td>
                             {% for month_num, month_name in months %}
                                 <td class="text-end pe-2">
                                     <strong class="total-column-balance" data-month="{{ month_num }}" style="font-size: 0.85rem;">
@@ -174,6 +216,7 @@
                             <td class="text-end pe-2">
                                 <strong id="grandTotal" style="font-size: 0.85rem;">R$ 0.00</strong>
                             </td>
+                            <td></td>
                         </tr>
                     </tfoot>
                 </table>
@@ -273,6 +316,46 @@
 #budgetTable .category-row td:first-child {
     padding-left: 1.5rem !important;
 }
+
+/* Alinhar campo de anotações à esquerda */
+#budgetTable .notes-input {
+    text-align: left !important;
+}
+
+/* Garantir que a célula de anotações também esteja alinhada à esquerda */
+#budgetTable tbody td:has(.notes-input) {
+    text-align: left !important;
+}
+
+/* Garantir alinhamento da célula de anotações - regras mais específicas */
+#budgetTable tbody tr.budget-row td.text-start {
+    text-align: left !important;
+}
+
+#budgetTable tbody tr.budget-row td.p-1.text-start {
+    text-align: left !important;
+}
+
+/* Garantir que o input dentro também esteja alinhado */
+#budgetTable tbody tr.budget-row td.text-start .notes-input {
+    text-align: left !important;
+    padding: 0.2rem 0.3rem !important;
+    margin: 0 !important;
+    box-sizing: border-box !important;
+    width: 100% !important;
+}
+
+/* Garantir que a célula tenha padding consistente */
+#budgetTable tbody tr.budget-row td.p-1.text-start {
+    padding: 0.25rem !important;
+    margin: 0 !important;
+}
+
+/* Alternativa para navegadores que não suportam :has() */
+#budgetTable tbody tr.budget-row td.p-1:has(.notes-input),
+#budgetTable tbody tr.budget-row td.p-1 .notes-input {
+    text-align: left !important;
+}
 </style>
 {% endblock %}
 
@@ -305,39 +388,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     function calculateTotals() {
-        // Calcular totais da média do ano anterior
-        let totalAvgPreviousCredit = 0;
-        let totalAvgPreviousDebit = 0;
-        
-        document.querySelectorAll('#budgetTable tbody tr').forEach(row => {
-            const avgCell = row.querySelector('td:nth-child(3)');
-            if (avgCell) {
-                const avgText = avgCell.textContent.trim();
-                const avgValue = parseFloat(avgText.replace('R$', '').replace(/\s/g, '').replace(',', '.')) || 0;
-                const typeBadge = row.querySelector('td:nth-child(2) .badge');
-                if (typeBadge && typeBadge.classList.contains('bg-success')) {
-                    totalAvgPreviousCredit += avgValue;
-                } else if (typeBadge && typeBadge.classList.contains('bg-danger')) {
-                    totalAvgPreviousDebit += avgValue;
-                }
-            }
-        });
-        
-        const totalAvgPreviousCreditEl = document.getElementById('totalAvgPreviousCredit');
-        if (totalAvgPreviousCreditEl) {
-            totalAvgPreviousCreditEl.textContent = 'R$ ' + totalAvgPreviousCredit.toFixed(2);
-        }
-        
-        const totalAvgPreviousDebitEl = document.getElementById('totalAvgPreviousDebit');
-        if (totalAvgPreviousDebitEl) {
-            totalAvgPreviousDebitEl.textContent = 'R$ ' + totalAvgPreviousDebit.toFixed(2);
-        }
-        
-        const totalAvgPreviousBalanceEl = document.getElementById('totalAvgPreviousBalance');
-        if (totalAvgPreviousBalanceEl) {
-            const balance = totalAvgPreviousCredit - totalAvgPreviousDebit;
-            totalAvgPreviousBalanceEl.textContent = 'R$ ' + balance.toFixed(2);
-        }
+        // Removido cálculo de média do ano anterior do rodapé (coluna foi removida)
         
         // Calcular totais por coluna (mês) separados por tipo
         {% for month_num, month_name in months %}
@@ -509,6 +560,212 @@ document.addEventListener('DOMContentLoaded', function() {
             calculateCategoryTotals();
         });
     });
+    
+    // Função para gerar hash único para novas linhas
+    function generateRowHash() {
+        return Math.random().toString(36).substring(2, 10);
+    }
+    
+    // Função para calcular total de uma linha específica
+    function calculateRowTotalByHash(subcategoryId, notesHash) {
+        let total = 0;
+        document.querySelectorAll(`input[data-subcategory="${subcategoryId}"][data-notes-hash="${notesHash}"].budget-input`).forEach(inp => {
+            let value = inp.value;
+            if (value) {
+                value = value.toString().trim().replace(/\s/g, '').replace(',', '.');
+                const numValue = parseFloat(value) || 0;
+                total += numValue;
+            }
+        });
+        
+        const totalRow = document.querySelector(`.total-row[data-subcategory="${subcategoryId}"][data-notes-hash="${notesHash}"]`);
+        if (totalRow) {
+            totalRow.textContent = 'R$ ' + total.toFixed(2);
+        }
+    }
+    
+    // Atualizar calculateRowTotal para usar notes_hash
+    const originalCalculateRowTotal = calculateRowTotal;
+    calculateRowTotal = function(input) {
+        const subcategoryId = input.dataset.subcategory;
+        const notesHash = input.dataset.notesHash;
+        if (subcategoryId && notesHash) {
+            calculateRowTotalByHash(subcategoryId, notesHash);
+        } else {
+            originalCalculateRowTotal(input);
+        }
+    };
+    
+    // Adicionar nova linha usando delegação de eventos
+    document.addEventListener('click', function(e) {
+        if (e.target.closest('.add-row-btn')) {
+            const btn = e.target.closest('.add-row-btn');
+            const subcategoryId = btn.dataset.subcategoryId;
+            const categoryId = btn.dataset.categoryId;
+            const transactionType = btn.dataset.transactionType;
+            const newHash = generateRowHash();
+            
+            // Encontrar uma linha para clonar (preferir linha sem rowspan)
+            const allRows = Array.from(document.querySelectorAll(`tr.budget-row[data-subcategory-id="${subcategoryId}"]`));
+            const addRowTr = document.querySelector(`tr.add-row-tr[data-subcategory-id="${subcategoryId}"]`);
+            
+            if (allRows.length === 0 || !addRowTr) {
+                console.error('Não foi possível encontrar linha para clonar');
+                return;
+            }
+            
+            // Criar nova linha do zero para garantir estrutura correta
+            // A linha deve ter: anotações, 12 meses, total, ações (sem células com rowspan)
+            const newRow = document.createElement('tr');
+            newRow.className = `category-row category-${categoryId} budget-row ${transactionType === 'CR' ? 'table-success' : 'table-danger'}`;
+            newRow.setAttribute('data-category-id', categoryId);
+            newRow.setAttribute('data-subcategory-id', subcategoryId);
+            newRow.setAttribute('data-notes-hash', newHash);
+            
+            // Célula de Anotações
+            const notesCell = document.createElement('td');
+            notesCell.className = 'p-1 text-start';
+            notesCell.style.textAlign = 'left';
+            notesCell.style.setProperty('text-align', 'left', 'important');
+            // Garantir que a célula não tenha padding/margin extra
+            notesCell.style.padding = '0.25rem';
+            notesCell.style.margin = '0';
+            const notesInput = document.createElement('input');
+            notesInput.type = 'text';
+            notesInput.name = `notes_${subcategoryId}_${newHash}`;
+            notesInput.className = 'form-control form-control-sm notes-input';
+            notesInput.placeholder = 'Digite as anotações...';
+            // Garantir padding exatamente igual ao template
+            notesInput.style.fontSize = '0.75rem';
+            notesInput.style.padding = '0.2rem 0.3rem';
+            notesInput.style.margin = '0';
+            notesInput.style.textAlign = 'left';
+            notesInput.style.setProperty('text-align', 'left', 'important');
+            notesInput.style.boxSizing = 'border-box';
+            notesInput.style.width = '100%';
+            notesCell.appendChild(notesInput);
+            newRow.appendChild(notesCell);
+            
+            // 12 células para os meses
+            for (let month = 1; month <= 12; month++) {
+                const monthCell = document.createElement('td');
+                monthCell.className = 'p-1';
+                const monthInput = document.createElement('input');
+                monthInput.type = 'text';
+                monthInput.name = `budget_${subcategoryId}_${newHash}_${month}`;
+                monthInput.className = 'form-control form-control-sm budget-input text-end';
+                monthInput.setAttribute('data-subcategory', subcategoryId);
+                monthInput.setAttribute('data-category', categoryId);
+                monthInput.setAttribute('data-month', month);
+                monthInput.setAttribute('data-type', transactionType);
+                monthInput.setAttribute('data-notes-hash', newHash);
+                monthInput.placeholder = '0.00';
+                monthInput.style.cssText = 'font-size: 0.8rem; padding: 0.2rem 0.4rem;';
+                monthCell.appendChild(monthInput);
+                newRow.appendChild(monthCell);
+            }
+            
+            // Célula de Total
+            const totalCell = document.createElement('td');
+            totalCell.className = 'text-end pe-2';
+            const totalStrong = document.createElement('strong');
+            totalStrong.className = 'total-row';
+            totalStrong.setAttribute('data-subcategory', subcategoryId);
+            totalStrong.setAttribute('data-notes-hash', newHash);
+            totalStrong.style.fontSize = '0.85rem';
+            totalStrong.textContent = 'R$ 0.00';
+            totalCell.appendChild(totalStrong);
+            newRow.appendChild(totalCell);
+            
+            // Célula de Ações
+            const actionsCell = document.createElement('td');
+            actionsCell.className = 'text-center';
+            const removeBtn = document.createElement('button');
+            removeBtn.type = 'button';
+            removeBtn.className = 'btn btn-sm btn-outline-danger remove-row-btn';
+            removeBtn.setAttribute('data-subcategory-id', subcategoryId);
+            removeBtn.setAttribute('data-notes-hash', newHash);
+            removeBtn.title = 'Remover linha';
+            removeBtn.style.cssText = 'font-size: 0.7rem; padding: 0.1rem 0.3rem;';
+            removeBtn.innerHTML = '<i class="fas fa-times"></i>';
+            actionsCell.appendChild(removeBtn);
+            newRow.appendChild(actionsCell);
+            
+            // Atualizar rowspan da primeira linha desta subcategoria
+            // Quando adicionamos uma nova linha, o rowspan precisa ser incrementado
+            const firstRow = allRows[0];
+            if (firstRow) {
+                const cellsWithRowspan = firstRow.querySelectorAll('td[rowspan]');
+                cellsWithRowspan.forEach(cell => {
+                    const currentRowspan = parseInt(cell.getAttribute('rowspan')) || 1;
+                    cell.setAttribute('rowspan', currentRowspan + 1);
+                });
+            }
+            
+            // Inserir antes do add-row-tr
+            addRowTr.parentNode.insertBefore(newRow, addRowTr);
+            
+            // Adicionar listeners aos novos inputs
+            newRow.querySelectorAll('.budget-input').forEach(input => {
+                input.addEventListener('input', function() {
+                    calculateRowTotal(this);
+                    calculateTotals();
+                    calculateCategoryTotals();
+                });
+                input.addEventListener('change', function() {
+                    calculateRowTotal(this);
+                    calculateTotals();
+                    calculateCategoryTotals();
+                });
+            });
+            
+            // Recalcular totais
+            calculateTotals();
+            calculateCategoryTotals();
+        }
+    });
+    
+    // Remover linha
+    document.addEventListener('click', function(e) {
+        if (e.target.closest('.remove-row-btn')) {
+            const btn = e.target.closest('.remove-row-btn');
+            const row = btn.closest('tr.budget-row');
+            if (row && confirm('Tem certeza que deseja remover esta linha?')) {
+                const subcategoryId = row.dataset.subcategoryId;
+                const allRows = Array.from(document.querySelectorAll(`tr.budget-row[data-subcategory-id="${subcategoryId}"]`));
+                const firstRow = allRows[0];
+                
+                // Se não for a primeira linha, atualizar rowspan da primeira linha
+                if (firstRow && firstRow !== row) {
+                    const cellsWithRowspan = firstRow.querySelectorAll('td[rowspan]');
+                    cellsWithRowspan.forEach(cell => {
+                        const currentRowspan = parseInt(cell.getAttribute('rowspan')) || 1;
+                        if (currentRowspan > 1) {
+                            cell.setAttribute('rowspan', currentRowspan - 1);
+                        }
+                    });
+                }
+                
+                row.remove();
+                calculateTotals();
+                calculateCategoryTotals();
+            }
+        }
+    });
+    
+    // Atualizar calculateTotals para considerar múltiplas linhas
+    const originalCalculateTotals = calculateTotals;
+    calculateTotals = function() {
+        originalCalculateTotals();
+        // Recalcular totais por linha
+        document.querySelectorAll('tr.budget-row').forEach(row => {
+            const subcategoryId = row.dataset.subcategoryId;
+            const notesHash = row.dataset.notesHash;
+            if (subcategoryId && notesHash) {
+                calculateRowTotalByHash(subcategoryId, notesHash);
+            }
+        });
+    };
 });
 </script>
 {% endblock %}
