@@ -740,7 +740,94 @@ def transaction_update(request, pk):
             form = TransactionForm(request.POST, instance=transaction)
             
         if form.is_valid():
-            if transaction.is_transfer:
+            is_transfer_in_form = form.cleaned_data.get('is_transfer', False)
+            
+            # Detectar conversão: verificar se o estado mudou
+            is_converting_to_transfer = not transaction.is_transfer and is_transfer_in_form
+            is_converting_to_normal = transaction.is_transfer and not is_transfer_in_form
+            
+            if is_converting_to_transfer:
+                # Converter transação normal para transferência
+                source_account = form.cleaned_data['source_account']
+                destination_account = form.cleaned_data['destination_account']
+                value = form.cleaned_data['value']
+                due_date = form.cleaned_data.get('due_date')
+                transaction_date = form.cleaned_data.get('transaction_date')
+                purchase_date = form.cleaned_data.get('purchase_date')
+                notes = form.cleaned_data.get('notes', '')
+                
+                # Gerar UUID para vincular as duas transações
+                transfer_group_id = uuid.uuid4()
+                
+                with db_transaction.atomic():
+                    # Converter a transação existente em transação de débito (conta origem)
+                    transaction.account = source_account
+                    transaction.beneficiary = None
+                    transaction.subcategory = None
+                    transaction.transaction_type = 'DB'
+                    transaction.value = value
+                    transaction.due_date = due_date
+                    transaction.transaction_date = transaction_date
+                    transaction.purchase_date = purchase_date
+                    transaction.notes = notes
+                    transaction.transfer_group_id = transfer_group_id
+                    transaction.is_transfer = True
+                    transaction.save()
+                    
+                    # Criar transação de crédito (conta destino)
+                    credit_transaction = Transaction.objects.create(
+                        account=destination_account,
+                        beneficiary=None,
+                        subcategory=None,
+                        transaction_type='CR',
+                        value=value,
+                        due_date=due_date,
+                        transaction_date=transaction_date,
+                        purchase_date=purchase_date,
+                        notes=notes,
+                        transfer_group_id=transfer_group_id,
+                        is_transfer=True
+                    )
+                
+                messages.success(request, 'Transação convertida em transferência com sucesso!')
+            elif is_converting_to_normal:
+                # Converter transferência para transação normal
+                transfer_pair = transaction.get_transfer_pair()
+                
+                # Obter dados do formulário para a nova transação normal
+                account = form.cleaned_data['account']
+                beneficiary = form.cleaned_data['beneficiary']
+                subcategory = form.cleaned_data['subcategory']
+                transaction_type = form.cleaned_data['transaction_type']
+                value = form.cleaned_data['value']
+                due_date = form.cleaned_data.get('due_date')
+                transaction_date = form.cleaned_data.get('transaction_date')
+                purchase_date = form.cleaned_data.get('purchase_date')
+                notes = form.cleaned_data.get('notes', '')
+                
+                with db_transaction.atomic():
+                    # Deletar ambas as transações da transferência
+                    if transfer_pair:
+                        transfer_pair.delete()
+                    transaction.delete()
+                    
+                    # Criar nova transação normal
+                    new_transaction = Transaction.objects.create(
+                        account=account,
+                        beneficiary=beneficiary,
+                        subcategory=subcategory,
+                        transaction_type=transaction_type,
+                        value=value,
+                        due_date=due_date,
+                        transaction_date=transaction_date,
+                        purchase_date=purchase_date,
+                        notes=notes,
+                        is_transfer=False,
+                        transfer_group_id=None
+                    )
+                
+                messages.success(request, 'Transferência convertida em transação normal com sucesso!')
+            elif transaction.is_transfer:
                 # Atualizar ambas as transações da transferência
                 transfer_pair = transaction.get_transfer_pair()
                 if transfer_pair:
