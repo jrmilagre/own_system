@@ -128,9 +128,13 @@ class Money99Parser:
             return 'BANK'
     
     @staticmethod
-    def generate_import_hash(date, beneficiary, account, memo, category, subcategory, value):
+    def generate_import_hash(date, beneficiary, account, memo, category, subcategory, value, 
+                            is_transfer=False, source_account=None, destination_account=None, 
+                            transfer_side=None):
         """
         Gera hash MD5 baseado nos dados originais da transação para prevenir duplicatas.
+        
+        Para transferências, gera hash único para cada lado (débito e crédito).
         
         Args:
             date: Data da transação (objeto date)
@@ -140,6 +144,10 @@ class Money99Parser:
             category: Categoria (string)
             subcategory: Subcategoria (string)
             value: Valor da transação (Decimal)
+            is_transfer: Se é transferência (bool)
+            source_account: Conta origem (string, apenas para transferências)
+            destination_account: Conta destino (string, apenas para transferências)
+            transfer_side: Lado da transferência ('DB' ou 'CR', apenas para transferências)
         
         Returns:
             Hash MD5 hexadecimal de 32 caracteres
@@ -148,33 +156,57 @@ class Money99Parser:
         # Data: Formato YYYY-MM-DD
         date_str = date.strftime('%Y-%m-%d') if date else ''
         
-        # Favorecido: Normalizar espaços, converter para string vazia se None
-        beneficiary_str = Money99Parser.normalize_name(beneficiary) if beneficiary else ''
-        
-        # Conta: Normalizar espaços
-        account_str = Money99Parser.normalize_name(account) if account else ''
-        
-        # Memo: Normalizar espaços, converter para string vazia se None
-        memo_str = ' '.join(memo.split()) if memo else ''
-        
-        # Categoria: Normalizar espaços, usar categoria + " : " + subcategoria (ou apenas categoria se não houver subcategoria)
-        category_str = ''
-        if category:
-            category_normalized = Money99Parser.normalize_name(category)
-            if subcategory and subcategory != category:
-                subcategory_normalized = Money99Parser.normalize_name(subcategory)
-                category_str = f"{category_normalized} : {subcategory_normalized}"
+        # Para transferências, usar lógica diferente
+        if is_transfer:
+            # Normalizar contas
+            source_account_str = Money99Parser.normalize_name(source_account) if source_account else ''
+            destination_account_str = Money99Parser.normalize_name(destination_account) if destination_account else ''
+            
+            # Memo: Normalizar espaços
+            memo_str = ' '.join(memo.split()) if memo else ''
+            
+            # Montante: Converter Decimal para string com 2 casas decimais
+            if value is not None:
+                value_str = f"{value:.2f}"
             else:
-                category_str = category_normalized
-        
-        # Montante: Converter Decimal para string com 2 casas decimais (sem separadores)
-        if value is not None:
-            value_str = f"{value:.2f}"
+                value_str = '0.00'
+            
+            # Para transferências, incluir ambas as contas e o lado (DB ou CR)
+            # Ordenar contas para garantir consistência
+            accounts_sorted = sorted([source_account_str, destination_account_str])
+            transfer_side_str = transfer_side if transfer_side else ''
+            
+            # Concatenar: Data|ContaOrigem|ContaDestino|Memo|Montante|Lado
+            hash_string = f"{date_str}|{accounts_sorted[0]}|{accounts_sorted[1]}|{memo_str}|{value_str}|{transfer_side_str}"
         else:
-            value_str = '0.00'
-        
-        # Concatenar na ordem: Data|Favorecido|Conta|Memo|Categoria|Montante
-        hash_string = f"{date_str}|{beneficiary_str}|{account_str}|{memo_str}|{category_str}|{value_str}"
+            # Lógica original para transações normais
+            # Favorecido: Normalizar espaços, converter para string vazia se None
+            beneficiary_str = Money99Parser.normalize_name(beneficiary) if beneficiary else ''
+            
+            # Conta: Normalizar espaços
+            account_str = Money99Parser.normalize_name(account) if account else ''
+            
+            # Memo: Normalizar espaços, converter para string vazia se None
+            memo_str = ' '.join(memo.split()) if memo else ''
+            
+            # Categoria: Normalizar espaços, usar categoria + " : " + subcategoria (ou apenas categoria se não houver subcategoria)
+            category_str = ''
+            if category:
+                category_normalized = Money99Parser.normalize_name(category)
+                if subcategory and subcategory != category:
+                    subcategory_normalized = Money99Parser.normalize_name(subcategory)
+                    category_str = f"{category_normalized} : {subcategory_normalized}"
+                else:
+                    category_str = category_normalized
+            
+            # Montante: Converter Decimal para string com 2 casas decimais (sem separadores)
+            if value is not None:
+                value_str = f"{value:.2f}"
+            else:
+                value_str = '0.00'
+            
+            # Concatenar na ordem: Data|Favorecido|Conta|Memo|Categoria|Montante
+            hash_string = f"{date_str}|{beneficiary_str}|{account_str}|{memo_str}|{category_str}|{value_str}"
         
         # Gerar MD5
         return hashlib.md5(hash_string.encode('utf-8')).hexdigest()
@@ -232,19 +264,52 @@ class Money99Parser:
             transaction_type = 'CR' if amount >= 0 else 'DB'
             value = abs(amount)
 
-            # Separar categoria e subcategoria
-            category, subcategory = Money99Parser.parse_category(category_str)
+            # Verificar se é transferência
+            is_transfer = False
+            source_account = None
+            destination_account = None
+            
+            # Verificar se category_str ou memo_str contém padrão de transferência
+            transfer_text = category_str if category_str else memo_str
+            if transfer_text:
+                if 'Transferir para :' in transfer_text:
+                    # Padrão: "Transferir para : [conta destino]"
+                    # A conta na linha é a origem (débito), a conta após "para :" é o destino (crédito)
+                    is_transfer = True
+                    source_account = account_str
+                    # Extrair conta destino após "para :"
+                    parts = transfer_text.split('Transferir para :', 1)
+                    if len(parts) > 1:
+                        destination_account = parts[1].strip()
+                elif 'Transferir de :' in transfer_text:
+                    # Padrão: "Transferir de : [conta origem]"
+                    # A conta na linha é o destino (crédito), a conta após "de :" é a origem (débito)
+                    is_transfer = True
+                    destination_account = account_str
+                    # Extrair conta origem após "de :"
+                    parts = transfer_text.split('Transferir de :', 1)
+                    if len(parts) > 1:
+                        source_account = parts[1].strip()
 
-            # Gerar hash de importação baseado nos valores originais
-            import_hash = Money99Parser.generate_import_hash(
-                date=transaction_date,
-                beneficiary=beneficiary_str,
-                account=account_str,
-                memo=memo_str,
-                category=category,
-                subcategory=subcategory,
-                value=value
-            )
+            # Separar categoria e subcategoria (apenas se não for transferência)
+            if is_transfer:
+                category = None
+                subcategory = None
+                # Para transferências, não gerar hash aqui - será gerado na view para cada lado
+                import_hash = None
+            else:
+                category, subcategory = Money99Parser.parse_category(category_str)
+                # Gerar hash de importação baseado nos valores originais
+                import_hash = Money99Parser.generate_import_hash(
+                    date=transaction_date,
+                    beneficiary=beneficiary_str,
+                    account=account_str,
+                    memo=memo_str,
+                    category=category,
+                    subcategory=subcategory,
+                    value=value,
+                    is_transfer=False
+                )
 
             result = {
                 'transaction_date': transaction_date,
@@ -258,6 +323,9 @@ class Money99Parser:
                 'line_num': line_num,
                 'original_index': None,  # Será preenchido após parsing
                 'import_hash': import_hash,  # Hash baseado em valores originais
+                'is_transfer': is_transfer,
+                'source_account': source_account,
+                'destination_account': destination_account,
             }
             return result
         except Exception as e:

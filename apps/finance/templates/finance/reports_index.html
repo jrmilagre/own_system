@@ -17,7 +17,7 @@
 <h6 class="px-3 text-uppercase text-muted mt-3" style="font-size: 0.7rem; color: #888 !important;">Contas</h6>
 <ul class="nav flex-column">
     <li class="nav-item">
-        <a href="{% url 'finance:account_statement' %}" class="{% if request.resolver_match.url_name == 'account_statement' %}active{% endif %}">
+        <a href="{% url 'finance:account_statement_report' %}" class="{% if request.resolver_match.url_name == 'account_statement_report' %}active{% endif %}">
             <i class="fas fa-file-alt me-2"></i>Extrato
         </a>
     </li>
@@ -43,7 +43,7 @@
 {% endblock %}
 
 {% block content %}
-<div class="card shadow-sm border-0">
+<div class="card shadow-sm border-0 mb-3">
     <div class="card-body">
         <h1 class="h4 mb-4">Relatórios</h1>
         
@@ -59,7 +59,7 @@
                     <div class="card-body">
                         <ul class="list-unstyled mb-0">
                             <li class="mb-2">
-                                <a href="{% url 'finance:account_statement' %}" class="text-decoration-none">
+                                <a href="{% url 'finance:account_statement_report' %}" class="text-decoration-none">
                                     <i class="fas fa-file-alt text-primary me-2"></i>Extrato
                                 </a>
                             </li>

@@ -67,7 +67,7 @@
             <table class="table table-hover table-sm mb-0" style="font-size: 0.9rem;">
                 <thead class="table-light">
                     <tr>
-                        <th class="ps-3">Transação</th>
+                        <th class="ps-3">Beneficiário</th>
                         <th>Conta</th>
                         <th>Subcategoria</th>
                         <th>Tipo</th>
@@ -142,14 +142,20 @@
                                     <span style="font-size: 1.1rem;">💸</span>
                                 {% endif %}
                                 <span style="font-weight: 500;">
-                                    {% if transaction.beneficiary %}
-                                        {{ transaction.beneficiary }}
-                                    {% elif transaction.subcategory %}
-                                        {{ transaction.subcategory }}
-                                    {% elif transaction.is_transfer %}
-                                        Transação entre contas
+                                    {% if transaction.is_transfer %}
+                                        {% with transfer_pair=transaction.get_transfer_pair %}
+                                            {% if transfer_pair %}
+                                                {{ transfer_pair.account }}
+                                            {% else %}
+                                                <span class="text-muted">-</span>
+                                            {% endif %}
+                                        {% endwith %}
                                     {% else %}
-                                        Transação
+                                        {% if transaction.beneficiary %}
+                                            {{ transaction.beneficiary }}
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
                                     {% endif %}
                                 </span>
                                 {% if transaction.asset_transaction %}

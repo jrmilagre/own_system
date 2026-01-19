@@ -76,7 +76,7 @@ urlpatterns = [
     path('asset-positions/<int:pk>/delete/', views.asset_position_delete, name='asset_position_delete'),
     # Reports URLs
     path('reports/', views.reports_index, name='reports_index'),
-    path('reports/account-statement/', views.account_statement, name='account_statement'),
+    path('reports/account-statement/', views.account_statement_report, name='account_statement_report'),
     path('reports/asset-stock-position/', views.asset_stock_position_report, name='asset_stock_position_report'),
     path('reports/cash-flow/', views.cash_flow_report, name='cash_flow_report'),
     # Budget URLs

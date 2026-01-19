@@ -2487,8 +2487,130 @@ def asset_position_delete(request, pk):
 
 # Reports Views
 def reports_index(request):
-    """Página inicial de relatórios"""
+    """Página inicial de relatórios com atalhos"""
     return render(request, 'finance/reports_index.html')
+
+
+def account_statement_report(request):
+    """Página de extrato de contas"""
+    from decimal import Decimal
+    from datetime import date, datetime
+    from django.shortcuts import get_object_or_404
+    from django.contrib import messages
+    from apps.finance.models import Account, Subcategory
+    
+    accounts = Account.objects.all()
+    
+    # Valores padrão: início do mês atual e data de hoje
+    today = date.today()
+    first_day_of_month = date(today.year, today.month, 1)
+    
+    # Obter account_id do GET
+    account_id = request.GET.get('account')
+    
+    start_date_str = request.GET.get('start_date')
+    end_date_str = request.GET.get('end_date')
+    
+    account = None
+    # Usar valores padrão se não fornecidos
+    start_date = first_day_of_month
+    end_date = today
+    movements = []
+    transactions = []
+    previous_balance = None
+    final_balance = None
+    
+    # Processar data inicial
+    if start_date_str:
+        try:
+            start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+        except ValueError:
+            messages.error(request, 'Data inicial inválida.')
+            start_date = first_day_of_month
+    else:
+        # Se não foi fornecida, usar padrão
+        start_date = first_day_of_month
+    
+    # Processar data final
+    if end_date_str:
+        try:
+            end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+        except ValueError:
+            messages.error(request, 'Data final inválida.')
+            end_date = today
+    else:
+        # Se não foi fornecida, usar padrão
+        end_date = today
+    
+    if account_id:
+        account = get_object_or_404(Account, pk=account_id)
+        
+        if account and start_date and end_date:
+            if start_date > end_date:
+                messages.error(request, 'Data inicial deve ser anterior à data final.')
+                total_payments = Decimal('0')
+                total_deposits = Decimal('0')
+            else:
+                movements = account.get_statement(start_date, end_date)
+                previous_balance = account.get_previous_balance(start_date)
+                if movements:
+                    final_balance = movements[-1]['balance']
+                else:
+                    final_balance = previous_balance
+                
+                # Formatar transações para o template (com saldo acumulado)
+                # O saldo já vem calculado no movement['balance'], então podemos usar diretamente
+                total_payments = Decimal('0')
+                total_deposits = Decimal('0')
+                
+                for movement in movements:
+                    amount = 0
+                    if movement.get('debit'):
+                        amount = -float(movement['debit'])
+                        total_payments += Decimal(str(abs(amount)))
+                    elif movement.get('credit'):
+                        amount = float(movement['credit'])
+                        total_deposits += Decimal(str(amount))
+                    
+                    # ID da transação (pode ser Transaction ou AssetTransaction relacionado)
+                    trans_id = None
+                    if movement.get('transaction'):
+                        trans_id = movement['transaction'].id
+                    elif movement.get('asset_transaction'):
+                        # Se houver asset_transaction, usar o ID dele (para compatibilidade)
+                        trans_id = movement['asset_transaction'].id
+                    
+                    transactions.append({
+                        'id': trans_id,
+                        'date': movement['date'],
+                        'description': movement['description'],
+                        'amount': amount,
+                        'running_balance': float(movement.get('balance', 0)),
+                        'transaction': movement.get('transaction'),  # Incluir objeto transaction para acesso a is_transfer e get_transfer_pair
+                    })
+    else:
+        # Se não há account_id, inicializar totais como zero
+        total_payments = Decimal('0')
+        total_deposits = Decimal('0')
+    
+    # Buscar categorias para o formulário
+    categories = Subcategory.objects.all().select_related('category').order_by('category__category', 'subcategory')
+    
+    return render(request, 'finance/account_statement_report.html', {
+        'accounts': accounts,
+        'account': account,
+        'selected_account': account,  # Para compatibilidade
+        'start_date': start_date,
+        'end_date': end_date,
+        'movements': movements,
+        'transactions': transactions,
+        'previous_balance': previous_balance,
+        'final_balance': final_balance,
+        'total_payments': total_payments,
+        'total_deposits': total_deposits,
+        'categories': categories,
+        'today': today,
+    })
 
 
 def account_statement(request, account_id=None):
@@ -2543,6 +2665,8 @@ def account_statement(request, account_id=None):
         if account and start_date and end_date:
             if start_date > end_date:
                 messages.error(request, 'Data inicial deve ser anterior à data final.')
+                total_payments = Decimal('0')
+                total_deposits = Decimal('0')
             else:
                 movements = account.get_statement(start_date, end_date)
                 previous_balance = account.get_previous_balance(start_date)
@@ -2553,12 +2677,17 @@ def account_statement(request, account_id=None):
                 
                 # Formatar transações para o template (com saldo acumulado)
                 # O saldo já vem calculado no movement['balance'], então podemos usar diretamente
+                total_payments = Decimal('0')
+                total_deposits = Decimal('0')
+                
                 for movement in movements:
                     amount = 0
                     if movement.get('debit'):
                         amount = -float(movement['debit'])
+                        total_payments += Decimal(str(abs(amount)))
                     elif movement.get('credit'):
                         amount = float(movement['credit'])
+                        total_deposits += Decimal(str(amount))
                     
                     # ID da transação (pode ser Transaction ou AssetTransaction relacionado)
                     trans_id = None
@@ -2574,7 +2703,12 @@ def account_statement(request, account_id=None):
                         'description': movement['description'],
                         'amount': amount,
                         'running_balance': float(movement.get('balance', 0)),
+                        'transaction': movement.get('transaction'),  # Incluir objeto transaction para acesso a is_transfer e get_transfer_pair
                     })
+    else:
+        # Se não há account_id, inicializar totais como zero
+        total_payments = Decimal('0')
+        total_deposits = Decimal('0')
     
     # Buscar categorias para o formulário
     categories = Subcategory.objects.all().select_related('category').order_by('category__category', 'subcategory')
@@ -2589,6 +2723,8 @@ def account_statement(request, account_id=None):
         'transactions': transactions,
         'previous_balance': previous_balance,
         'final_balance': final_balance,
+        'total_payments': total_payments,
+        'total_deposits': total_deposits,
         'categories': categories,
         'today': today,
     })
@@ -4275,58 +4411,172 @@ def money99_import_execute(request):
                             if created:
                                 stats['created_subcategories'] += 1
 
-                    # Verificar duplicatas usando import_hash
-                    # O hash é baseado nos valores originais e não muda mesmo após edições no stage
-                    import_hash = trans_data.get('import_hash')
-                    if not import_hash:
-                        # Se não há hash, pular esta transação (não deve acontecer, mas por segurança)
-                        stats['errors'].append(f'Linha {trans_data.get("line_num", "?")}: Hash de importação não encontrado')
-                        continue
+                    # Verificar se é transferência
+                    is_transfer = trans_data.get('is_transfer', False)
                     
-                    # Verificar no set de hashes existentes (verificação em lote feita antes do loop)
-                    if import_hash in existing_hashes_set:
-                        stats['duplicates'] += 1
-                        # #region agent log
-                        if stats['duplicates'] <= 5:  # Log apenas primeiras 5 duplicatas
-                            log_data = {
-                                'sessionId': 'debug-session',
-                                'runId': 'run1',
-                                'hypothesisId': 'DUP',
-                                'location': 'views.py:3770',
-                                'message': 'Duplicate transaction detected by import_hash',
-                                'data': {
-                                    'original_index': trans_data.get('original_index'),
-                                    'import_hash': import_hash,
-                                    'transaction_date': str(trans_data['transaction_date']),
-                                    'account': account_name,
-                                    'value': str(trans_data['value']),
-                                    'beneficiary': beneficiary_name if beneficiary else None,
-                                    'category': trans_data.get('category'),
-                                    'subcategory': trans_data.get('subcategory'),
-                                },
-                                'timestamp': int(time.time() * 1000)
+                    if is_transfer:
+                        # Processar transferência entre contas
+                        source_account_name = Money99Parser.normalize_name(trans_data.get('source_account', ''))
+                        destination_account_name = Money99Parser.normalize_name(trans_data.get('destination_account', ''))
+                        
+                        if not source_account_name or not destination_account_name:
+                            stats['errors'].append(f'Linha {trans_data.get("line_num", "?")}: Contas de origem/destino não encontradas na transferência')
+                            continue
+                        
+                        # Criar/obter ambas as contas
+                        source_account, created = Account.objects.get_or_create(
+                            name=source_account_name,
+                            defaults={
+                                'account_type': Money99Parser.infer_account_type(source_account_name),
+                                'currency': 'Real brasileiro',
+                                'opening_balance': Decimal('0'),
                             }
-                            safe_debug_log(log_data)
-                        # #endregion
-                        continue
-                    
-                    # Adicionar ao set para evitar duplicatas dentro do mesmo lote
-                    existing_hashes_set.add(import_hash)
+                        )
+                        if created:
+                            stats['created_accounts'] += 1
+                        
+                        destination_account, created = Account.objects.get_or_create(
+                            name=destination_account_name,
+                            defaults={
+                                'account_type': Money99Parser.infer_account_type(destination_account_name),
+                                'currency': 'Real brasileiro',
+                                'opening_balance': Decimal('0'),
+                            }
+                        )
+                        if created:
+                            stats['created_accounts'] += 1
+                        
+                        # Gerar transfer_group_id
+                        transfer_group_id = uuid.uuid4()
+                        
+                        # Gerar hashes únicos para cada lado da transferência
+                        import_hash_debit = Money99Parser.generate_import_hash(
+                            date=trans_data['transaction_date'],
+                            beneficiary=None,
+                            account=source_account_name,
+                            memo=trans_data.get('memo', ''),
+                            category=None,
+                            subcategory=None,
+                            value=trans_data['value'],
+                            is_transfer=True,
+                            source_account=source_account_name,
+                            destination_account=destination_account_name,
+                            transfer_side='DB'
+                        )
+                        
+                        import_hash_credit = Money99Parser.generate_import_hash(
+                            date=trans_data['transaction_date'],
+                            beneficiary=None,
+                            account=destination_account_name,
+                            memo=trans_data.get('memo', ''),
+                            category=None,
+                            subcategory=None,
+                            value=trans_data['value'],
+                            is_transfer=True,
+                            source_account=source_account_name,
+                            destination_account=destination_account_name,
+                            transfer_side='CR'
+                        )
+                        
+                        # Verificar duplicatas para ambas as transações
+                        if import_hash_debit in existing_hashes_set or import_hash_credit in existing_hashes_set:
+                            stats['duplicates'] += 1
+                            continue
+                        
+                        # Adicionar ao set para evitar duplicatas dentro do mesmo lote
+                        existing_hashes_set.add(import_hash_debit)
+                        existing_hashes_set.add(import_hash_credit)
+                        
+                        # Criar transação de débito (conta origem)
+                        debit_transaction = Transaction(
+                            account=source_account,
+                            beneficiary=None,
+                            subcategory=None,
+                            transaction_type='DB',
+                            value=trans_data['value'],
+                            transaction_date=trans_data['transaction_date'],
+                            due_date=None,
+                            purchase_date=None,
+                            notes=trans_data.get('memo', ''),
+                            import_hash=import_hash_debit,
+                            transfer_group_id=transfer_group_id,
+                            is_transfer=True
+                        )
+                        transactions_to_create.append(debit_transaction)
+                        
+                        # Criar transação de crédito (conta destino)
+                        credit_transaction = Transaction(
+                            account=destination_account,
+                            beneficiary=None,
+                            subcategory=None,
+                            transaction_type='CR',
+                            value=trans_data['value'],
+                            transaction_date=trans_data['transaction_date'],
+                            due_date=None,
+                            purchase_date=None,
+                            notes=trans_data.get('memo', ''),
+                            import_hash=import_hash_credit,
+                            transfer_group_id=transfer_group_id,
+                            is_transfer=True
+                        )
+                        transactions_to_create.append(credit_transaction)
+                        
+                        # Contar como 2 transações criadas
+                        # (será contado no bulk_create)
+                    else:
+                        # Processar transação normal (não-transferência)
+                        # Verificar duplicatas usando import_hash
+                        # O hash é baseado nos valores originais e não muda mesmo após edições no stage
+                        import_hash = trans_data.get('import_hash')
+                        if not import_hash:
+                            # Se não há hash, pular esta transação (não deve acontecer, mas por segurança)
+                            stats['errors'].append(f'Linha {trans_data.get("line_num", "?")}: Hash de importação não encontrado')
+                            continue
+                        
+                        # Verificar no set de hashes existentes (verificação em lote feita antes do loop)
+                        if import_hash in existing_hashes_set:
+                            stats['duplicates'] += 1
+                            # #region agent log
+                            if stats['duplicates'] <= 5:  # Log apenas primeiras 5 duplicatas
+                                log_data = {
+                                    'sessionId': 'debug-session',
+                                    'runId': 'run1',
+                                    'hypothesisId': 'DUP',
+                                    'location': 'views.py:3770',
+                                    'message': 'Duplicate transaction detected by import_hash',
+                                    'data': {
+                                        'original_index': trans_data.get('original_index'),
+                                        'import_hash': import_hash,
+                                        'transaction_date': str(trans_data['transaction_date']),
+                                        'account': account_name,
+                                        'value': str(trans_data['value']),
+                                        'beneficiary': beneficiary_name if beneficiary else None,
+                                        'category': trans_data.get('category'),
+                                        'subcategory': trans_data.get('subcategory'),
+                                    },
+                                    'timestamp': int(time.time() * 1000)
+                                }
+                                safe_debug_log(log_data)
+                            # #endregion
+                            continue
+                        
+                        # Adicionar ao set para evitar duplicatas dentro do mesmo lote
+                        existing_hashes_set.add(import_hash)
 
-                    # Criar Transaction
-                    transaction_obj = Transaction(
-                        account=account,
-                        beneficiary=beneficiary,
-                        subcategory=subcategory,
-                        transaction_type=trans_data['transaction_type'],
-                        value=trans_data['value'],
-                        transaction_date=trans_data['transaction_date'],
-                        due_date=None,
-                        purchase_date=None,
-                        notes=trans_data.get('memo', ''),
-                        import_hash=import_hash,  # Incluir hash de importação baseado em valores originais
-                    )
-                    transactions_to_create.append(transaction_obj)
+                        # Criar Transaction
+                        transaction_obj = Transaction(
+                            account=account,
+                            beneficiary=beneficiary,
+                            subcategory=subcategory,
+                            transaction_type=trans_data['transaction_type'],
+                            value=trans_data['value'],
+                            transaction_date=trans_data['transaction_date'],
+                            due_date=None,
+                            purchase_date=None,
+                            notes=trans_data.get('memo', ''),
+                            import_hash=import_hash,  # Incluir hash de importação baseado em valores originais
+                        )
+                        transactions_to_create.append(transaction_obj)
 
                     # Criar em lotes para melhor performance
                     if len(transactions_to_create) >= batch_size:

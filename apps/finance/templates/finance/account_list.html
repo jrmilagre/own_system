@@ -24,7 +24,7 @@
                 <tbody>
                     {% for account in accounts %}
                     <tr class="table-row-compact">
-                        <td class="ps-3 py-1" style="cursor: pointer;" onclick="window.location.href='{% url 'finance:historico' account.pk %}'">
+                        <td class="ps-3 py-1" style="cursor: pointer;" onclick="window.location.href='{% url 'finance:account_statement_report' %}?account={{ account.pk }}'">
                             <div class="d-flex align-items-center gap-2">
                                 {% if account.account_type == 'CASH' %}
                                     <span style="font-size: 1.1rem;">💰</span>
@@ -40,20 +40,20 @@
                                 <span>{{ account.get_account_type_display }}</span>
                             </div>
                         </td>
-                        <td class="py-1" style="cursor: pointer;" onclick="window.location.href='{% url 'finance:historico' account.pk %}'">
+                        <td class="py-1" style="cursor: pointer;" onclick="window.location.href='{% url 'finance:account_statement_report' %}?account={{ account.pk }}'">
                             <span style="font-weight: 500;">{{ account.name }}</span>
                         </td>
-                        <td class="text-end pe-3 py-1" style="cursor: pointer;" onclick="window.location.href='{% url 'finance:historico' account.pk %}'">
+                        <td class="text-end pe-3 py-1" style="cursor: pointer;" onclick="window.location.href='{% url 'finance:account_statement_report' %}?account={{ account.pk }}'">
                             <span class="fw-bold {% if account.get_balance < 0 %}text-danger{% else %}text-dark{% endif %}" style="font-size: 0.95rem;">
                                 R$ {{ account.get_balance|floatformat:2 }}
                             </span>
                         </td>
                         <td class="pe-3 py-1">
                             <div class="btn-group btn-group-sm compact-buttons" role="group">
-                                <a href="{% url 'finance:historico' account.pk %}" class="btn btn-sm btn-outline-info compact-btn" title="Ver histórico" onclick="event.stopPropagation();">
+                                <a href="{% url 'finance:account_statement_report' %}?account={{ account.pk }}" class="btn btn-sm btn-outline-info compact-btn" title="Ver histórico" onclick="event.stopPropagation();">
                                     <i class="fas fa-chart-line"></i>
                                 </a>
-                                <a href="{% url 'finance:account_statement' %}?account={{ account.pk }}" class="btn btn-sm btn-outline-secondary compact-btn" title="Visualizar" onclick="event.stopPropagation();">
+                                <a href="{% url 'finance:account_statement_report' %}?account={{ account.pk }}" class="btn btn-sm btn-outline-secondary compact-btn" title="Visualizar" onclick="event.stopPropagation();">
                                     <i class="fas fa-eye"></i>
                                 </a>
                                 <a href="{% url 'finance:account_update' account.pk %}" class="btn btn-sm btn-outline-primary compact-btn" title="Editar" onclick="event.stopPropagation();">

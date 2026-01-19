@@ -1,4 +1,4 @@
-{% extends "finance/base.html" %}
+{% extends 'finance/base.html' %}
 
 {% block section_name %}{% if account %}{{ account.name }} ({{ account.get_account_type_display }}){% else %}Extrato de Contas{% endif %}{% endblock %}
 
@@ -15,7 +15,7 @@
 <h6 class="px-3 text-uppercase text-muted mt-3" style="font-size: 0.7rem; color: #888 !important;">Contas</h6>
 <ul class="nav flex-column">
     <li class="nav-item">
-        <a href="{% url 'finance:account_statement' %}" class="active">
+        <a href="{% url 'finance:account_statement_report' %}" class="{% if request.resolver_match.url_name == 'account_statement_report' %}active{% endif %}">
             <i class="fas fa-file-alt me-2"></i>Extrato
         </a>
     </li>
@@ -24,7 +24,7 @@
 <h6 class="px-3 text-uppercase text-muted mt-3" style="font-size: 0.7rem; color: #888 !important;">Ativos</h6>
 <ul class="nav flex-column">
     <li class="nav-item">
-        <a href="{% url 'finance:asset_stock_position_report' %}">
+        <a href="{% url 'finance:asset_stock_position_report' %}" class="{% if request.resolver_match.url_name == 'asset_stock_position_report' %}active{% endif %}">
             <i class="fas fa-chart-bar me-2"></i>Posição de Estoque
         </a>
     </li>
@@ -33,7 +33,7 @@
 <h6 class="px-3 text-uppercase text-muted mt-3" style="font-size: 0.7rem; color: #888 !important;">Fluxo de Caixa</h6>
 <ul class="nav flex-column">
     <li class="nav-item">
-        <a href="{% url 'finance:cash_flow_report' %}">
+        <a href="{% url 'finance:cash_flow_report' %}" class="{% if request.resolver_match.url_name == 'cash_flow_report' %}active{% endif %}">
             <i class="fas fa-chart-line me-2"></i>Relatório de Fluxo de Caixa
         </a>
     </li>
@@ -41,6 +41,41 @@
 {% endblock %}
 
 {% block content %}
+<!-- Filtros e Tabela de Extrato -->
+<div class="card shadow-sm border-0 mb-3">
+    <div class="card-header bg-light">
+        <h5 class="mb-0">
+            <i class="fas fa-file-alt me-2"></i>Extrato de Contas
+        </h5>
+    </div>
+    <div class="card-body">
+        <form method="get" action="{% url 'finance:account_statement_report' %}">
+            <div class="row g-3 mb-3">
+                <div class="col-md-4">
+                    <label for="account" class="form-label">Conta:</label>
+                    <select name="account" id="account" class="form-select">
+                        <option value="">Selecione uma conta</option>
+                        {% for acc in accounts %}
+                        <option value="{{ acc.pk }}" {% if account and account.pk == acc.pk %}selected{% endif %}>{{ acc.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="start_date" class="form-label">Data Inicial:</label>
+                    <input type="date" name="start_date" id="start_date" class="form-control" value="{{ start_date|date:'Y-m-d' }}" required>
+                </div>
+                <div class="col-md-3">
+                    <label for="end_date" class="form-label">Data Final:</label>
+                    <input type="date" name="end_date" id="end_date" class="form-control" value="{{ end_date|date:'Y-m-d' }}" required>
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary w-100">Gerar Extrato</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
 {% if account %}
 <div class="card shadow-sm border-0 mb-3">
     <div class="card-body p-0">
@@ -128,37 +163,6 @@
                 </tfoot>
             </table>
         </div>
-    </div>
-</div>
-{% else %}
-<!-- Formulário para selecionar conta quando não há account_id na URL -->
-<div class="card shadow-sm border-0">
-    <div class="card-body">
-        <h5 class="card-title">Extrato de Contas</h5>
-        <form method="get" action="{% url 'finance:account_statement' %}">
-            <div class="row g-3 mb-3">
-                <div class="col-md-4">
-                    <label for="account" class="form-label">Conta:</label>
-                    <select name="account" id="account" class="form-select" required>
-                        <option value="">Selecione uma conta</option>
-                        {% for acc in accounts %}
-                        <option value="{{ acc.pk }}">{{ acc.name }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="col-md-3">
-                    <label for="start_date" class="form-label">Data Inicial:</label>
-                    <input type="date" name="start_date" id="start_date" class="form-control" value="{{ start_date|date:'Y-m-d' }}" required>
-                </div>
-                <div class="col-md-3">
-                    <label for="end_date" class="form-label">Data Final:</label>
-                    <input type="date" name="end_date" id="end_date" class="form-control" value="{{ end_date|date:'Y-m-d' }}" required>
-                </div>
-                <div class="col-md-2 d-flex align-items-end">
-                    <button type="submit" class="btn btn-primary w-100">Gerar Extrato</button>
-                </div>
-            </div>
-        </form>
     </div>
 </div>
 {% endif %}
