@@ -1619,13 +1619,21 @@ class CashFlowItem(BaseModel):
         Por subcategoria:
         [{"type": "subcategory", "subcategory_id": 5}]
         
+        Por transferência (crédito na conta de destino - valor recebido):
+        [{"type": "transfer", "destination_account_id": 5, "value_type": "credit"}]
+        
+        Por transferência (débito nas contas de origem - valor enviado):
+        [{"type": "transfer", "destination_account_id": 5, "value_type": "debit"}]
+        
         Múltiplas regras (soma todas):
         [
             {"type": "subcategory", "subcategory_id": 5},
-            {"type": "subcategory", "subcategory_id": 10}
+            {"type": "subcategory", "subcategory_id": 10},
+            {"type": "transfer", "destination_account_id": 3, "value_type": "credit"}
         ]
         
         Nota: As transações de ativos agora geram Transactions normais que podem ser categorizadas por subcategoria.
+        Nota: Regras antigas com "direction" são automaticamente migradas (direction="to" → value_type="credit", direction="from" → value_type="debit").
         """
     )
     order = models.IntegerField(
@@ -1958,6 +1966,21 @@ class CashFlowItem(BaseModel):
                         subcategory_id, start_date, end_date, account
                     )
                     total += value
+                elif rule_type == 'transfer':
+                    destination_account_id = rule.get('destination_account_id')
+                    value_type = rule.get('value_type')
+                    
+                    # Compatibilidade com regras antigas que usam 'direction'
+                    if not value_type and rule.get('direction'):
+                        direction = rule.get('direction')
+                        # Migrar: 'to' -> 'credit', 'from' -> 'debit'
+                        value_type = 'credit' if direction == 'to' else 'debit'
+                    
+                    if destination_account_id and value_type:
+                        value = self._calculate_by_transfer(
+                            destination_account_id, value_type, start_date, end_date, account
+                        )
+                        total += value
                 # Nota: asset_operation foi removido - transações de ativos agora geram Transactions normais
             
             return total
@@ -1989,6 +2012,84 @@ class CashFlowItem(BaseModel):
                 total += trans.value
             elif trans.transaction_type == 'DB':
                 total -= trans.value
+        
+        return total
+    
+    def _calculate_by_transfer(self, destination_account_id, value_type, start_date, end_date, account):
+        """Calcula valor por transferência entre contas"""
+        from django.db.models import Q
+        from decimal import Decimal
+        
+        date_filter = Q(
+            Q(transaction_date__gte=start_date, transaction_date__lte=end_date) |
+            Q(transaction_date__isnull=True, due_date__gte=start_date, due_date__lte=end_date)
+        )
+        
+        total = Decimal('0')
+        
+        if value_type == 'credit':
+            # Buscar transações de crédito na conta de destino (valor recebido)
+            filters = {
+                'is_transfer': True,
+                'account_id': destination_account_id,
+                'transaction_type': 'CR',
+            }
+            
+            if account:
+                # Se há filtro de conta, só considerar se a conta de destino for a filtrada
+                if account.id == destination_account_id:
+                    transactions = Transaction.objects.filter(**filters).filter(date_filter)
+                else:
+                    transactions = Transaction.objects.none()
+            else:
+                transactions = Transaction.objects.filter(**filters).filter(date_filter)
+            
+            for trans in transactions:
+                total += trans.value
+                
+        elif value_type == 'debit':
+            # Buscar transações de débito em contas de origem que transferiram para a conta de destino
+            # Primeiro, encontrar todas as transferências que chegaram na conta de destino
+            destination_transfers_query = Transaction.objects.filter(
+                is_transfer=True,
+                account_id=destination_account_id,
+                transaction_type='CR'
+            ).filter(date_filter)
+            
+            if account:
+                # Se há filtro de conta, só considerar transferências que vieram dessa conta
+                # Encontrar os transfer_group_ids das transferências que vieram da conta filtrada
+                source_transfers = Transaction.objects.filter(
+                    is_transfer=True,
+                    account=account,
+                    transaction_type='DB'
+                ).filter(date_filter).values_list('transfer_group_id', flat=True)
+                
+                # Filtrar apenas transferências que chegaram na conta de destino E vieram da conta filtrada
+                destination_transfers_query = destination_transfers_query.filter(
+                    transfer_group_id__in=list(source_transfers)
+                )
+            
+            destination_transfers = destination_transfers_query.values_list('transfer_group_id', flat=True)
+            
+            if destination_transfers:
+                # Buscar os débitos correspondentes (lado negativo da transferência)
+                # Aplicar filtro de data nos débitos para garantir que estão no período
+                filters = {
+                    'is_transfer': True,
+                    'transaction_type': 'DB',
+                    'transfer_group_id__in': list(destination_transfers),
+                }
+                
+                if account:
+                    filters['account'] = account
+                
+                # Aplicar filtro de data nos débitos
+                transactions = Transaction.objects.filter(**filters).filter(date_filter)
+                
+                for trans in transactions:
+                    # Débitos são saídas (valores negativos no fluxo de caixa)
+                    total -= trans.value
         
         return total
     

@@ -774,21 +774,66 @@ class InventoryForm(forms.ModelForm):
 class CashFlowCalculationRuleForm(forms.Form):
     """Formulário para cada regra de cálculo"""
     
-    # Campo para regra de subcategoria
+    RULE_TYPE_CHOICES = [
+        ('subcategory', 'Por Subcategoria'),
+        ('transfer', 'Por Transferência entre Contas'),
+    ]
+    
+    VALUE_TYPE_CHOICES = [
+        ('debit', 'Débito (origem)'),
+        ('credit', 'Crédito (destino)'),
+    ]
+    
+    # Campo para tipo de regra
+    rule_type = forms.ChoiceField(
+        choices=RULE_TYPE_CHOICES,
+        label='Tipo de Regra',
+        required=True,
+        initial='subcategory',
+        widget=forms.Select(attrs={'class': 'rule-type-field form-select'})
+    )
+    
+    # Campo para regra de subcategoria (condicional)
     subcategory = forms.ModelChoiceField(
         queryset=Subcategory.objects.all().order_by('category__category', 'subcategory'),
         label='Subcategoria',
-        required=True,
+        required=False,
         widget=forms.Select(attrs={'class': 'subcategory-field form-select'})
+    )
+    
+    # Campos para regra de transferência (condicionais)
+    destination_account = forms.ModelChoiceField(
+        queryset=Account.objects.all().order_by('name'),
+        label='Conta de Destino',
+        required=False,
+        widget=forms.Select(attrs={'class': 'destination-account-field form-select'})
+    )
+    
+    value_type = forms.ChoiceField(
+        choices=VALUE_TYPE_CHOICES,
+        label='Tipo de Valor',
+        required=False,
+        widget=forms.Select(attrs={'class': 'value-type-field form-select'})
     )
     
     def clean(self):
         cleaned_data = super().clean()
+        rule_type = cleaned_data.get('rule_type')
         
-        if not cleaned_data.get('subcategory'):
-            raise forms.ValidationError({
-                'subcategory': 'Subcategoria é obrigatória.'
-            })
+        if rule_type == 'subcategory':
+            if not cleaned_data.get('subcategory'):
+                raise forms.ValidationError({
+                    'subcategory': 'Subcategoria é obrigatória para regras de subcategoria.'
+                })
+        elif rule_type == 'transfer':
+            if not cleaned_data.get('destination_account'):
+                raise forms.ValidationError({
+                    'destination_account': 'Conta de destino é obrigatória para regras de transferência.'
+                })
+            if not cleaned_data.get('value_type'):
+                raise forms.ValidationError({
+                    'value_type': 'Tipo de valor é obrigatório para regras de transferência.'
+                })
         
         return cleaned_data
 
@@ -830,13 +875,26 @@ class CashFlowItemForm(forms.ModelForm):
             for form in self.rules_formset:
                 # Verificar se o form tem dados válidos e não foi deletado
                 if form.is_valid() and form.cleaned_data and not form.cleaned_data.get('DELETE', False):
-                    subcategory = form.cleaned_data.get('subcategory')
-                    if subcategory:
-                        rule_dict = {
-                            'type': 'subcategory',
-                            'subcategory_id': subcategory.id
-                        }
-                        rules_data.append(rule_dict)
+                    rule_type = form.cleaned_data.get('rule_type')
+                    
+                    if rule_type == 'subcategory':
+                        subcategory = form.cleaned_data.get('subcategory')
+                        if subcategory:
+                            rule_dict = {
+                                'type': 'subcategory',
+                                'subcategory_id': subcategory.id
+                            }
+                            rules_data.append(rule_dict)
+                    elif rule_type == 'transfer':
+                        destination_account = form.cleaned_data.get('destination_account')
+                        value_type = form.cleaned_data.get('value_type')
+                        if destination_account and value_type:
+                            rule_dict = {
+                                'type': 'transfer',
+                                'destination_account_id': destination_account.id,
+                                'value_type': value_type
+                            }
+                            rules_data.append(rule_dict)
             
             instance.calculation_rules = rules_data
         

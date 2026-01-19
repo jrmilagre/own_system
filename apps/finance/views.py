@@ -3312,10 +3312,25 @@ def cash_flow_item_update(request, pk):
         # Popular formset com regras existentes
         initial_data = []
         for rule in item.calculation_rules:
-            # Apenas processar regras de subcategoria
-            if rule.get('type') == 'subcategory':
+            rule_type = rule.get('type', 'subcategory')  # Default para 'subcategory' se não especificado (compatibilidade)
+            if rule_type == 'subcategory':
                 rule_data = {
+                    'rule_type': 'subcategory',
                     'subcategory': rule.get('subcategory_id')
+                }
+                initial_data.append(rule_data)
+            elif rule_type == 'transfer':
+                # Compatibilidade com regras antigas que usam 'direction'
+                value_type = rule.get('value_type')
+                if not value_type and rule.get('direction'):
+                    direction = rule.get('direction')
+                    # Migrar: 'to' -> 'credit', 'from' -> 'debit'
+                    value_type = 'credit' if direction == 'to' else 'debit'
+                
+                rule_data = {
+                    'rule_type': 'transfer',
+                    'destination_account': rule.get('destination_account_id'),
+                    'value_type': value_type
                 }
                 initial_data.append(rule_data)
         

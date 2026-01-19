@@ -114,12 +114,44 @@
                             {% endif %}
                             <div class="row g-3">
                                 <div class="col-md-12">
+                                    <label for="{{ rule_form.rule_type.id_for_label }}" class="form-label">
+                                        <i class="fas fa-list-ul me-1 text-primary"></i>Tipo de Regra <span class="text-danger">*</span>
+                                    </label>
+                                    {{ rule_form.rule_type }}
+                                    {% if rule_form.rule_type.errors %}
+                                        <div class="text-danger small mt-1">{{ rule_form.rule_type.errors }}</div>
+                                    {% endif %}
+                                </div>
+                                
+                                <!-- Campos para regra de subcategoria -->
+                                <div class="col-md-12 subcategory-rule-fields" style="display: none;">
                                     <label for="{{ rule_form.subcategory.id_for_label }}" class="form-label">
                                         <i class="fas fa-tags me-1 text-warning"></i>Subcategoria <span class="text-danger">*</span>
                                     </label>
                                     {{ rule_form.subcategory }}
                                     {% if rule_form.subcategory.errors %}
                                         <div class="text-danger small mt-1">{{ rule_form.subcategory.errors }}</div>
+                                    {% endif %}
+                                </div>
+                                
+                                <!-- Campos para regra de transferência -->
+                                <div class="col-md-6 transfer-rule-fields" style="display: none;">
+                                    <label for="{{ rule_form.destination_account.id_for_label }}" class="form-label">
+                                        <i class="fas fa-university me-1 text-info"></i>Conta de Destino <span class="text-danger">*</span>
+                                    </label>
+                                    {{ rule_form.destination_account }}
+                                    {% if rule_form.destination_account.errors %}
+                                        <div class="text-danger small mt-1">{{ rule_form.destination_account.errors }}</div>
+                                    {% endif %}
+                                </div>
+                                
+                                <div class="col-md-6 transfer-rule-fields" style="display: none;">
+                                    <label for="{{ rule_form.value_type.id_for_label }}" class="form-label">
+                                        <i class="fas fa-exchange-alt me-1 text-success"></i>Tipo de Valor <span class="text-danger">*</span>
+                                    </label>
+                                    {{ rule_form.value_type }}
+                                    {% if rule_form.value_type.errors %}
+                                        <div class="text-danger small mt-1">{{ rule_form.value_type.errors }}</div>
                                     {% endif %}
                                 </div>
                             </div>
@@ -227,7 +259,49 @@ document.addEventListener('DOMContentLoaded', function() {
         updateFormVisibility();
     }
     
-    // Não é mais necessário mostrar/ocultar campos, pois agora só temos subcategoria
+    // Função para atualizar visibilidade dos campos baseado no tipo de regra
+    function updateRuleFieldsVisibility(ruleForm) {
+        const ruleTypeField = ruleForm.querySelector('.rule-type-field');
+        if (!ruleTypeField) return;
+        
+        const ruleType = ruleTypeField.value;
+        const subcategoryFields = ruleForm.querySelectorAll('.subcategory-rule-fields');
+        const transferFields = ruleForm.querySelectorAll('.transfer-rule-fields');
+        
+        if (ruleType === 'subcategory') {
+            subcategoryFields.forEach(field => field.style.display = 'block');
+            transferFields.forEach(field => field.style.display = 'none');
+        } else if (ruleType === 'transfer') {
+            subcategoryFields.forEach(field => field.style.display = 'none');
+            transferFields.forEach(field => field.style.display = 'block');
+        } else {
+            subcategoryFields.forEach(field => field.style.display = 'none');
+            transferFields.forEach(field => field.style.display = 'none');
+        }
+    }
+    
+    // Configurar listeners para mudança de tipo de regra
+    function setupRuleTypeListeners() {
+        document.querySelectorAll('.rule-type-field').forEach(field => {
+            // Remover listeners antigos para evitar duplicação
+            const newField = field.cloneNode(true);
+            field.parentNode.replaceChild(newField, field);
+            
+            // Adicionar novo listener
+            newField.addEventListener('change', function() {
+                const ruleForm = this.closest('.rule-form');
+                updateRuleFieldsVisibility(ruleForm);
+            });
+        });
+    }
+    
+    // Inicializar visibilidade dos campos para regras existentes
+    document.querySelectorAll('.rule-form').forEach(ruleForm => {
+        updateRuleFieldsVisibility(ruleForm);
+    });
+    
+    // Configurar listeners iniciais
+    setupRuleTypeListeners();
     
     // Adicionar nova regra
     const addRuleButton = document.getElementById('add-rule');
@@ -256,10 +330,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             });
             
-            // Limpar valores
+            // Limpar valores, mas manter rule_type como 'subcategory' por padrão
             newForm.querySelectorAll('input[type="text"], input[type="number"], select').forEach(element => {
                 if (element.type !== 'checkbox' && element.type !== 'hidden') {
-                    element.value = '';
+                    if (element.classList.contains('rule-type-field')) {
+                        element.value = 'subcategory';
+                    } else {
+                        element.value = '';
+                    }
                 } else if (element.type === 'checkbox') {
                     element.checked = false;
                 }
@@ -284,6 +362,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     field.classList.add('form-control');
                 }
             });
+            
+            // Inicializar visibilidade dos campos para a nova regra
+            updateRuleFieldsVisibility(newForm);
             
             // Re-aplicar event listeners
             setupRuleTypeListeners();
