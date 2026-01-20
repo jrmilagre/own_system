@@ -4334,13 +4334,72 @@ def money99_import_execute(request):
             
             # Coletar todos os import_hash que serão criados para verificação em lote
             # Isso evita verificar duplicatas uma por uma dentro do loop
-            all_import_hashes = [t.get('import_hash') for t in selected_transactions if t.get('import_hash')]
+            # Para transferências, precisamos gerar os hashes antecipadamente e armazená-los
+            all_import_hashes = []
+            transfer_hashes_cache = {}  # Cache para armazenar hashes de transferências por índice
+            
+            # Coletar hashes de transações normais
+            for idx, t in enumerate(selected_transactions):
+                if t.get('import_hash'):
+                    all_import_hashes.append(t.get('import_hash'))
+                elif t.get('is_transfer'):
+                    # Gerar e armazenar hashes de transferências
+                    source_account_name = Money99Parser.normalize_name(t.get('source_account', ''))
+                    destination_account_name = Money99Parser.normalize_name(t.get('destination_account', ''))
+                    
+                    if source_account_name and destination_account_name:
+                        # Gerar hashes para ambos os lados da transferência
+                        hash_debit = Money99Parser.generate_import_hash(
+                            date=t['transaction_date'],
+                            beneficiary=None,
+                            account=source_account_name,
+                            memo=t.get('memo', ''),
+                            category=None,
+                            subcategory=None,
+                            value=t['value'],
+                            is_transfer=True,
+                            source_account=source_account_name,
+                            destination_account=destination_account_name,
+                            transfer_side='DB',
+                            line_num=line_num
+                        )
+                        hash_credit = Money99Parser.generate_import_hash(
+                            date=t['transaction_date'],
+                            beneficiary=None,
+                            account=destination_account_name,
+                            memo=t.get('memo', ''),
+                            category=None,
+                            subcategory=None,
+                            value=t['value'],
+                            is_transfer=True,
+                            source_account=source_account_name,
+                            destination_account=destination_account_name,
+                            transfer_side='CR',
+                            line_num=line_num
+                        )
+                        all_import_hashes.extend([hash_debit, hash_credit])
+                        # Armazenar no cache para reutilizar no loop
+                        transfer_hashes_cache[idx] = {
+                            'debit': hash_debit,
+                            'credit': hash_credit,
+                            'source_account': source_account_name,
+                            'destination_account': destination_account_name
+                        }
+            
+            # Verificar hashes existentes no banco de dados
+            # Dividir em lotes para evitar problemas com muitas variáveis SQL
             existing_hashes_set = set()
             if all_import_hashes:
-                existing_hashes_set = set(
-                    Transaction.objects.filter(import_hash__in=all_import_hashes)
-                    .values_list('import_hash', flat=True)
-                )
+                hash_batch_size = 1000  # Processar em lotes de 1000 hashes
+                for i in range(0, len(all_import_hashes), hash_batch_size):
+                    batch = all_import_hashes[i:i + hash_batch_size]
+                    existing_hashes_set.update(
+                        Transaction.objects.filter(import_hash__in=batch)
+                        .values_list('import_hash', flat=True)
+                    )
+            
+            # Set para rastrear hashes do lote atual (evita duplicatas dentro do mesmo lote)
+            batch_hashes_set = set()
             
             # #region agent log
             log_data = {
@@ -4359,7 +4418,28 @@ def money99_import_execute(request):
             safe_debug_log(log_data)
             # #endregion
             
+            total_transactions = len(selected_transactions)
             for i, trans_data in enumerate(selected_transactions, 1):
+                # Log de progresso a cada 1000 transações
+                if i % 1000 == 0:
+                    # #region agent log
+                    log_data = {
+                        'sessionId': 'debug-session',
+                        'runId': 'run1',
+                        'hypothesisId': 'PROGRESS',
+                        'location': 'views.py:4412',
+                        'message': 'Import progress',
+                        'data': {
+                            'processed': i,
+                            'total': total_transactions,
+                            'percentage': round((i / total_transactions) * 100, 2),
+                            'transactions_to_create_count': len(transactions_to_create)
+                        },
+                        'timestamp': int(time.time() * 1000)
+                    }
+                    safe_debug_log(log_data)
+                    # #endregion
+                
                 try:
                     # Criar/obter Account
                     account_name = Money99Parser.normalize_name(trans_data['account'])
@@ -4449,43 +4529,87 @@ def money99_import_execute(request):
                         # Gerar transfer_group_id
                         transfer_group_id = uuid.uuid4()
                         
-                        # Gerar hashes únicos para cada lado da transferência
-                        import_hash_debit = Money99Parser.generate_import_hash(
-                            date=trans_data['transaction_date'],
-                            beneficiary=None,
-                            account=source_account_name,
-                            memo=trans_data.get('memo', ''),
-                            category=None,
-                            subcategory=None,
-                            value=trans_data['value'],
-                            is_transfer=True,
-                            source_account=source_account_name,
-                            destination_account=destination_account_name,
-                            transfer_side='DB'
-                        )
+                        # Reutilizar hashes do cache (já foram gerados antes do loop)
+                        line_num = trans_data.get('line_num')
+                        cache_idx = i - 1  # i-1 porque enumerate começa em 1, mas cache usa índice base 0
+                        cached_hashes = transfer_hashes_cache.get(cache_idx)
                         
-                        import_hash_credit = Money99Parser.generate_import_hash(
-                            date=trans_data['transaction_date'],
-                            beneficiary=None,
-                            account=destination_account_name,
-                            memo=trans_data.get('memo', ''),
-                            category=None,
-                            subcategory=None,
-                            value=trans_data['value'],
-                            is_transfer=True,
-                            source_account=source_account_name,
-                            destination_account=destination_account_name,
-                            transfer_side='CR'
-                        )
+                        if cached_hashes:
+                            import_hash_debit = cached_hashes['debit']
+                            import_hash_credit = cached_hashes['credit']
+                            # Atualizar nomes das contas do cache (caso tenham sido normalizados)
+                            source_account_name = cached_hashes['source_account']
+                            destination_account_name = cached_hashes['destination_account']
+                        else:
+                            # Fallback: gerar hashes se não estiverem no cache (não deveria acontecer)
+                            import_hash_debit = Money99Parser.generate_import_hash(
+                                date=trans_data['transaction_date'],
+                                beneficiary=None,
+                                account=source_account_name,
+                                memo=trans_data.get('memo', ''),
+                                category=None,
+                                subcategory=None,
+                                value=trans_data['value'],
+                                is_transfer=True,
+                                source_account=source_account_name,
+                                destination_account=destination_account_name,
+                                transfer_side='DB',
+                                line_num=line_num
+                            )
+                            
+                            import_hash_credit = Money99Parser.generate_import_hash(
+                                date=trans_data['transaction_date'],
+                                beneficiary=None,
+                                account=destination_account_name,
+                                memo=trans_data.get('memo', ''),
+                                category=None,
+                                subcategory=None,
+                                value=trans_data['value'],
+                                is_transfer=True,
+                                source_account=source_account_name,
+                                destination_account=destination_account_name,
+                                transfer_side='CR',
+                                line_num=line_num
+                            )
+                        
+                        # #region agent log
+                        # Log apenas para linhas específicas (28091 e 28093) para debug
+                        if line_num in [28091, 28093]:
+                            try:
+                                with open(r'c:\Users\jafonseca\projects\django\own_system\.cursor\debug.log', 'a', encoding='utf-8') as f:
+                                    f.write(json.dumps({
+                                        'sessionId': 'debug-session',
+                                        'runId': 'run1',
+                                        'hypothesisId': 'H3',
+                                        'location': 'views.py:4481',
+                                        'message': 'After hash generation, checking duplicates',
+                                        'data': {
+                                            'line_num': line_num,
+                                            'import_hash_debit': import_hash_debit,
+                                            'import_hash_credit': import_hash_credit,
+                                            'debit_in_set': import_hash_debit in existing_hashes_set,
+                                            'credit_in_set': import_hash_credit in existing_hashes_set,
+                                            'set_size': len(existing_hashes_set)
+                                        },
+                                        'timestamp': int(__import__('time').time() * 1000)
+                                    }) + '\n')
+                            except: pass
+                        # #endregion
                         
                         # Verificar duplicatas para ambas as transações
-                        if import_hash_debit in existing_hashes_set or import_hash_credit in existing_hashes_set:
+                        # Verificar tanto no banco de dados quanto no lote atual
+                        debit_in_db = import_hash_debit in existing_hashes_set
+                        credit_in_db = import_hash_credit in existing_hashes_set
+                        debit_in_batch = import_hash_debit in batch_hashes_set
+                        credit_in_batch = import_hash_credit in batch_hashes_set
+                        
+                        if (debit_in_db or credit_in_db or debit_in_batch or credit_in_batch):
                             stats['duplicates'] += 1
                             continue
                         
-                        # Adicionar ao set para evitar duplicatas dentro do mesmo lote
-                        existing_hashes_set.add(import_hash_debit)
-                        existing_hashes_set.add(import_hash_credit)
+                        # Adicionar ao set do lote atual para evitar duplicatas dentro do mesmo lote
+                        batch_hashes_set.add(import_hash_debit)
+                        batch_hashes_set.add(import_hash_credit)
                         
                         # Criar transação de débito (conta origem)
                         debit_transaction = Transaction(
@@ -4528,40 +4652,21 @@ def money99_import_execute(request):
                         # Verificar duplicatas usando import_hash
                         # O hash é baseado nos valores originais e não muda mesmo após edições no stage
                         import_hash = trans_data.get('import_hash')
+                        line_num = trans_data.get('line_num')
+                        
                         if not import_hash:
                             # Se não há hash, pular esta transação (não deve acontecer, mas por segurança)
-                            stats['errors'].append(f'Linha {trans_data.get("line_num", "?")}: Hash de importação não encontrado')
+                            stats['errors'].append(f'Linha {line_num or "?"}: Hash de importação não encontrado')
                             continue
                         
                         # Verificar no set de hashes existentes (verificação em lote feita antes do loop)
-                        if import_hash in existing_hashes_set:
+                        # E também no batch_hashes_set para evitar duplicatas dentro do mesmo lote
+                        if import_hash in existing_hashes_set or import_hash in batch_hashes_set:
                             stats['duplicates'] += 1
-                            # #region agent log
-                            if stats['duplicates'] <= 5:  # Log apenas primeiras 5 duplicatas
-                                log_data = {
-                                    'sessionId': 'debug-session',
-                                    'runId': 'run1',
-                                    'hypothesisId': 'DUP',
-                                    'location': 'views.py:3770',
-                                    'message': 'Duplicate transaction detected by import_hash',
-                                    'data': {
-                                        'original_index': trans_data.get('original_index'),
-                                        'import_hash': import_hash,
-                                        'transaction_date': str(trans_data['transaction_date']),
-                                        'account': account_name,
-                                        'value': str(trans_data['value']),
-                                        'beneficiary': beneficiary_name if beneficiary else None,
-                                        'category': trans_data.get('category'),
-                                        'subcategory': trans_data.get('subcategory'),
-                                    },
-                                    'timestamp': int(time.time() * 1000)
-                                }
-                                safe_debug_log(log_data)
-                            # #endregion
                             continue
                         
                         # Adicionar ao set para evitar duplicatas dentro do mesmo lote
-                        existing_hashes_set.add(import_hash)
+                        batch_hashes_set.add(import_hash)
 
                         # Criar Transaction
                         transaction_obj = Transaction(

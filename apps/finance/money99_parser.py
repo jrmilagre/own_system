@@ -130,11 +130,12 @@ class Money99Parser:
     @staticmethod
     def generate_import_hash(date, beneficiary, account, memo, category, subcategory, value, 
                             is_transfer=False, source_account=None, destination_account=None, 
-                            transfer_side=None):
+                            transfer_side=None, line_num=None):
         """
         Gera hash MD5 baseado nos dados originais da transação para prevenir duplicatas.
         
         Para transferências, gera hash único para cada lado (débito e crédito).
+        Inclui line_num no hash para diferenciar transferências idênticas de linhas diferentes.
         
         Args:
             date: Data da transação (objeto date)
@@ -148,6 +149,7 @@ class Money99Parser:
             source_account: Conta origem (string, apenas para transferências)
             destination_account: Conta destino (string, apenas para transferências)
             transfer_side: Lado da transferência ('DB' ou 'CR', apenas para transferências)
+            line_num: Número da linha no arquivo original (int, opcional, usado para diferenciar transferências idênticas)
         
         Returns:
             Hash MD5 hexadecimal de 32 caracteres
@@ -176,8 +178,11 @@ class Money99Parser:
             accounts_sorted = sorted([source_account_str, destination_account_str])
             transfer_side_str = transfer_side if transfer_side else ''
             
-            # Concatenar: Data|ContaOrigem|ContaDestino|Memo|Montante|Lado
-            hash_string = f"{date_str}|{accounts_sorted[0]}|{accounts_sorted[1]}|{memo_str}|{value_str}|{transfer_side_str}"
+            # Incluir line_num no hash para diferenciar transferências idênticas de linhas diferentes
+            line_num_str = str(line_num) if line_num is not None else ''
+            
+            # Concatenar: Data|ContaOrigem|ContaDestino|Memo|Montante|Lado|LineNum
+            hash_string = f"{date_str}|{accounts_sorted[0]}|{accounts_sorted[1]}|{memo_str}|{value_str}|{transfer_side_str}|{line_num_str}"
         else:
             # Lógica original para transações normais
             # Favorecido: Normalizar espaços, converter para string vazia se None
@@ -205,8 +210,12 @@ class Money99Parser:
             else:
                 value_str = '0.00'
             
-            # Concatenar na ordem: Data|Favorecido|Conta|Memo|Categoria|Montante
-            hash_string = f"{date_str}|{beneficiary_str}|{account_str}|{memo_str}|{category_str}|{value_str}"
+            # Incluir line_num no hash para diferenciar transações idênticas de linhas diferentes
+            # Isso permite importar transações duplicadas legítimas que aparecem no arquivo original
+            line_num_str = str(line_num) if line_num is not None else ''
+            
+            # Concatenar na ordem: Data|Favorecido|Conta|Memo|Categoria|Montante|LineNum
+            hash_string = f"{date_str}|{beneficiary_str}|{account_str}|{memo_str}|{category_str}|{value_str}|{line_num_str}"
         
         # Gerar MD5
         return hashlib.md5(hash_string.encode('utf-8')).hexdigest()
@@ -270,26 +279,22 @@ class Money99Parser:
             destination_account = None
             
             # Verificar se category_str ou memo_str contém padrão de transferência
+            # Manter apenas "Transferir de :" para evitar duplicação (Money99 exporta cada transferência duas vezes)
+            # Ignorar completamente linhas com "Transferir para :" (são duplicatas da mesma transferência)
             transfer_text = category_str if category_str else memo_str
-            if transfer_text:
-                if 'Transferir para :' in transfer_text:
-                    # Padrão: "Transferir para : [conta destino]"
-                    # A conta na linha é a origem (débito), a conta após "para :" é o destino (crédito)
-                    is_transfer = True
-                    source_account = account_str
-                    # Extrair conta destino após "para :"
-                    parts = transfer_text.split('Transferir para :', 1)
-                    if len(parts) > 1:
-                        destination_account = parts[1].strip()
-                elif 'Transferir de :' in transfer_text:
-                    # Padrão: "Transferir de : [conta origem]"
-                    # A conta na linha é o destino (crédito), a conta após "de :" é a origem (débito)
-                    is_transfer = True
-                    destination_account = account_str
-                    # Extrair conta origem após "de :"
-                    parts = transfer_text.split('Transferir de :', 1)
-                    if len(parts) > 1:
-                        source_account = parts[1].strip()
+            if transfer_text and 'Transferir para :' in transfer_text:
+                # Ignorar esta linha completamente - é uma duplicata da transferência vista do outro lado
+                return None
+            
+            if transfer_text and 'Transferir de :' in transfer_text:
+                # Padrão: "Transferir de : [conta origem]"
+                # A conta na linha é o destino (crédito), a conta após "de :" é a origem (débito)
+                is_transfer = True
+                destination_account = account_str
+                # Extrair conta origem após "de :"
+                parts = transfer_text.split('Transferir de :', 1)
+                if len(parts) > 1:
+                    source_account = parts[1].strip()
 
             # Separar categoria e subcategoria (apenas se não for transferência)
             if is_transfer:
@@ -300,6 +305,7 @@ class Money99Parser:
             else:
                 category, subcategory = Money99Parser.parse_category(category_str)
                 # Gerar hash de importação baseado nos valores originais
+                # Incluir line_num para diferenciar transações idênticas de linhas diferentes
                 import_hash = Money99Parser.generate_import_hash(
                     date=transaction_date,
                     beneficiary=beneficiary_str,
@@ -308,7 +314,8 @@ class Money99Parser:
                     category=category,
                     subcategory=subcategory,
                     value=value,
-                    is_transfer=False
+                    is_transfer=False,
+                    line_num=line_num
                 )
 
             result = {
