@@ -19,7 +19,7 @@ from .forms import (
     MultipleSchedulerRegisterItemFormSet, AssetForm, AssetTransactionForm, AssetPositionForm, InventoryForm, AssetTransactionCategoryConfigForm,
     CashFlowItemForm, CashFlowCalculationRuleFormSet, TransactionFilterForm, SchedulerFilterForm, BudgetForm,
     TransactionsImportForm, TransactionsStagingFilterForm, SubcategoryMoveForm,
-    AssetTransactionsImportForm, AssetTransactionsStagingFilterForm
+    AssetTransactionsImportForm, AssetTransactionsStagingFilterForm, AccountFilterForm
 )
 from .transactions_parser import TransactionsParser
 from .asset_transactions_parser import AssetTransactionsParser
@@ -228,15 +228,103 @@ def quick_create_asset(request):
 
 # Account Views
 def account_list(request):
-    """Lista de contas"""
+    """Lista de contas com filtros e paginação"""
+    # Inicializar formulário de filtros
+    filter_form = AccountFilterForm(request.GET)
+    
+    # Query base
     accounts = Account.objects.all()
+    
+    # Aplicar filtros
+    if filter_form.is_valid():
+        account_types = filter_form.cleaned_data.get('account_type')
+        name_search = filter_form.cleaned_data.get('name_search')
+        
+        if account_types:
+            accounts = accounts.filter(account_type__in=account_types)
+        
+        if name_search:
+            accounts = accounts.filter(name__icontains=name_search)
+    
+    # Ordenar - suporte para múltiplas colunas
+    sort_fields_str = request.GET.get('sort', '')
+    sort_orders_str = request.GET.get('order', 'desc')
+    
+    # Mapeamento de campos de ordenação
+    sort_mapping = {
+        'account_type': 'account_type',
+        'name': 'name',
+        'balance': None,  # Será tratado separadamente
+    }
+    
+    # Processar múltiplos campos de ordenação (separados por vírgula)
+    sort_fields = [f.strip() for f in sort_fields_str.split(',') if f.strip()] if sort_fields_str else []
+    sort_orders = [o.strip() for o in sort_orders_str.split(',')] if sort_orders_str else []
+    
+    # Converter para lista para poder ordenar (necessário para ordenação por saldo)
+    accounts_list = list(accounts)
+    
+    # Aplicar ordenação
+    valid_sorts = []
+    valid_orders = []
+    
+    # Se não houver ordenação especificada, usar ordenação padrão por nome
+    if not sort_fields:
+        sort_fields = ['name']
+        sort_orders = ['asc']
+    
+    # Validar campos de ordenação
+    for i, sort_field in enumerate(sort_fields):
+        if sort_field in sort_mapping:
+            sort_order = sort_orders[i] if i < len(sort_orders) else 'asc'
+            if sort_order not in ['asc', 'desc']:
+                sort_order = 'asc'
+            
+            valid_sorts.append(sort_field)
+            valid_orders.append(sort_order)
+    
+    # Aplicar ordenações múltiplas (Python sort é estável, então aplicamos da menos para a mais significativa)
+    # Ou seja, aplicamos na ordem inversa: última ordenação primeiro, primeira por último
+    for i in range(len(valid_sorts) - 1, -1, -1):
+        sort_field = valid_sorts[i]
+        sort_order = valid_orders[i]
+        reverse_order = (sort_order == 'desc')
+        
+        if sort_field == 'balance':
+            # Ordenar por saldo (calculado)
+            accounts_list.sort(key=lambda a: a.get_balance(), reverse=reverse_order)
+        elif sort_field == 'account_type':
+            # Ordenar por tipo de conta
+            accounts_list.sort(key=lambda a: a.account_type, reverse=reverse_order)
+        elif sort_field == 'name':
+            # Ordenar por nome
+            accounts_list.sort(key=lambda a: a.name.lower(), reverse=reverse_order)
+    
+    # Paginação
+    paginator = Paginator(accounts_list, 25)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+    
+    # Calcular total de saldos apenas para a página atual
+    total_balance = sum(account.get_balance() for account in page_obj)
+    
     # Calcular datas padrão para o botão de extrato
     today = date.today()
     first_day_of_month = date(today.year, today.month, 1)
-    # Calcular total de saldos
-    total_balance = sum(account.get_balance() for account in accounts)
+    
+    # Criar dicionário com prioridade de cada campo ordenado
+    sort_info = {}
+    for idx, sort_field in enumerate(valid_sorts):
+        sort_info[sort_field] = {
+            'priority': idx + 1,
+            'order': valid_orders[idx] if idx < len(valid_orders) else 'asc'
+        }
+    
     return render(request, 'finance/account_list.html', {
-        'accounts': accounts,
+        'accounts': page_obj,
+        'filter_form': filter_form,
+        'page_obj': page_obj,
+        'sort_info': sort_info,
         'default_start_date': first_day_of_month,
         'default_end_date': today,
         'total_balance': total_balance,

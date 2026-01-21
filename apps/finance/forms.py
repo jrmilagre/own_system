@@ -1031,6 +1031,21 @@ class TransactionFilterForm(forms.Form):
     )
 
 
+class AccountFilterForm(forms.Form):
+    """Formulário de filtros para a lista de contas"""
+    account_type = forms.MultipleChoiceField(
+        choices=Account.ACCOUNT_TYPE_CHOICES,
+        required=False,
+        label='Tipo de Conta',
+        widget=forms.CheckboxSelectMultiple(attrs={'class': 'form-check-input'})
+    )
+    name_search = forms.CharField(
+        required=False,
+        label='Buscar por nome',
+        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Digite o nome da conta...'})
+    )
+
+
 class SchedulerFilterForm(forms.Form):
     """Formulário de filtros para a lista de agendamentos"""
     account = forms.ModelChoiceField(
