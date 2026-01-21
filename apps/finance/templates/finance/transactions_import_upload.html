@@ -1,14 +1,26 @@
 {% extends 'finance/base.html' %}
 
-{% block title %}Importar Transações do Money99{% endblock %}
+{% block title %}Importar Transações{% endblock %}
 
-{% block section_name %}Importar Transações do Money99{% endblock %}
+{% block section_name %}Importar Transações{% endblock %}
 
 {% block sidebar %}
-<h6 class="px-3 text-uppercase text-muted" style="font-size: 0.7rem; color: #888 !important;">Ações</h6>
+<h6 class="px-3 text-uppercase text-muted" style="font-size: 0.7rem; color: #888 !important;">Importações</h6>
 <ul class="nav flex-column">
     <li class="nav-item">
-        <a href="{% url 'finance:transaction_list' %}"><i class="fas fa-list me-2"></i> Ver transações</a>
+        <a href="{% url 'finance:conectividade_index' %}">
+            <i class="fas fa-home me-2"></i>Início
+        </a>
+    </li>
+    <li class="nav-item">
+        <a href="{% url 'finance:transactions_import_upload' %}" class="active">
+            <i class="fas fa-file-import me-2"></i>Importar Transações
+        </a>
+    </li>
+    <li class="nav-item">
+        <a href="{% url 'finance:asset_transactions_import_upload' %}">
+            <i class="fas fa-chart-line me-2"></i>Importar Transações de Ativos
+        </a>
     </li>
 </ul>
 {% endblock %}
@@ -20,7 +32,7 @@
     </div>
     <div class="card-body">
         <p class="text-muted">
-            Faça o upload do arquivo <code>transactions.txt</code> exportado do Money99.
+            Faça o upload do arquivo <code>transactions.txt</code>.
             O arquivo será parseado e você poderá revisar, filtrar e editar as transações antes de importá-las.
         </p>
         

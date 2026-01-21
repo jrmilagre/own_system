@@ -1,0 +1,65 @@
+{% extends 'finance/base.html' %}
+
+{% block title %}Importar Transações de Ativos{% endblock %}
+
+{% block section_name %}Importar Transações de Ativos{% endblock %}
+
+{% block sidebar %}
+<h6 class="px-3 text-uppercase text-muted" style="font-size: 0.7rem; color: #888 !important;">Importações</h6>
+<ul class="nav flex-column">
+    <li class="nav-item">
+        <a href="{% url 'finance:conectividade_index' %}">
+            <i class="fas fa-home me-2"></i>Início
+        </a>
+    </li>
+    <li class="nav-item">
+        <a href="{% url 'finance:transactions_import_upload' %}">
+            <i class="fas fa-file-import me-2"></i>Importar Transações
+        </a>
+    </li>
+    <li class="nav-item">
+        <a href="{% url 'finance:asset_transactions_import_upload' %}" class="active">
+            <i class="fas fa-chart-line me-2"></i>Importar Transações de Ativos
+        </a>
+    </li>
+</ul>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="fas fa-upload me-2"></i>Upload do Arquivo</h5>
+    </div>
+    <div class="card-body">
+        <p class="text-muted">
+            Faça o upload do arquivo <code>asset_transactions.txt</code>.
+            O arquivo será parseado e você poderá revisar, filtrar e editar as transações antes de importá-las.
+        </p>
+        
+        <form method="post" enctype="multipart/form-data">
+            {% csrf_token %}
+            <div class="mb-3">
+                <label for="{{ form.file.id_for_label }}" class="form-label">{{ form.file.label }}</label>
+                {{ form.file }}
+                {% if form.file.help_text %}
+                    <small class="form-text text-muted">{{ form.file.help_text }}</small>
+                {% endif %}
+                {% if form.file.errors %}
+                    <div class="text-danger">
+                        {% for error in form.file.errors %}
+                            <small>{{ error }}</small>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            </div>
+            
+            <button type="submit" class="btn btn-primary">
+                <i class="fas fa-upload me-2"></i>Enviar e Processar
+            </button>
+            <a href="{% url 'finance:asset_transaction_list' %}" class="btn btn-secondary">
+                <i class="fas fa-times me-2"></i>Cancelar
+            </a>
+        </form>
+    </div>
+</div>
+{% endblock %}

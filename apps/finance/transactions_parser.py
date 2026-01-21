@@ -1,5 +1,5 @@
 """
-Utilitário para parsing de arquivos transactions.txt do Money99
+Utilitário para parsing de arquivos transactions.txt
 Extraído do comando import_money99.py para reutilização em views
 """
 import re
@@ -11,8 +11,8 @@ from datetime import datetime
 logger = logging.getLogger(__name__)
 
 
-class Money99Parser:
-    """Classe utilitária para parsing de arquivos Money99"""
+class TransactionsParser:
+    """Classe utilitária para parsing de arquivos de transações"""
     
     @staticmethod
     def detect_encoding(file_path):
@@ -161,8 +161,8 @@ class Money99Parser:
         # Para transferências, usar lógica diferente
         if is_transfer:
             # Normalizar contas
-            source_account_str = Money99Parser.normalize_name(source_account) if source_account else ''
-            destination_account_str = Money99Parser.normalize_name(destination_account) if destination_account else ''
+            source_account_str = TransactionsParser.normalize_name(source_account) if source_account else ''
+            destination_account_str = TransactionsParser.normalize_name(destination_account) if destination_account else ''
             
             # Memo: Normalizar espaços
             memo_str = ' '.join(memo.split()) if memo else ''
@@ -186,10 +186,10 @@ class Money99Parser:
         else:
             # Lógica original para transações normais
             # Favorecido: Normalizar espaços, converter para string vazia se None
-            beneficiary_str = Money99Parser.normalize_name(beneficiary) if beneficiary else ''
+            beneficiary_str = TransactionsParser.normalize_name(beneficiary) if beneficiary else ''
             
             # Conta: Normalizar espaços
-            account_str = Money99Parser.normalize_name(account) if account else ''
+            account_str = TransactionsParser.normalize_name(account) if account else ''
             
             # Memo: Normalizar espaços, converter para string vazia se None
             memo_str = ' '.join(memo.split()) if memo else ''
@@ -197,9 +197,9 @@ class Money99Parser:
             # Categoria: Normalizar espaços, usar categoria + " : " + subcategoria (ou apenas categoria se não houver subcategoria)
             category_str = ''
             if category:
-                category_normalized = Money99Parser.normalize_name(category)
+                category_normalized = TransactionsParser.normalize_name(category)
                 if subcategory and subcategory != category:
-                    subcategory_normalized = Money99Parser.normalize_name(subcategory)
+                    subcategory_normalized = TransactionsParser.normalize_name(subcategory)
                     category_str = f"{category_normalized} : {subcategory_normalized}"
                 else:
                     category_str = category_normalized
@@ -260,12 +260,12 @@ class Money99Parser:
                 return None
 
             # Validar e converter data
-            transaction_date = Money99Parser.parse_date(date_str)
+            transaction_date = TransactionsParser.parse_date(date_str)
             if not transaction_date:
                 return None
 
             # Validar e converter valor
-            amount = Money99Parser.parse_amount(amount_str)
+            amount = TransactionsParser.parse_amount(amount_str)
             if amount is None:
                 return None
 
@@ -273,28 +273,32 @@ class Money99Parser:
             transaction_type = 'CR' if amount >= 0 else 'DB'
             value = abs(amount)
 
+            # Ignorar linhas com "Comprar :" ou "Vender :" na coluna Memo (coluna 5)
+            if memo_str and ('Comprar :' in memo_str or 'Vender :' in memo_str):
+                # Ignorar esta linha completamente - são transações de investimento que devem ser tratadas separadamente
+                return None
+
             # Verificar se é transferência
             is_transfer = False
             source_account = None
             destination_account = None
             
-            # Verificar se category_str ou memo_str contém padrão de transferência
-            # Manter apenas "Transferir de :" para evitar duplicação (Money99 exporta cada transferência duas vezes)
+            # Verificar se category_str contém padrão de transferência (apenas na coluna Categoria, coluna 6)
+            # Manter apenas "Transferir de :" para evitar duplicação (exporta cada transferência duas vezes)
             # Ignorar completamente linhas com "Transferir para :" (são duplicatas da mesma transferência)
-            transfer_text = category_str if category_str else memo_str
-            if transfer_text and 'Transferir para :' in transfer_text:
+            if category_str and 'Transferir para :' in category_str:
                 # Ignorar esta linha completamente - é uma duplicata da transferência vista do outro lado
                 return None
             
-            if transfer_text and 'Transferir de :' in transfer_text:
+            if category_str and 'Transferir de :' in category_str:
                 # Padrão: "Transferir de : [conta origem]"
                 # A conta na linha é o destino (crédito), a conta após "de :" é a origem (débito)
                 is_transfer = True
                 destination_account = account_str
                 # Extrair conta origem após "de :"
-                parts = transfer_text.split('Transferir de :', 1)
-                if len(parts) > 1:
-                    source_account = parts[1].strip()
+                transfer_parts = category_str.split('Transferir de :', 1)
+                if len(transfer_parts) > 1:
+                    source_account = transfer_parts[1].strip()
 
             # Separar categoria e subcategoria (apenas se não for transferência)
             if is_transfer:
@@ -303,10 +307,10 @@ class Money99Parser:
                 # Para transferências, não gerar hash aqui - será gerado na view para cada lado
                 import_hash = None
             else:
-                category, subcategory = Money99Parser.parse_category(category_str)
+                category, subcategory = TransactionsParser.parse_category(category_str)
                 # Gerar hash de importação baseado nos valores originais
                 # Incluir line_num para diferenciar transações idênticas de linhas diferentes
-                import_hash = Money99Parser.generate_import_hash(
+                import_hash = TransactionsParser.generate_import_hash(
                     date=transaction_date,
                     beneficiary=beneficiary_str,
                     account=account_str,
@@ -353,7 +357,7 @@ class Money99Parser:
         """
         # Detectar encoding se não fornecido
         if encoding is None:
-            encoding = Money99Parser.detect_encoding_from_file(file_obj)
+            encoding = TransactionsParser.detect_encoding_from_file(file_obj)
         
         # Ler arquivo
         file_obj.seek(0)
@@ -400,7 +404,7 @@ class Money99Parser:
                 continue
 
             # Parsear linha de transação
-            parsed = Money99Parser.parse_transaction_line(line, line_num)
+            parsed = TransactionsParser.parse_transaction_line(line, line_num)
             if parsed:
                 # Adicionar flags para staging
                 parsed['selected'] = True  # Por padrão, todas selecionadas

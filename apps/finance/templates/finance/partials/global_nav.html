@@ -9,7 +9,7 @@
     <a href="{% url 'finance:budget_list' %}" class="nav-link-money nav-orcamento {% if 'budget' in request.resolver_match.url_name %}active{% endif %}">Orçamento</a>
     <a href="{% url 'finance:cash_flow_item_list' %}" class="nav-link-money nav-fluxo-caixa {% if 'cash_flow' in request.resolver_match.url_name or 'cash-flow' in request.resolver_match.url_name or 'cash_flow_report' in request.resolver_match.url_name %}active{% endif %}">Fluxo de caixa</a>
     <a href="{% url 'finance:reports_index' %}" class="nav-link-money nav-relatorios {% if 'report' in request.resolver_match.url_name or request.resolver_match.url_name == 'reports_index' %}active{% endif %}">Relatórios</a>
-    <a href="{% url 'finance:money99_import_upload' %}" class="nav-link-money nav-conectividade {% if 'money99' in request.resolver_match.url_name %}active{% endif %}">Conectividade</a>
+    <a href="{% url 'finance:conectividade_index' %}" class="nav-link-money nav-conectividade {% if 'conectividade' in request.resolver_match.url_name or 'transactions_import' in request.resolver_match.url_name or 'asset_transactions' in request.resolver_match.url_name %}active{% endif %}">Conectividade</a>
     <button type="button" class="btn btn-sm btn-outline-secondary ms-auto" onclick="window.history.back();" title="Voltar">
         <i class="fas fa-arrow-left me-1"></i><span class="d-none d-sm-inline">Voltar</span>
     </button>

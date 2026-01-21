@@ -154,6 +154,37 @@
                                         <div class="text-danger small mt-1">{{ rule_form.value_type.errors }}</div>
                                     {% endif %}
                                 </div>
+                                
+                                <!-- Campos para regra de transação de ativo -->
+                                <div class="col-md-6 asset-transaction-rule-fields" style="display: none;">
+                                    <label for="{{ rule_form.operation_type.id_for_label }}" class="form-label">
+                                        <i class="fas fa-chart-line me-1 text-primary"></i>Tipo de Operação <span class="text-danger">*</span>
+                                    </label>
+                                    {{ rule_form.operation_type }}
+                                    {% if rule_form.operation_type.errors %}
+                                        <div class="text-danger small mt-1">{{ rule_form.operation_type.errors }}</div>
+                                    {% endif %}
+                                </div>
+                                
+                                <div class="col-md-6 asset-transaction-rule-fields" style="display: none;">
+                                    <label for="{{ rule_form.asset_type.id_for_label }}" class="form-label">
+                                        <i class="fas fa-coins me-1 text-warning"></i>Tipo de Ativo
+                                    </label>
+                                    {{ rule_form.asset_type }}
+                                    {% if rule_form.asset_type.errors %}
+                                        <div class="text-danger small mt-1">{{ rule_form.asset_type.errors }}</div>
+                                    {% endif %}
+                                </div>
+                                
+                                <div class="col-md-6 asset-transaction-rule-fields" style="display: none;">
+                                    <label for="{{ rule_form.asset_value_type.id_for_label }}" class="form-label">
+                                        <i class="fas fa-dollar-sign me-1 text-success"></i>Tipo de Valor <span class="text-danger">*</span>
+                                    </label>
+                                    {{ rule_form.asset_value_type }}
+                                    {% if rule_form.asset_value_type.errors %}
+                                        <div class="text-danger small mt-1">{{ rule_form.asset_value_type.errors }}</div>
+                                    {% endif %}
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -267,16 +298,20 @@ document.addEventListener('DOMContentLoaded', function() {
         const ruleType = ruleTypeField.value;
         const subcategoryFields = ruleForm.querySelectorAll('.subcategory-rule-fields');
         const transferFields = ruleForm.querySelectorAll('.transfer-rule-fields');
+        const assetTransactionFields = ruleForm.querySelectorAll('.asset-transaction-rule-fields');
         
+        // Ocultar todos os campos primeiro
+        subcategoryFields.forEach(field => field.style.display = 'none');
+        transferFields.forEach(field => field.style.display = 'none');
+        assetTransactionFields.forEach(field => field.style.display = 'none');
+        
+        // Mostrar campos baseado no tipo de regra
         if (ruleType === 'subcategory') {
             subcategoryFields.forEach(field => field.style.display = 'block');
-            transferFields.forEach(field => field.style.display = 'none');
         } else if (ruleType === 'transfer') {
-            subcategoryFields.forEach(field => field.style.display = 'none');
             transferFields.forEach(field => field.style.display = 'block');
-        } else {
-            subcategoryFields.forEach(field => field.style.display = 'none');
-            transferFields.forEach(field => field.style.display = 'none');
+        } else if (ruleType === 'asset_transaction') {
+            assetTransactionFields.forEach(field => field.style.display = 'block');
         }
     }
     
@@ -341,6 +376,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 } else if (element.type === 'checkbox') {
                     element.checked = false;
                 }
+            });
+            
+            // Ocultar todos os campos de regra inicialmente
+            newForm.querySelectorAll('.subcategory-rule-fields, .transfer-rule-fields, .asset-transaction-rule-fields').forEach(field => {
+                field.style.display = 'none';
             });
             
             // Atualizar título

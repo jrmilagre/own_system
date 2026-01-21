@@ -3,7 +3,7 @@ from apps.finance.models import CashFlowItem
 
 
 class Command(BaseCommand):
-    help = 'Inicializa os itens do fluxo de caixa com a estrutura pré-definida'
+    help = 'Inicializa os itens do fluxo de caixa'
 
     def handle(self, *args, **options):
         # Dados a serem criados: (código, descrição, acumula_em)
@@ -79,6 +79,6 @@ class Command(BaseCommand):
         
         self.stdout.write(
             self.style.SUCCESS(
-                f'\n[OK] Total de {len(created_items)} itens processados!'
+                f'\n[OK] Total de {len(created_items)} itens de fluxo de caixa processados!'
             )
         )

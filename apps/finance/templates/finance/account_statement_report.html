@@ -40,6 +40,27 @@
 </ul>
 {% endblock %}
 
+{% block extra_css %}
+<style>
+    #account-statement-table tbody tr {
+        transition: background-color 0.2s ease;
+        cursor: pointer;
+    }
+    #account-statement-table tbody tr.selected,
+    #account-statement-table tbody tr.selected td {
+        background-color: #ffb74d !important;
+    }
+    #account-statement-table tbody tr:nth-of-type(odd).selected,
+    #account-statement-table tbody tr:nth-of-type(odd).selected td {
+        background-color: #ffb74d !important;
+    }
+    #account-statement-table tbody tr:nth-of-type(even).selected,
+    #account-statement-table tbody tr:nth-of-type(even).selected td {
+        background-color: #ffb74d !important;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <!-- Filtros e Tabela de Extrato -->
 <div class="card shadow-sm border-0 mb-3">
@@ -80,7 +101,7 @@
 <div class="card shadow-sm border-0 mb-3">
     <div class="card-body p-0">
         <div class="table-responsive" style="max-height: 800px; overflow-y: auto;">
-            <table class="table table-sm table-striped mb-0" style="font-size: 0.85rem;">
+            <table id="account-statement-table" class="table table-sm table-striped mb-0" style="font-size: 0.85rem;">
                 <thead class="bg-dark text-white sticky-top">
                     <tr>
                         <th class="ps-2">Núm.</th>
@@ -166,4 +187,25 @@
     </div>
 </div>
 {% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const table = document.getElementById('account-statement-table');
+        if (table) {
+            const rows = table.querySelectorAll('tbody tr');
+            rows.forEach(function(row) {
+                row.addEventListener('click', function() {
+                    // Remove a seleção de todas as linhas
+                    rows.forEach(function(r) {
+                        r.classList.remove('selected');
+                    });
+                    // Adiciona a seleção na linha clicada
+                    this.classList.add('selected');
+                });
+            });
+        }
+    });
+</script>
 {% endblock %}

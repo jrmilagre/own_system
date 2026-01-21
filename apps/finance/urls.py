@@ -95,11 +95,23 @@ urlpatterns = [
     path('cash-flow-items/create/', views.cash_flow_item_create, name='cash_flow_item_create'),
     path('cash-flow-items/<int:pk>/update/', views.cash_flow_item_update, name='cash_flow_item_update'),
     path('cash-flow-items/<int:pk>/delete/', views.cash_flow_item_delete, name='cash_flow_item_delete'),
-    # Money99 Import URLs
-    path('conectividade/money99/upload/', views.money99_import_upload, name='money99_import_upload'),
-    path('conectividade/money99/staging/', views.money99_import_staging, name='money99_import_staging'),
-    path('conectividade/money99/edit-item/', views.money99_import_edit_item, name='money99_import_edit_item'),
-    path('conectividade/money99/remove-item/', views.money99_import_remove_item, name='money99_import_remove_item'),
-    path('conectividade/money99/execute/', views.money99_import_execute, name='money99_import_execute'),
+    # Conectividade Index
+    path('conectividade/', views.conectividade_index, name='conectividade_index'),
+    # Transactions Import URLs
+    path('conectividade/transactions/upload/', views.transactions_import_upload, name='transactions_import_upload'),
+    path('conectividade/transactions/staging/', views.transactions_import_staging, name='transactions_import_staging'),
+    path('conectividade/transactions/edit-item/', views.transactions_import_edit_item, name='transactions_import_edit_item'),
+    path('conectividade/transactions/remove-item/', views.transactions_import_remove_item, name='transactions_import_remove_item'),
+    path('conectividade/transactions/select-all/', views.transactions_import_select_all, name='transactions_import_select_all'),
+    path('conectividade/transactions/deselect-all/', views.transactions_import_deselect_all, name='transactions_import_deselect_all'),
+    path('conectividade/transactions/execute/', views.transactions_import_execute, name='transactions_import_execute'),
+            # Asset Transactions Import URLs
+            path('conectividade/asset-transactions/upload/', views.asset_transactions_import_upload, name='asset_transactions_import_upload'),
+            path('conectividade/asset-transactions/staging/', views.asset_transactions_import_staging, name='asset_transactions_import_staging'),
+            path('conectividade/asset-transactions/edit-item/', views.asset_transactions_import_edit_item, name='asset_transactions_import_edit_item'),
+            path('conectividade/asset-transactions/remove-item/', views.asset_transactions_import_remove_item, name='asset_transactions_import_remove_item'),
+            path('conectividade/asset-transactions/select-all/', views.asset_transactions_import_select_all, name='asset_transactions_import_select_all'),
+            path('conectividade/asset-transactions/deselect-all/', views.asset_transactions_import_deselect_all, name='asset_transactions_import_deselect_all'),
+            path('conectividade/asset-transactions/execute/', views.asset_transactions_import_execute, name='asset_transactions_import_execute'),
 ]
 

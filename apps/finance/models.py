@@ -1168,6 +1168,14 @@ class AssetTransaction(BaseModel):
         'Observações',
         blank=True
     )
+    import_hash = models.CharField(
+        'Hash de importação',
+        max_length=32,
+        unique=True,
+        null=True,
+        blank=True,
+        help_text='Hash MD5 gerado a partir dos dados originais da importação para prevenir duplicatas'
+    )
     
     class Meta:
         verbose_name = 'Transação de Ativo'
@@ -1215,11 +1223,23 @@ class AssetTransaction(BaseModel):
         # Salvar o AssetTransaction primeiro
         super().save(*args, **kwargs)
         
+        # Obter cash_account e subcategory_override se foram definidos como atributos temporários (usado na importação)
+        cash_account = getattr(self, '_cash_account', None)
+        subcategory_override = getattr(self, '_subcategory_override', None)
+        
         # Criar/atualizar Transactions relacionadas
-        self._create_or_update_related_transactions(is_update)
+        self._create_or_update_related_transactions(is_update, cash_account=cash_account, subcategory_override=subcategory_override)
     
-    def _create_or_update_related_transactions(self, is_update):
-        """Cria ou atualiza as Transactions relacionadas baseado na configuração de categorias"""
+    def _create_or_update_related_transactions(self, is_update, cash_account=None, subcategory_override=None):
+        """
+        Cria ou atualiza as Transactions relacionadas baseado na configuração de categorias
+        ou cria transferências entre contas quando ambas estão disponíveis.
+        
+        Args:
+            is_update: Se é uma atualização (já existe no banco)
+            cash_account: Conta de transferência/cash opcional. Se não fornecido, usa self.account
+            subcategory_override: Subcategoria opcional para sobrescrever a configuração
+        """
         from decimal import Decimal
         
         # Operações que não afetam o fluxo de caixa não geram Transactions
@@ -1229,6 +1249,90 @@ class AssetTransaction(BaseModel):
                 Transaction.objects.filter(asset_transaction=self).delete()
             return
         
+        # Deletar Transactions antigas se for atualização
+        if is_update:
+            Transaction.objects.filter(asset_transaction=self).delete()
+        
+        # Verificar se deve criar transferência entre contas
+        # Precisa ter cash_account e investment_account (self.account) e serem diferentes
+        investment_account = self.account
+        should_create_transfer = (
+            cash_account is not None and 
+            investment_account is not None and 
+            cash_account != investment_account
+        )
+        
+        if should_create_transfer:
+            # Criar transferência entre contas
+            transfer_group_id = uuid.uuid4()
+            transfer_notes = f"Transferência gerada de: {self.asset.code} - {self.get_operation_type_display()}"
+            
+            # Calcular valor base (quantity * price)
+            calculated_base = self.quantity * self.price
+            
+            # Determinar direção e valor da transferência baseado no tipo de operação
+            if self.operation_type in ['BUY', 'SUB']:
+                # Compra: cash_account (origem, DB) → investment_account (destino, CR)
+                # Valor: calculated_base + fees (valor total pago)
+                transfer_value = calculated_base + self.fees
+                source_account = cash_account
+                destination_account = investment_account
+            elif self.operation_type in ['SELL', 'REDEMPTION']:
+                # Venda: investment_account (origem, DB) → cash_account (destino, CR)
+                # Valor: calculated_base - fees (valor líquido recebido)
+                transfer_value = calculated_base - self.fees
+                source_account = investment_account
+                destination_account = cash_account
+            elif self.operation_type in ['DIVIDEND', 'JCP', 'INTEREST', 'AMORTIZATION']:
+                # Recebimentos: investment_account (origem, DB) → cash_account (destino, CR)
+                # Valor: income_value
+                transfer_value = self.income_value
+                source_account = investment_account
+                destination_account = cash_account
+            else:
+                # Outros tipos de operação não tratados aqui
+                transfer_value = Decimal('0')
+                source_account = None
+                destination_account = None
+            
+            # Criar transferência se houver valor e contas válidas
+            if transfer_value > 0 and source_account and destination_account:
+                # Transação de débito (conta origem)
+                Transaction.objects.create(
+                    account=source_account,
+                    beneficiary=None,
+                    subcategory=None,
+                    transaction_type='DB',
+                    value=transfer_value,
+                    due_date=self.date,
+                    transaction_date=self.date,
+                    purchase_date=None,
+                    notes=transfer_notes,
+                    transfer_group_id=transfer_group_id,
+                    is_transfer=True,
+                    asset_transaction=self
+                )
+                
+                # Transação de crédito (conta destino)
+                Transaction.objects.create(
+                    account=destination_account,
+                    beneficiary=None,
+                    subcategory=None,
+                    transaction_type='CR',
+                    value=transfer_value,
+                    due_date=self.date,
+                    transaction_date=self.date,
+                    purchase_date=None,
+                    notes=transfer_notes,
+                    transfer_group_id=transfer_group_id,
+                    is_transfer=True,
+                    asset_transaction=self
+                )
+            
+            # Transferência criada, não precisa criar Transaction com subcategoria
+            return
+        
+        # Se não criou transferência, usar lógica antiga (Transaction com subcategoria)
         # Buscar configuração de categorias
         # Primeiro tenta buscar por operation_type + asset_type específico
         config = AssetTransactionCategoryConfig.objects.filter(
@@ -1243,16 +1347,19 @@ class AssetTransaction(BaseModel):
                 asset_type__isnull=True
             ).first()
         
-        # Se não encontrar configuração, não cria Transactions
-        if not config:
-            # Deletar Transactions existentes se houver (caso a configuração foi removida)
-            if is_update:
-                Transaction.objects.filter(asset_transaction=self).delete()
+        # Se não encontrar configuração e não houver subcategoria override, não cria Transactions
+        if not config and not subcategory_override:
             return
         
-        # Deletar Transactions antigas se for atualização
-        if is_update:
-            Transaction.objects.filter(asset_transaction=self).delete()
+        # Se não há configuração mas há subcategoria override, usar valores padrão
+        if not config:
+            # Usar valores padrão baseados no tipo de operação
+            default_transaction_type = 'DB' if self.operation_type in ['BUY', 'SUB'] else 'CR'
+        else:
+            default_transaction_type = config.transaction_type_principal
+        
+        # Usar cash_account se fornecido, senão usar self.account
+        transaction_account = cash_account if cash_account else self.account
         
         # Calcular valores
         calculated_base = self.quantity * self.price
@@ -1267,23 +1374,28 @@ class AssetTransaction(BaseModel):
         
         # Criar Transaction principal se houver valor
         if principal_value > 0:
-            Transaction.objects.create(
-                account=self.account,
-                beneficiary=None,  # Transações de ativos não têm beneficiário
-                subcategory=config.subcategory_principal,
-                transaction_type=config.transaction_type_principal,
-                value=principal_value,
-                due_date=self.date,
-                transaction_date=self.date,
-                purchase_date=None,
-                notes=f"Gerado automaticamente de: {self.asset.code} - {self.get_operation_type_display()}",
-                asset_transaction=self
-            )
+            # Usar subcategoria override se fornecida, senão usar a da configuração
+            transaction_subcategory = subcategory_override if subcategory_override else (config.subcategory_principal if config else None)
+            
+            # Só criar se houver subcategoria (override ou da configuração)
+            if transaction_subcategory:
+                Transaction.objects.create(
+                    account=transaction_account,
+                    beneficiary=None,  # Transações de ativos não têm beneficiário
+                    subcategory=transaction_subcategory,
+                    transaction_type=default_transaction_type,
+                    value=principal_value,
+                    due_date=self.date,
+                    transaction_date=self.date,
+                    purchase_date=None,
+                    notes=f"Gerado automaticamente de: {self.asset.code} - {self.get_operation_type_display()}",
+                    asset_transaction=self
+                )
         
         # Criar Transaction de taxas se houver fees e subcategory_fees configurada
-        if self.fees > 0 and config.subcategory_fees:
+        if self.fees > 0 and config and config.subcategory_fees:
             Transaction.objects.create(
-                account=self.account,
+                account=transaction_account,
                 beneficiary=None,
                 subcategory=config.subcategory_fees,
                 transaction_type=config.transaction_type_fees,
@@ -1625,11 +1737,21 @@ class CashFlowItem(BaseModel):
         Por transferência (débito nas contas de origem - valor enviado):
         [{"type": "transfer", "destination_account_id": 5, "value_type": "debit"}]
         
+        Por transação de ativo (compras de ações):
+        [{"type": "asset_transaction", "operation_type": "BUY", "asset_value_type": "net_value"}]
+        
+        Por transação de ativo (dividendos de FIIs):
+        [{"type": "asset_transaction", "operation_type": "DIVIDEND", "asset_type": "FII", "asset_value_type": "income_value"}]
+        
+        Por transação de ativo (compras de renda fixa):
+        [{"type": "asset_transaction", "operation_type": "BUY", "asset_type": "BOND", "asset_value_type": "net_value"}]
+        
         Múltiplas regras (soma todas):
         [
             {"type": "subcategory", "subcategory_id": 5},
             {"type": "subcategory", "subcategory_id": 10},
-            {"type": "transfer", "destination_account_id": 3, "value_type": "credit"}
+            {"type": "transfer", "destination_account_id": 3, "value_type": "credit"},
+            {"type": "asset_transaction", "operation_type": "DIVIDEND", "asset_value_type": "income_value"}
         ]
         
         Nota: As transações de ativos agora geram Transactions normais que podem ser categorizadas por subcategoria.
@@ -1981,7 +2103,17 @@ class CashFlowItem(BaseModel):
                             destination_account_id, value_type, start_date, end_date, account
                         )
                         total += value
-                # Nota: asset_operation foi removido - transações de ativos agora geram Transactions normais
+                elif rule_type == 'asset_transaction':
+                    operation_type = rule.get('operation_type')
+                    asset_type = rule.get('asset_type')
+                    asset_value_type = rule.get('asset_value_type', 'net_value')
+                    
+                    if operation_type:
+                        value = self._calculate_by_asset_transaction(
+                            operation_type, asset_type, 
+                            asset_value_type, start_date, end_date, account
+                        )
+                        total += value
             
             return total
         
@@ -2090,6 +2222,55 @@ class CashFlowItem(BaseModel):
                 for trans in transactions:
                     # Débitos são saídas (valores negativos no fluxo de caixa)
                     total -= trans.value
+        
+        return total
+    
+    def _calculate_by_asset_transaction(self, operation_type, asset_type, 
+                                        asset_value_type, start_date, end_date, account):
+        """Calcula valor por transação de ativo"""
+        from django.db.models import Q
+        from decimal import Decimal
+        
+        # Construir filtros
+        filters = {
+            'date__gte': start_date,
+            'date__lte': end_date,
+            'operation_type': operation_type,
+        }
+        
+        # Filtro por tipo de ativo (se especificado)
+        if asset_type:
+            filters['asset__asset_type'] = asset_type
+        
+        # Se há filtro de conta, filtrar pela conta
+        if account:
+            filters['account'] = account
+        
+        # Buscar transações de ativo
+        asset_transactions = AssetTransaction.objects.filter(**filters)
+        
+        total = Decimal('0')
+        for asset_trans in asset_transactions:
+            # Determinar qual valor usar baseado em asset_value_type
+            if asset_value_type == 'net_value':
+                # Usar get_net_value() que calcula o valor líquido considerando fees
+                # Já retorna valores negativos para compras e positivos para vendas/recebimentos
+                value = asset_trans.get_net_value()
+            elif asset_value_type == 'total_value':
+                # Usar total_value (valor principal)
+                # Para compras e subscrições, deve ser negativo (saída de dinheiro)
+                value = asset_trans.total_value
+                if asset_trans.operation_type in ['BUY', 'SUB']:
+                    value = -abs(value)  # Garantir que seja negativo
+            elif asset_value_type == 'income_value':
+                # Usar income_value (rendimentos)
+                # Rendimentos são sempre positivos (entrada de dinheiro)
+                value = asset_trans.income_value
+            else:
+                # Default: net_value
+                value = asset_trans.get_net_value()
+            
+            total += value
         
         return total
     

@@ -1,0 +1,812 @@
+{% extends 'finance/base.html' %}
+{% load static %}
+
+{% block extra_css %}
+{% endblock %}
+
+{% block title %}Revisar Transações de Ativos{% endblock %}
+
+{% block section_name %}Revisar Transações de Ativos{% endblock %}
+
+{% block sidebar %}
+<h6 class="px-3 text-uppercase text-muted" style="font-size: 0.7rem; color: #888 !important;">Importações</h6>
+<ul class="nav flex-column">
+    <li class="nav-item">
+        <a href="{% url 'finance:conectividade_index' %}">
+            <i class="fas fa-home me-2"></i>Início
+        </a>
+    </li>
+    <li class="nav-item">
+        <a href="{% url 'finance:transactions_import_upload' %}">
+            <i class="fas fa-file-import me-2"></i>Importar Transações
+        </a>
+    </li>
+    <li class="nav-item">
+        <a href="{% url 'finance:asset_transactions_import_upload' %}">
+            <i class="fas fa-chart-line me-2"></i>Importar Transações de Ativos
+        </a>
+    </li>
+</ul>
+{% endblock %}
+
+{% block content %}
+<div class="card mb-3">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><i class="fas fa-filter me-2"></i>Filtros</h5>
+        <span class="badge bg-primary">{{ total_count }} total / {{ filtered_count }} filtradas / {{ selected_count }} selecionadas</span>
+    </div>
+    <div class="card-body">
+        <form method="get" action="{% url 'finance:asset_transactions_import_staging' %}" id="filterForm" class="row g-3">
+            <div class="col-md-6 col-lg-2">
+                <label for="{{ filter_form.date_start.id_for_label }}" class="form-label">{{ filter_form.date_start.label }}</label>
+                {{ filter_form.date_start }}
+            </div>
+            <div class="col-md-6 col-lg-2">
+                <label for="{{ filter_form.date_end.id_for_label }}" class="form-label">{{ filter_form.date_end.label }}</label>
+                {{ filter_form.date_end }}
+            </div>
+            <div class="col-md-6 col-lg-2">
+                <label for="{{ filter_form.investment_account.id_for_label }}" class="form-label">{{ filter_form.investment_account.label }}</label>
+                {{ filter_form.investment_account }}
+            </div>
+            <div class="col-md-6 col-lg-2">
+                <label for="{{ filter_form.cash_account.id_for_label }}" class="form-label">{{ filter_form.cash_account.label }}</label>
+                {{ filter_form.cash_account }}
+            </div>
+            <div class="col-md-6 col-lg-2">
+                <label for="{{ filter_form.asset_code.id_for_label }}" class="form-label">{{ filter_form.asset_code.label }}</label>
+                {{ filter_form.asset_code }}
+            </div>
+            <div class="col-md-6 col-lg-2">
+                <label for="{{ filter_form.operation_type.id_for_label }}" class="form-label">{{ filter_form.operation_type.label }}</label>
+                {{ filter_form.operation_type }}
+            </div>
+            <div class="col-md-6 col-lg-2">
+                <label for="{{ filter_form.min_value.id_for_label }}" class="form-label">{{ filter_form.min_value.label }}</label>
+                {{ filter_form.min_value }}
+            </div>
+            <div class="col-md-6 col-lg-2">
+                <label for="{{ filter_form.max_value.id_for_label }}" class="form-label">{{ filter_form.max_value.label }}</label>
+                {{ filter_form.max_value }}
+            </div>
+            <div class="col-md-6 col-lg-2">
+                <label for="{{ filter_form.import_status.id_for_label }}" class="form-label">{{ filter_form.import_status.label }}</label>
+                {{ filter_form.import_status }}
+            </div>
+            <div class="col-12">
+                <button type="submit" class="btn btn-primary btn-sm">
+                    <i class="fas fa-search me-1"></i>Filtrar
+                </button>
+                <a href="{% url 'finance:asset_transactions_import_staging' %}" class="btn btn-secondary btn-sm">
+                    <i class="fas fa-times me-1"></i>Limpar
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><i class="fas fa-table me-2"></i>Transações de Ativos</h5>
+        <div>
+            <button type="button" class="btn btn-sm btn-outline-primary" id="selectAllBtn">
+                <i class="fas fa-check-square me-1"></i>Selecionar todas
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="deselectAllBtn">
+                <i class="fas fa-square me-1"></i>Deselecionar todas
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-danger" id="removeSelectedBtn">
+                <i class="fas fa-trash me-1"></i>Remover selecionadas
+            </button>
+            <button type="button" class="btn btn-sm btn-success" id="importBtn">
+                <i class="fas fa-download me-1"></i>Importar selecionadas
+            </button>
+        </div>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-striped table-hover" id="transactionsTable">
+                <thead>
+                    <tr>
+                        <th width="40">
+                            <input type="checkbox" id="selectAllCheckbox" title="Selecionar todas">
+                        </th>
+                        <th class="sortable" data-sort="date" style="cursor: pointer;">
+                            Data <i class="fas fa-sort sort-icon" style="opacity: 0.3;"></i>
+                        </th>
+                        <th class="sortable" data-sort="investment_account" style="cursor: pointer;">
+                            Conta Invest. <i class="fas fa-sort sort-icon" style="opacity: 0.3;"></i>
+                        </th>
+                        <th class="sortable" data-sort="asset_code" style="cursor: pointer;">
+                            Ativo <i class="fas fa-sort sort-icon" style="opacity: 0.3;"></i>
+                        </th>
+                        <th class="sortable" data-sort="operation_type" style="cursor: pointer;">
+                            Operação <i class="fas fa-sort sort-icon" style="opacity: 0.3;"></i>
+                        </th>
+                        <th class="sortable" data-sort="quantity" style="cursor: pointer;">
+                            Quantidade <i class="fas fa-sort sort-icon" style="opacity: 0.3;"></i>
+                        </th>
+                        <th class="sortable" data-sort="price" style="cursor: pointer;">
+                            Preço <i class="fas fa-sort sort-icon" style="opacity: 0.3;"></i>
+                        </th>
+                        <th class="sortable" data-sort="total" style="cursor: pointer;">
+                            Total <i class="fas fa-sort sort-icon" style="opacity: 0.3;"></i>
+                        </th>
+                        <th class="sortable" data-sort="cash_account" style="cursor: pointer;">
+                            Conta Cash <i class="fas fa-sort sort-icon" style="opacity: 0.3;"></i>
+                        </th>
+                        <th class="sortable" data-sort="category" style="cursor: pointer;">
+                            Subcategoria <i class="fas fa-sort sort-icon" style="opacity: 0.3;"></i>
+                        </th>
+                        <th class="sortable" data-sort="notes" style="cursor: pointer;">
+                            Memo <i class="fas fa-sort sort-icon" style="opacity: 0.3;"></i>
+                        </th>
+                        <th width="120">Status</th>
+                        <th width="80">Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for transaction in transactions %}
+                    <tr data-index="{{ transaction.original_index|default:forloop.counter0 }}" data-selected="{{ transaction.selected|yesno:'true,false' }}" {% if transaction.is_imported %}class="table-secondary"{% endif %}>
+                        <td>
+                            <input type="checkbox" class="transaction-checkbox" 
+                                   {% if transaction.selected %}checked{% endif %}>
+                        </td>
+                        <td>
+                            <input type="date" class="form-control form-control-sm editable-field" 
+                                   data-field="date" 
+                                   value="{{ transaction.date|date:'Y-m-d' }}" 
+                                   style="min-width: 120px;">
+                        </td>
+                        <td>
+                            <input type="text" class="form-control form-control-sm editable-field" 
+                                   data-field="investment_account" 
+                                   value="{{ transaction.investment_account }}" 
+                                   style="min-width: 150px;">
+                        </td>
+                        <td>
+                            <input type="text" class="form-control form-control-sm editable-field" 
+                                   data-field="asset_code" 
+                                   value="{{ transaction.asset_code }}" 
+                                   style="min-width: 100px;">
+                        </td>
+                        <td>
+                            <select class="form-select form-select-sm editable-field" 
+                                    data-field="operation_type" 
+                                    style="min-width: 120px;">
+                                <option value="BUY" {% if transaction.operation_type == 'BUY' %}selected{% endif %}>Compra</option>
+                                <option value="SELL" {% if transaction.operation_type == 'SELL' %}selected{% endif %}>Venda</option>
+                                <option value="DIVIDEND" {% if transaction.operation_type == 'DIVIDEND' %}selected{% endif %}>Dividendo</option>
+                                <option value="JCP" {% if transaction.operation_type == 'JCP' %}selected{% endif %}>JCP</option>
+                                <option value="INTEREST" {% if transaction.operation_type == 'INTEREST' %}selected{% endif %}>Juros</option>
+                                <option value="BONUS" {% if transaction.operation_type == 'BONUS' %}selected{% endif %}>Bonificação</option>
+                                <option value="REDEMPTION" {% if transaction.operation_type == 'REDEMPTION' %}selected{% endif %}>Resgate</option>
+                            </select>
+                        </td>
+                        <td>
+                            <input type="number" step="0.00000001" class="form-control form-control-sm editable-field" 
+                                   data-field="quantity" 
+                                   value="{{ transaction.quantity }}" 
+                                   style="min-width: 100px;">
+                        </td>
+                        <td>
+                            <input type="number" step="0.0001" class="form-control form-control-sm editable-field" 
+                                   data-field="price" 
+                                   value="{{ transaction.price }}" 
+                                   style="min-width: 100px;">
+                        </td>
+                        <td>
+                            <input type="number" step="0.01" class="form-control form-control-sm editable-field" 
+                                   data-field="total" 
+                                   value="{{ transaction.total }}" 
+                                   style="min-width: 100px;">
+                        </td>
+                        <td>
+                            <input type="text" class="form-control form-control-sm editable-field" 
+                                   data-field="cash_account" 
+                                   value="{{ transaction.cash_account|default:'' }}" 
+                                   style="min-width: 150px;">
+                        </td>
+                        <td>
+                            <input type="text" class="form-control form-control-sm editable-field" 
+                                   data-field="category" 
+                                   value="{{ transaction.category|default:'' }}" 
+                                   style="min-width: 200px;"
+                                   placeholder="Categoria : Subcategoria">
+                        </td>
+                        <td>
+                            <input type="text" class="form-control form-control-sm editable-field" 
+                                   data-field="notes" 
+                                   value="{{ transaction.notes|default:'' }}" 
+                                   style="min-width: 200px;">
+                        </td>
+                        <td>
+                            {% if transaction.is_imported %}
+                                <span class="badge bg-success" title="Já importada">
+                                    <i class="fas fa-check-circle me-1"></i>Importada
+                                </span>
+                            {% else %}
+                                <span class="badge bg-secondary" title="Não importada">
+                                    <i class="fas fa-clock me-1"></i>Pendente
+                                </span>
+                            {% endif %}
+                            {% if transaction.edited %}
+                                <span class="badge bg-warning ms-1" title="Editado">
+                                    <i class="fas fa-edit"></i>
+                                </span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <button type="button" class="btn btn-sm btn-outline-danger remove-item-btn" 
+                                    data-index="{{ transaction.original_index|default:forloop.counter0 }}"
+                                    title="Remover transação">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="13" class="text-center text-muted">
+                            Nenhuma transação encontrada.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Paginação -->
+{% if transactions.has_other_pages %}
+<nav aria-label="Paginação de transações" class="mt-3">
+    <ul class="pagination justify-content-center">
+        {% if transactions.has_previous %}
+            <li class="page-item">
+                <a class="page-link" href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page=1">
+                    <i class="fas fa-angle-double-left"></i> Primeira
+                </a>
+            </li>
+            <li class="page-item">
+                <a class="page-link" href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ transactions.previous_page_number }}">
+                    <i class="fas fa-angle-left"></i> Anterior
+                </a>
+            </li>
+        {% endif %}
+        
+        <li class="page-item active">
+            <span class="page-link">
+                Página {{ transactions.number }} de {{ transactions.paginator.num_pages }}
+            </span>
+        </li>
+        
+        {% if transactions.has_next %}
+            <li class="page-item">
+                <a class="page-link" href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ transactions.next_page_number }}">
+                    Próxima <i class="fas fa-angle-right"></i>
+                </a>
+            </li>
+            <li class="page-item">
+                <a class="page-link" href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ transactions.paginator.num_pages }}">
+                    Última <i class="fas fa-angle-double-right"></i>
+                </a>
+            </li>
+        {% endif %}
+    </ul>
+</nav>
+{% endif %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+    // Obter índices reais das transações na página atual
+    const transactions = [];
+    document.querySelectorAll('#transactionsTable tbody tr[data-index]').forEach((row, idx) => {
+        const originalIndex = parseInt(row.getAttribute('data-index'));
+        transactions.push({
+            row: row,
+            index: originalIndex,
+            checkbox: row.querySelector('.transaction-checkbox')
+        });
+    });
+
+    // Selecionar/Deselecionar todas
+    const selectAllCheckbox = document.getElementById('selectAllCheckbox');
+    const selectAllBtn = document.getElementById('selectAllBtn');
+    const deselectAllBtn = document.getElementById('deselectAllBtn');
+    
+    // #region agent log
+    fetch('http://127.0.0.1:7243/ingest/f640d3d1-ffd7-4f6c-8f06-e351fd789592',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'asset_transactions_import_staging.html:401',message:'Buscando botões',data:{selectAllBtnFound:!!selectAllBtn,deselectAllBtnFound:!!deselectAllBtn,selectAllCheckboxFound:!!selectAllCheckbox,transactionsCount:transactions.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+    // #endregion
+    
+    // Verificar se os elementos existem
+    if (!selectAllBtn || !deselectAllBtn) {
+        // #region agent log
+        fetch('http://127.0.0.1:7243/ingest/f640d3d1-ffd7-4f6c-8f06-e351fd789592',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'asset_transactions_import_staging.html:407',message:'Botões não encontrados',data:{selectAllBtn:!!selectAllBtn,deselectAllBtn:!!deselectAllBtn},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+        // #endregion
+        console.error('Botões de seleção não encontrados');
+    }
+    
+    function updateSelectAllState() {
+        if (selectAllCheckbox && transactions.length > 0) {
+            const allChecked = transactions.every(t => t.checkbox && t.checkbox.checked);
+            selectAllCheckbox.checked = allChecked;
+        }
+    }
+    
+    function saveSelectionState(index, checked) {
+        // Salvar estado de seleção via AJAX
+        fetch('{% url "finance:asset_transactions_import_edit_item" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify({
+                index: index,
+                field: 'selected',
+                value: checked
+            })
+        })
+        .catch(error => {
+            console.error('Erro ao salvar seleção:', error);
+        });
+    }
+    
+    if (selectAllCheckbox) {
+        selectAllCheckbox.addEventListener('change', function() {
+            transactions.forEach(t => {
+                if (t.checkbox) {
+                    t.checkbox.checked = this.checked;
+                    updateRowSelection(t.row, this.checked);
+                    saveSelectionState(t.index, this.checked);
+                }
+            });
+        });
+    }
+    
+    if (selectAllBtn) {
+        // #region agent log
+        fetch('http://127.0.0.1:7243/ingest/f640d3d1-ffd7-4f6c-8f06-e351fd789592',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'asset_transactions_import_staging.html:448',message:'Anexando listener ao botão selectAllBtn',data:{buttonFound:true,currentPageTransactions:transactions.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H'})}).catch(()=>{});
+        // #endregion
+        selectAllBtn.addEventListener('click', function() {
+            // #region agent log
+            fetch('http://127.0.0.1:7243/ingest/f640d3d1-ffd7-4f6c-8f06-e351fd789592',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'asset_transactions_import_staging.html:450',message:'Botão selectAllBtn clicado - chamando endpoint backend',data:{transactionsCount:transactions.length,willSelectAllPages:true},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'I'})}).catch(()=>{});
+            // #endregion
+            // Chamar endpoint backend para selecionar todas as transações de todas as páginas
+            fetch('{% url "finance:asset_transactions_import_select_all" %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Recarregar página para atualizar estado visual
+                    location.reload();
+                } else {
+                    alert('Erro ao selecionar todas: ' + (data.error || 'Erro desconhecido'));
+                }
+            })
+            .catch(error => {
+                console.error('Erro:', error);
+                alert('Erro ao selecionar todas as transações');
+            });
+        });
+    }
+    
+    if (deselectAllBtn) {
+        // #region agent log
+        fetch('http://127.0.0.1:7243/ingest/f640d3d1-ffd7-4f6c-8f06-e351fd789592',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'asset_transactions_import_staging.html:493',message:'Anexando listener ao botão deselectAllBtn',data:{buttonFound:true,currentPageTransactions:transactions.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H'})}).catch(()=>{});
+        // #endregion
+        deselectAllBtn.addEventListener('click', function() {
+            // #region agent log
+            fetch('http://127.0.0.1:7243/ingest/f640d3d1-ffd7-4f6c-8f06-e351fd789592',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'asset_transactions_import_staging.html:495',message:'Botão deselectAllBtn clicado - chamando endpoint backend',data:{transactionsCount:transactions.length,willDeselectAllPages:true},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'I'})}).catch(()=>{});
+            // #endregion
+            // Chamar endpoint backend para deselecionar todas as transações de todas as páginas
+            fetch('{% url "finance:asset_transactions_import_deselect_all" %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Recarregar página para atualizar estado visual
+                    location.reload();
+                } else {
+                    alert('Erro ao deselecionar todas: ' + (data.error || 'Erro desconhecido'));
+                }
+            })
+            .catch(error => {
+                console.error('Erro:', error);
+                alert('Erro ao deselecionar todas as transações');
+            });
+        });
+    }
+    
+    function updateRowSelection(row, selected) {
+        row.setAttribute('data-selected', selected);
+        if (selected) {
+            row.classList.add('table-primary');
+        } else {
+            row.classList.remove('table-primary');
+        }
+    }
+    
+    // CORREÇÃO: Ajustar quantidade e preço quando ambos são zero
+    // Se quantity = 0 e price = 0, definir quantity = 1 e price = total
+    function adjustZeroQuantityAndPrice() {
+        document.querySelectorAll('#transactionsTable tbody tr[data-index]').forEach(row => {
+            const quantityField = row.querySelector('input[data-field="quantity"]');
+            const priceField = row.querySelector('input[data-field="price"]');
+            const totalField = row.querySelector('input[data-field="total"]');
+            
+            if (quantityField && priceField && totalField) {
+                const quantity = parseFloat(quantityField.value) || 0;
+                const price = parseFloat(priceField.value) || 0;
+                const total = parseFloat(totalField.value) || 0;
+                
+                // Se ambos são zero e há um total, ajustar
+                if (quantity === 0 && price === 0 && total !== 0) {
+                    const index = parseInt(row.getAttribute('data-index'));
+                    
+                    // Atualizar valores nos campos
+                    quantityField.value = '1';
+                    priceField.value = total.toFixed(4);
+                    
+                    // Salvar na sessão via AJAX
+                    Promise.all([
+                        fetch('{% url "finance:asset_transactions_import_edit_item" %}', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRFToken': '{{ csrf_token }}'
+                            },
+                            body: JSON.stringify({
+                                index: index,
+                                field: 'quantity',
+                                value: '1'
+                            })
+                        }),
+                        fetch('{% url "finance:asset_transactions_import_edit_item" %}', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRFToken': '{{ csrf_token }}'
+                            },
+                            body: JSON.stringify({
+                                index: index,
+                                field: 'price',
+                                value: total.toFixed(4)
+                            })
+                        })
+                    ]).catch(error => {
+                        console.error('Erro ao ajustar quantidade/preço:', error);
+                    });
+                }
+            }
+        });
+    }
+    
+    // Executar ajuste ao carregar a página
+    adjustZeroQuantityAndPrice();
+    
+    // Executar ajuste antes de submeter o formulário de filtro
+    const filterForm = document.getElementById('filterForm');
+    if (filterForm) {
+        filterForm.addEventListener('submit', function(e) {
+            // Ajustar valores antes de submeter
+            adjustZeroQuantityAndPrice();
+            // Aguardar um pouco para garantir que os AJAX completem
+            setTimeout(() => {
+                // Continuar com o submit normal
+            }, 100);
+        });
+    }
+    
+    // Edição inline
+    document.querySelectorAll('.editable-field').forEach(field => {
+        let originalValue = field.value;
+        
+        field.addEventListener('change', function() {
+            const row = this.closest('tr');
+            const index = parseInt(row.getAttribute('data-index'));
+            const fieldName = this.getAttribute('data-field');
+            const newValue = this.value;
+            
+            // Atualizar visualmente
+            const statusCell = row.querySelector('td:nth-last-child(2)');
+            if (statusCell) {
+                statusCell.innerHTML = '<span class="badge bg-warning" title="Editado">E</span>';
+            }
+            
+            // Salvar na sessão via AJAX
+            fetch('{% url "finance:asset_transactions_import_edit_item" %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: JSON.stringify({
+                    index: index,
+                    field: fieldName,
+                    value: newValue
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (!data.success) {
+                    alert('Erro ao salvar: ' + (data.error || 'Erro desconhecido'));
+                    this.value = originalValue;
+                }
+            })
+            .catch(error => {
+                console.error('Erro:', error);
+                alert('Erro ao salvar alteração');
+                this.value = originalValue;
+            });
+        });
+    });
+    
+    // Remover selecionadas
+    document.getElementById('removeSelectedBtn').addEventListener('click', function() {
+        const selectedIndices = transactions
+            .filter(t => t.checkbox.checked)
+            .map(t => t.index);
+        
+        if (selectedIndices.length === 0) {
+            alert('Selecione pelo menos uma transação para remover');
+            return;
+        }
+        
+        if (!confirm(`Tem certeza que deseja remover ${selectedIndices.length} transação(ões)?`)) {
+            return;
+        }
+        
+        fetch('{% url "finance:asset_transactions_import_remove_item" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify({
+                indices: selectedIndices
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                alert('Erro ao remover: ' + (data.error || 'Erro desconhecido'));
+            }
+        })
+        .catch(error => {
+            console.error('Erro:', error);
+            alert('Erro ao remover transações');
+        });
+    });
+    
+    // Remover item individual
+    document.querySelectorAll('.remove-item-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const index = parseInt(this.getAttribute('data-index'));
+            
+            if (!confirm('Tem certeza que deseja remover esta transação?')) {
+                return;
+            }
+            
+            fetch('{% url "finance:asset_transactions_import_remove_item" %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: JSON.stringify({
+                    indices: [index]
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    location.reload();
+                } else {
+                    alert('Erro ao remover: ' + (data.error || 'Erro desconhecido'));
+                }
+            })
+            .catch(error => {
+                console.error('Erro:', error);
+                alert('Erro ao remover transação');
+            });
+        });
+    });
+    
+    // Importar selecionadas
+    try {
+        const importBtnElement = document.getElementById('importBtn');
+        // #region agent log
+        fetch('http://127.0.0.1:7243/ingest/f640d3d1-ffd7-4f6c-8f06-e351fd789592',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'asset_transactions_import_staging.html:641',message:'Buscando botão importBtn',data:{importBtnFound:!!importBtnElement,importBtnId:'importBtn',allButtons:Array.from(document.querySelectorAll('button')).map(b=>b.id)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+        // #endregion
+        if (!importBtnElement) {
+            // #region agent log
+            fetch('http://127.0.0.1:7243/ingest/f640d3d1-ffd7-4f6c-8f06-e351fd789592',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'asset_transactions_import_staging.html:645',message:'ERRO: Botão importBtn não encontrado',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+            // #endregion
+            console.error('Botão importBtn não encontrado');
+        } else {
+            // #region agent log
+            fetch('http://127.0.0.1:7243/ingest/f640d3d1-ffd7-4f6c-8f06-e351fd789592',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'asset_transactions_import_staging.html:650',message:'Anexando listener ao botão importBtn',data:{buttonFound:true},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+            // #endregion
+            importBtnElement.addEventListener('click', function() {
+        const importBtn = this;
+        const originalText = importBtn.innerHTML;
+        // #region agent log
+        fetch('http://127.0.0.1:7243/ingest/f640d3d1-ffd7-4f6c-8f06-e351fd789592',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'asset_transactions_import_staging.html:655',message:'Botão importBtn clicado',data:{transactionsCount:transactions.length,selectedCount:transactions.filter(t=>t.checkbox&&t.checkbox.checked).length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+        // #endregion
+        
+        // Coletar índices selecionados da página atual
+        const selectedIndicesCurrentPage = transactions
+            .filter(t => t.checkbox.checked)
+            .map(t => t.index);
+        
+        const totalPages = {{ transactions.paginator.num_pages|default:1 }};
+        
+        // Verificar se há pelo menos uma selecionada na página atual (se for página única)
+        if (selectedIndicesCurrentPage.length === 0 && totalPages === 1) {
+            alert('Selecione pelo menos uma transação para importar');
+            return;
+        }
+        
+        let confirmMessage = 'Tem certeza que deseja importar todas as transações selecionadas';
+        if (totalPages > 1) {
+            confirmMessage += ' (de todas as páginas)';
+        }
+        confirmMessage += '?';
+        
+        if (!confirm(confirmMessage)) {
+            return;
+        }
+        
+        // Desabilitar botão e mostrar loading
+        importBtn.disabled = true;
+        importBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Importando...';
+        
+        // Coletar filtros atuais da URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const filters = {
+            date_start: urlParams.get('date_start') || '',
+            date_end: urlParams.get('date_end') || '',
+            investment_account: urlParams.get('investment_account') || '',
+            cash_account: urlParams.get('cash_account') || '',
+            asset_code: urlParams.get('asset_code') || '',
+            operation_type: urlParams.get('operation_type') || '',
+            min_value: urlParams.get('min_value') || '',
+            max_value: urlParams.get('max_value') || ''
+        };
+        
+        const hasFilters = Object.values(filters).some(v => v !== '');
+        
+        // IMPORTANTE: Enviar lista vazia para indicar que deve importar TODAS as selecionadas
+        // A view vai verificar o campo 'selected' de cada transação quando selected_indices está vazio
+        // Isso permite importar seleções de todas as páginas, não apenas da página atual
+        const requestBody = {
+            selected_indices: [],  // Lista vazia = importar todas com selected=True na sessão
+            filters: hasFilters ? filters : null
+        };
+        // #region agent log
+        fetch('http://127.0.0.1:7243/ingest/f640d3d1-ffd7-4f6c-8f06-e351fd789592',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'asset_transactions_import_staging.html:707',message:'Enviando requisição de importação',data:{url:'{% url "finance:asset_transactions_import_execute" %}',hasFilters:hasFilters,selectedIndicesLength:requestBody.selected_indices.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+        // #endregion
+        fetch('{% url "finance:asset_transactions_import_execute" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify(requestBody)
+        })
+        .then(response => {
+            // #region agent log
+            fetch('http://127.0.0.1:7243/ingest/f640d3d1-ffd7-4f6c-8f06-e351fd789592',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'asset_transactions_import_staging.html:718',message:'Resposta recebida',data:{status:response.status,statusText:response.statusText,redirected:response.redirected,ok:response.ok,url:response.url},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+            // #endregion
+            if (response.redirected) {
+                // Se houver redirecionamento, seguir
+                window.location.href = response.url;
+                return;
+            }
+            return response.json();
+        })
+        .then(data => {
+            // #region agent log
+            fetch('http://127.0.0.1:7243/ingest/f640d3d1-ffd7-4f6c-8f06-e351fd789592',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'asset_transactions_import_staging.html:729',message:'Dados JSON recebidos',data:{hasData:!!data,success:data?.success,error:data?.error,message:data?.message},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+            // #endregion
+            if (data) {
+                if (data.success) {
+                    // Mostrar mensagem de sucesso
+                    const successMsg = data.message || 'Importação concluída com sucesso!';
+                    
+                    // Criar elemento de mensagem
+                    const alertDiv = document.createElement('div');
+                    alertDiv.className = 'alert alert-success alert-dismissible fade show position-fixed top-0 start-50 translate-middle-x mt-3';
+                    alertDiv.style.zIndex = '9999';
+                    alertDiv.style.minWidth = '400px';
+                    alertDiv.innerHTML = `
+                        <strong>Sucesso!</strong> ${successMsg}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    `;
+                    document.body.appendChild(alertDiv);
+                    
+                    // Recarregar página após 2 segundos para mostrar estatísticas atualizadas
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 2000);
+                } else {
+                    // #region agent log
+                    fetch('http://127.0.0.1:7243/ingest/f640d3d1-ffd7-4f6c-8f06-e351fd789592',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'asset_transactions_import_staging.html:754',message:'Erro na importação',data:{error:data.error,message:data.message},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+                    // #endregion
+                    // Restaurar botão
+                    importBtn.disabled = false;
+                    importBtn.innerHTML = originalText;
+                    alert('Erro ao importar: ' + (data.error || 'Erro desconhecido'));
+                }
+            }
+        })
+        .catch(error => {
+            // #region agent log
+            fetch('http://127.0.0.1:7243/ingest/f640d3d1-ffd7-4f6c-8f06-e351fd789592',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'asset_transactions_import_staging.html:764',message:'Erro na requisição fetch',data:{errorMessage:error.message,errorStack:error.stack,errorName:error.name},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'G'})}).catch(()=>{});
+            // #endregion
+            console.error('Erro:', error);
+            // Restaurar botão
+            importBtn.disabled = false;
+            importBtn.innerHTML = originalText;
+            
+            // Se não for erro de redirecionamento, mostrar alerta
+            if (!error.message || !error.message.includes('redirected')) {
+                alert('Erro ao importar transações. Verifique o console para mais detalhes.');
+            }
+        });
+        });
+        }
+    } catch (e) {
+        // #region agent log
+        fetch('http://127.0.0.1:7243/ingest/f640d3d1-ffd7-4f6c-8f06-e351fd789592',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'asset_transactions_import_staging.html:778',message:'ERRO ao configurar importBtn',data:{error:e.message,stack:e.stack},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+        // #endregion
+        console.error('Erro ao configurar botão importBtn:', e);
+    }
+    
+    // Adicionar event listeners aos checkboxes
+    transactions.forEach(t => {
+        if (t.checkbox) {
+            t.checkbox.addEventListener('change', function() {
+                updateRowSelection(t.row, this.checked);
+                updateSelectAllState();
+                saveSelectionState(t.index, this.checked);
+            });
+        }
+    });
+    
+    // Inicializar estado visual das linhas
+    // IMPORTANTE: Sincronizar estado do checkbox com o valor na sessão
+    transactions.forEach(t => {
+        if (t.checkbox) {
+            const rowSelected = t.row.getAttribute('data-selected') === 'true';
+            // Se o checkbox não está sincronizado com data-selected, corrigir
+            if (t.checkbox.checked !== rowSelected) {
+                t.checkbox.checked = rowSelected;
+            }
+            updateRowSelection(t.row, t.checkbox.checked);
+        }
+    });
+    updateSelectAllState();
+    
+    // #region agent log
+    fetch('http://127.0.0.1:7243/ingest/f640d3d1-ffd7-4f6c-8f06-e351fd789592',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'asset_transactions_import_staging.html:800',message:'Script finalizado com sucesso',data:{listenersAttached:!!selectAllBtn && !!deselectAllBtn},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+    // #endregion
+})();
+</script>
+{% endblock %}

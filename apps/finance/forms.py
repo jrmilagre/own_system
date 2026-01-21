@@ -777,6 +777,7 @@ class CashFlowCalculationRuleForm(forms.Form):
     RULE_TYPE_CHOICES = [
         ('subcategory', 'Por Subcategoria'),
         ('transfer', 'Por Transferência entre Contas'),
+        ('asset_transaction', 'Por Transação de Ativo'),
     ]
     
     VALUE_TYPE_CHOICES = [
@@ -816,6 +817,58 @@ class CashFlowCalculationRuleForm(forms.Form):
         widget=forms.Select(attrs={'class': 'value-type-field form-select'})
     )
     
+    # Campos para regra de transação de ativo (condicionais)
+    OPERATION_TYPE_CHOICES = [
+        ('', 'Todos'),
+        ('BUY', 'Compra'),
+        ('SELL', 'Venda'),
+        ('DIVIDEND', 'Dividendo'),
+        ('JCP', 'Juros sobre Capital Próprio'),
+        ('INTEREST', 'Juros (Renda Fixa)'),
+        ('AMORTIZATION', 'Amortização'),
+        ('REDEMPTION', 'Resgate (Renda Fixa)'),
+        ('SUB', 'Subscrição'),
+    ]
+    
+    ASSET_TYPE_CHOICES = [
+        ('', 'Todos'),
+        ('STOCK', 'Ação'),
+        ('FII', 'Fundo Imobiliário'),
+        ('ETF', 'ETF'),
+        ('BOND', 'Renda Fixa'),
+        ('REIT', 'REIT'),
+        ('CRYPTO', 'Criptomoeda'),
+        ('OTHER', 'Outro'),
+    ]
+    
+    ASSET_VALUE_TYPE_CHOICES = [
+        ('net_value', 'Valor Líquido (net_value)'),
+        ('total_value', 'Valor Total (total_value)'),
+        ('income_value', 'Valor de Rendimento (income_value)'),
+    ]
+    
+    operation_type = forms.ChoiceField(
+        choices=OPERATION_TYPE_CHOICES,
+        label='Tipo de Operação',
+        required=False,
+        widget=forms.Select(attrs={'class': 'operation-type-field form-select'})
+    )
+    
+    asset_type = forms.ChoiceField(
+        choices=ASSET_TYPE_CHOICES,
+        label='Tipo de Ativo',
+        required=False,
+        widget=forms.Select(attrs={'class': 'asset-type-field form-select'})
+    )
+    
+    asset_value_type = forms.ChoiceField(
+        choices=ASSET_VALUE_TYPE_CHOICES,
+        label='Tipo de Valor',
+        required=False,
+        initial='net_value',
+        widget=forms.Select(attrs={'class': 'asset-value-type-field form-select'})
+    )
+    
     def clean(self):
         cleaned_data = super().clean()
         rule_type = cleaned_data.get('rule_type')
@@ -833,6 +886,15 @@ class CashFlowCalculationRuleForm(forms.Form):
             if not cleaned_data.get('value_type'):
                 raise forms.ValidationError({
                     'value_type': 'Tipo de valor é obrigatório para regras de transferência.'
+                })
+        elif rule_type == 'asset_transaction':
+            if not cleaned_data.get('operation_type'):
+                raise forms.ValidationError({
+                    'operation_type': 'Tipo de operação é obrigatório para regras de transação de ativo.'
+                })
+            if not cleaned_data.get('asset_value_type'):
+                raise forms.ValidationError({
+                    'asset_value_type': 'Tipo de valor é obrigatório para regras de transação de ativo.'
                 })
         
         return cleaned_data
@@ -894,6 +956,20 @@ class CashFlowItemForm(forms.ModelForm):
                                 'destination_account_id': destination_account.id,
                                 'value_type': value_type
                             }
+                            rules_data.append(rule_dict)
+                    elif rule_type == 'asset_transaction':
+                        operation_type = form.cleaned_data.get('operation_type')
+                        asset_type = form.cleaned_data.get('asset_type')
+                        asset_value_type = form.cleaned_data.get('asset_value_type')
+                        if operation_type and asset_value_type:
+                            rule_dict = {
+                                'type': 'asset_transaction',
+                                'operation_type': operation_type,
+                                'asset_value_type': asset_value_type
+                            }
+                            # Adicionar campo opcional apenas se preenchido
+                            if asset_type:
+                                rule_dict['asset_type'] = asset_type
                             rules_data.append(rule_dict)
             
             instance.calculation_rules = rules_data
@@ -1029,11 +1105,11 @@ class BudgetForm(forms.ModelForm):
         self.fields['subcategory'].queryset = Subcategory.objects.all().order_by('category__category', 'subcategory')
 
 
-class Money99ImportForm(forms.Form):
-    """Formulário para upload do arquivo transactions.txt do Money99"""
+class TransactionsImportForm(forms.Form):
+    """Formulário para upload do arquivo transactions.txt"""
     file = forms.FileField(
         label='Arquivo transactions.txt',
-        help_text='Selecione o arquivo transactions.txt exportado do Money99',
+        help_text='Selecione o arquivo transactions.txt',
         widget=forms.FileInput(attrs={
             'accept': '.txt',
             'class': 'form-control',
@@ -1042,7 +1118,7 @@ class Money99ImportForm(forms.Form):
     )
 
 
-class Money99StagingFilterForm(forms.Form):
+class TransactionsStagingFilterForm(forms.Form):
     """Formulário de filtros para a página de staging"""
     date_start = forms.DateField(
         required=False,
@@ -1192,3 +1268,79 @@ class AssetTransactionCategoryConfigForm(forms.ModelForm):
             )
         
         return cleaned_data
+
+
+class AssetTransactionsImportForm(forms.Form):
+    """Formulário para upload do arquivo asset_transactions.txt"""
+    file = forms.FileField(
+        label='Arquivo asset_transactions.txt',
+        help_text='Selecione o arquivo asset_transactions.txt',
+        widget=forms.FileInput(attrs={
+            'accept': '.txt',
+            'class': 'form-control',
+            'required': True
+        })
+    )
+
+
+class AssetTransactionsStagingFilterForm(forms.Form):
+    """Formulário de filtros para a página de staging de transações de ativos"""
+    date_start = forms.DateField(
+        required=False,
+        label='Data início',
+        widget=forms.DateInput(attrs={'type': 'date', 'class': 'form-control'})
+    )
+    date_end = forms.DateField(
+        required=False,
+        label='Data fim',
+        widget=forms.DateInput(attrs={'type': 'date', 'class': 'form-control'})
+    )
+    investment_account = forms.CharField(
+        required=False,
+        label='Conta de investimento',
+        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Filtrar por conta...'})
+    )
+    cash_account = forms.CharField(
+        required=False,
+        label='Conta Cash',
+        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Filtrar por conta cash...'})
+    )
+    asset_code = forms.CharField(
+        required=False,
+        label='Ativo',
+        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Filtrar por código do ativo...'})
+    )
+    operation_type = forms.ChoiceField(
+        choices=[
+            ('', 'Todos'),
+            ('BUY', 'Compra'),
+            ('SELL', 'Venda'),
+            ('DIVIDEND', 'Dividendo'),
+            ('JCP', 'Juros sobre Capital Próprio'),
+            ('INTEREST', 'Juros'),
+            ('BONUS', 'Bonificação'),
+            ('REDEMPTION', 'Resgate'),
+        ],
+        required=False,
+        label='Tipo de operação',
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    min_value = forms.DecimalField(
+        required=False,
+        label='Valor mínimo',
+        widget=forms.NumberInput(attrs={'step': '0.01', 'class': 'form-control'})
+    )
+    max_value = forms.DecimalField(
+        required=False,
+        label='Valor máximo',
+        widget=forms.NumberInput(attrs={'step': '0.01', 'class': 'form-control'})
+    )
+    import_status = forms.ChoiceField(
+        choices=[('', 'Todas'), ('imported', 'Já importadas'), ('not_imported', 'Não importadas')],
+        required=False,
+        label='Status de importação',
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
