@@ -570,24 +570,24 @@ def transaction_list(request):
     
     # Aplicar filtros
     if filter_form.is_valid():
-        account = filter_form.cleaned_data.get('account')
-        beneficiary = filter_form.cleaned_data.get('beneficiary')
-        category = filter_form.cleaned_data.get('category')
-        subcategory = filter_form.cleaned_data.get('subcategory')
+        accounts = filter_form.cleaned_data.get('account')
+        beneficiaries = filter_form.cleaned_data.get('beneficiary')
+        categories = filter_form.cleaned_data.get('category')
+        subcategories = filter_form.cleaned_data.get('subcategory')
         date_start = filter_form.cleaned_data.get('date_start')
         date_end = filter_form.cleaned_data.get('date_end')
         
-        if account:
-            transactions = transactions.filter(account=account)
+        if accounts:
+            transactions = transactions.filter(account__in=accounts)
         
-        if beneficiary:
-            transactions = transactions.filter(beneficiary=beneficiary)
+        if beneficiaries:
+            transactions = transactions.filter(beneficiary__in=beneficiaries)
         
-        if category:
-            transactions = transactions.filter(subcategory__category=category)
+        if categories:
+            transactions = transactions.filter(subcategory__category__in=categories)
         
-        if subcategory:
-            transactions = transactions.filter(subcategory=subcategory)
+        if subcategories:
+            transactions = transactions.filter(subcategory__in=subcategories)
         
         if date_start or date_end:
             date_filter = Q()
@@ -605,8 +605,56 @@ def transaction_list(request):
                 date_filter = Q(transaction_date__lte=date_end) | Q(transaction_date__isnull=True, due_date__lte=date_end)
             transactions = transactions.filter(date_filter)
     
-    # Ordenar
-    transactions = transactions.order_by('-transaction_date', '-due_date', '-created_at')
+    # Ordenar - suporte para múltiplas colunas
+    sort_fields_str = request.GET.get('sort', '')
+    sort_orders_str = request.GET.get('order', 'desc')
+    
+    # Mapeamento de campos de ordenação
+    sort_mapping = {
+        'beneficiary': 'beneficiary__full_name',
+        'account': 'account__name',
+        'subcategory': 'subcategory__subcategory',
+        'transaction_type': 'transaction_type',
+        'value': 'value',
+        'date': 'transaction_date',  # Para data, usamos transaction_date como principal
+    }
+    
+    # Processar múltiplos campos de ordenação (separados por vírgula)
+    sort_fields = [f.strip() for f in sort_fields_str.split(',') if f.strip()] if sort_fields_str else []
+    sort_orders = [o.strip() for o in sort_orders_str.split(',')] if sort_orders_str else []
+    
+    # Validar e aplicar ordenações
+    order_fields = []
+    valid_sorts = []
+    valid_orders = []
+    
+    for i, sort_field in enumerate(sort_fields):
+        if sort_field in sort_mapping:
+            sort_order = sort_orders[i] if i < len(sort_orders) else 'desc'
+            if sort_order not in ['asc', 'desc']:
+                sort_order = 'desc'
+            
+            # Para data, precisamos de uma ordenação especial
+            if sort_field == 'date':
+                if sort_order == 'asc':
+                    order_fields.extend(['transaction_date', 'due_date', 'created_at'])
+                else:
+                    order_fields.extend(['-transaction_date', '-due_date', '-created_at'])
+            else:
+                order_prefix = '' if sort_order == 'asc' else '-'
+                order_fields.append(f"{order_prefix}{sort_mapping[sort_field]}")
+            
+            valid_sorts.append(sort_field)
+            valid_orders.append(sort_order)
+    
+    if order_fields:
+        # Adicionar ordenação padrão por data como fallback
+        if 'date' not in valid_sorts:
+            order_fields.extend(['-transaction_date', '-due_date', '-created_at'])
+        transactions = transactions.order_by(*order_fields)
+    else:
+        # Ordenação padrão
+        transactions = transactions.order_by('-transaction_date', '-due_date', '-created_at')
     
     # Paginação
     paginator = Paginator(transactions, 50)  # 50 transações por página
@@ -681,12 +729,22 @@ def transaction_list(request):
     for group_data in multiple_groups_list:
         subtotal += Decimal(str(group_data['total_value']))
     
+    # Passar informações de ordenação para o template
+    # Criar dicionário com prioridade de cada campo ordenado
+    sort_info = {}
+    for idx, sort_field in enumerate(valid_sorts):
+        sort_info[sort_field] = {
+            'priority': idx + 1,
+            'order': valid_orders[idx] if idx < len(valid_orders) else 'desc'
+        }
+    
     return render(request, 'finance/transaction_list.html', {
         'transactions': single_transactions,
         'multiple_groups': multiple_groups_list,
         'filter_form': filter_form,
         'page_obj': page_obj,
-        'subtotal': subtotal
+        'subtotal': subtotal,
+        'sort_info': sort_info,  # Dicionário com informações de ordenação por campo
     })
 
 

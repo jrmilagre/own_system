@@ -982,29 +982,29 @@ class CashFlowItemForm(forms.ModelForm):
 
 class TransactionFilterForm(forms.Form):
     """Formulário de filtros para a lista de transações"""
-    account = forms.ModelChoiceField(
+    account = forms.ModelMultipleChoiceField(
         queryset=Account.objects.all().order_by('name'),
         required=False,
         label='Conta',
-        widget=forms.Select(attrs={'class': 'form-control'})
+        widget=forms.CheckboxSelectMultiple(attrs={'class': 'form-check-input'})
     )
-    beneficiary = forms.ModelChoiceField(
+    beneficiary = forms.ModelMultipleChoiceField(
         queryset=Beneficiary.objects.all().order_by('full_name'),
         required=False,
         label='Beneficiário',
-        widget=forms.Select(attrs={'class': 'form-control'})
+        widget=forms.CheckboxSelectMultiple(attrs={'class': 'form-check-input'})
     )
-    category = forms.ModelChoiceField(
+    category = forms.ModelMultipleChoiceField(
         queryset=Category.objects.all().order_by('category'),
         required=False,
         label='Categoria',
-        widget=forms.Select(attrs={'class': 'form-control'})
+        widget=forms.CheckboxSelectMultiple(attrs={'class': 'form-check-input'})
     )
-    subcategory = forms.ModelChoiceField(
+    subcategory = forms.ModelMultipleChoiceField(
         queryset=Subcategory.objects.all().order_by('category__category', 'subcategory'),
         required=False,
         label='Subcategoria',
-        widget=forms.Select(attrs={'class': 'form-control'})
+        widget=forms.CheckboxSelectMultiple(attrs={'class': 'form-check-input'})
     )
     
     def __init__(self, *args, **kwargs):
