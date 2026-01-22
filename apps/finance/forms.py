@@ -1031,6 +1031,47 @@ class TransactionFilterForm(forms.Form):
     )
 
 
+class AssetTransactionFilterForm(forms.Form):
+    """Formulário de filtros para a lista de transações de ativos"""
+    asset = forms.ModelMultipleChoiceField(
+        queryset=Asset.objects.all().order_by('code'),
+        required=False,
+        label='Ativo',
+        widget=forms.CheckboxSelectMultiple(attrs={'class': 'form-check-input'})
+    )
+    account = forms.ModelMultipleChoiceField(
+        queryset=Account.objects.all().order_by('name'),
+        required=False,
+        label='Conta',
+        widget=forms.CheckboxSelectMultiple(attrs={'class': 'form-check-input'})
+    )
+    operation_type = forms.MultipleChoiceField(
+        choices=AssetTransaction.OPERATION_TYPE_CHOICES,
+        required=False,
+        label='Tipo de Operação',
+        widget=forms.CheckboxSelectMultiple(attrs={'class': 'form-check-input'})
+    )
+    date_start = forms.DateField(
+        required=False,
+        label='Data início',
+        widget=forms.DateInput(attrs={'type': 'date', 'class': 'form-control'})
+    )
+    date_end = forms.DateField(
+        required=False,
+        label='Data fim',
+        widget=forms.DateInput(attrs={'type': 'date', 'class': 'form-control'})
+    )
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Forçar avaliação dos querysets para evitar problemas com cursor do banco
+        # durante a renderização do template
+        if self.fields['asset'].queryset:
+            list(self.fields['asset'].queryset)
+        if self.fields['account'].queryset:
+            list(self.fields['account'].queryset)
+
+
 class AccountFilterForm(forms.Form):
     """Formulário de filtros para a lista de contas"""
     account_type = forms.MultipleChoiceField(

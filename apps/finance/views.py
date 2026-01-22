@@ -19,7 +19,7 @@ from .forms import (
     MultipleSchedulerRegisterItemFormSet, AssetForm, AssetTransactionForm, AssetPositionForm, InventoryForm, AssetTransactionCategoryConfigForm,
     CashFlowItemForm, CashFlowCalculationRuleFormSet, TransactionFilterForm, SchedulerFilterForm, BudgetForm,
     TransactionsImportForm, TransactionsStagingFilterForm, SubcategoryMoveForm,
-    AssetTransactionsImportForm, AssetTransactionsStagingFilterForm, AccountFilterForm
+    AssetTransactionsImportForm, AssetTransactionsStagingFilterForm, AccountFilterForm, AssetTransactionFilterForm
 )
 from .transactions_parser import TransactionsParser
 from .asset_transactions_parser import AssetTransactionsParser
@@ -2547,9 +2547,116 @@ def asset_delete(request, pk):
 
 # AssetTransaction Views
 def asset_transaction_list(request):
-    """Lista de transações de ativos"""
+    """Lista de transações de ativos com filtros e paginação"""
+    # Inicializar formulário de filtros
+    filter_form = AssetTransactionFilterForm(request.GET)
+    
+    # Query base
     transactions = AssetTransaction.objects.all().select_related('asset', 'account')
-    return render(request, 'finance/asset_transaction_list.html', {'transactions': transactions})
+    
+    # Aplicar filtros
+    if filter_form.is_valid():
+        assets = filter_form.cleaned_data.get('asset')
+        accounts = filter_form.cleaned_data.get('account')
+        operation_types = filter_form.cleaned_data.get('operation_type')
+        date_start = filter_form.cleaned_data.get('date_start')
+        date_end = filter_form.cleaned_data.get('date_end')
+        
+        if assets:
+            transactions = transactions.filter(asset__in=assets)
+        
+        if accounts:
+            transactions = transactions.filter(account__in=accounts)
+        
+        if operation_types:
+            transactions = transactions.filter(operation_type__in=operation_types)
+        
+        if date_start:
+            transactions = transactions.filter(date__gte=date_start)
+        
+        if date_end:
+            transactions = transactions.filter(date__lte=date_end)
+    
+    # Ordenar - suporte para múltiplas colunas
+    sort_fields_str = request.GET.get('sort', '')
+    sort_orders_str = request.GET.get('order', 'desc')
+    
+    # Mapeamento de campos de ordenação
+    sort_mapping = {
+        'asset': 'asset__code',
+        'account': 'account__name',
+        'operation_type': 'operation_type',
+        'date': 'date',
+        'quantity': 'quantity',
+        'price': 'price',
+        'total_value': 'total_value',
+        'fees': 'fees',
+        'income_value': 'income_value',
+    }
+    
+    # Processar múltiplos campos de ordenação (separados por vírgula)
+    sort_fields = [f.strip() for f in sort_fields_str.split(',') if f.strip()] if sort_fields_str else []
+    sort_orders = [o.strip() for o in sort_orders_str.split(',')] if sort_orders_str else []
+    
+    # Validar e aplicar ordenações
+    order_fields = []
+    valid_sorts = []
+    valid_orders = []
+    
+    for i, sort_field in enumerate(sort_fields):
+        if sort_field in sort_mapping:
+            sort_order = sort_orders[i] if i < len(sort_orders) else 'desc'
+            if sort_order not in ['asc', 'desc']:
+                sort_order = 'desc'
+            
+            order_prefix = '' if sort_order == 'asc' else '-'
+            order_fields.append(f"{order_prefix}{sort_mapping[sort_field]}")
+            
+            valid_sorts.append(sort_field)
+            valid_orders.append(sort_order)
+    
+    if order_fields:
+        # Adicionar ordenação padrão por data como fallback
+        if 'date' not in valid_sorts:
+            order_fields.append('-date')
+        transactions = transactions.order_by(*order_fields)
+    else:
+        # Ordenação padrão
+        transactions = transactions.order_by('-date')
+    
+    # Paginação
+    paginator = Paginator(transactions, 50)  # 50 transações por página
+    page_number = request.GET.get('page', 1)
+    page_obj = paginator.get_page(page_number)
+    
+    # Calcular subtotal da página
+    subtotal = Decimal('0')
+    total_fees = Decimal('0')
+    total_income = Decimal('0')
+    
+    for transaction in page_obj:
+        subtotal += transaction.total_value or Decimal('0')
+        total_fees += transaction.fees or Decimal('0')
+        total_income += transaction.income_value or Decimal('0')
+    
+    # Passar informações de ordenação para o template
+    # Criar dicionário com prioridade de cada campo ordenado
+    sort_info = {}
+    for idx, sort_field in enumerate(valid_sorts):
+        sort_info[sort_field] = {
+            'priority': idx + 1,
+            'order': valid_orders[idx] if idx < len(valid_orders) else 'desc'
+        }
+    
+    return render(request, 'finance/asset_transaction_list.html', {
+        'transactions': page_obj,
+        'filter_form': filter_form,
+        'page_obj': page_obj,
+        'subtotal': subtotal,
+        'total_fees': total_fees,
+        'total_income': total_income,
+        'sort_info': sort_info,
+    })
 
 
 def asset_transaction_create(request):
