@@ -1232,13 +1232,13 @@ class AssetTransaction(BaseModel):
     
     def _create_or_update_related_transactions(self, is_update, cash_account=None, subcategory_override=None):
         """
-        Cria ou atualiza as Transactions relacionadas baseado na configuração de categorias
-        ou cria transferências entre contas quando ambas estão disponíveis.
+        Cria ou atualiza as Transactions relacionadas baseado no tipo de operação.
+        Cria transferências entre contas quando cash_account está disponível.
         
         Args:
             is_update: Se é uma atualização (já existe no banco)
             cash_account: Conta de transferência/cash opcional. Se não fornecido, usa self.account
-            subcategory_override: Subcategoria opcional para sobrescrever a configuração
+            subcategory_override: Subcategoria opcional (usado principalmente na importação)
         """
         from decimal import Decimal
         
@@ -1329,81 +1329,40 @@ class AssetTransaction(BaseModel):
                     asset_transaction=self
                 )
             
-            # Transferência criada, não precisa criar Transaction com subcategoria
+            # Transferência criada, não precisa criar Transaction adicional
             return
         
-        # Se não criou transferência, usar lógica antiga (Transaction com subcategoria)
-        # Buscar configuração de categorias
-        # Primeiro tenta buscar por operation_type + asset_type específico
-        config = AssetTransactionCategoryConfig.objects.filter(
-            operation_type=self.operation_type,
-            asset_type=self.asset.asset_type
-        ).first()
-        
-        # Se não encontrar, busca por operation_type apenas (asset_type=None)
-        if not config:
-            config = AssetTransactionCategoryConfig.objects.filter(
-                operation_type=self.operation_type,
-                asset_type__isnull=True
-            ).first()
-        
-        # Se não encontrar configuração e não houver subcategoria override, não cria Transactions
-        if not config and not subcategory_override:
-            return
-        
-        # Se não há configuração mas há subcategoria override, usar valores padrão
-        if not config:
-            # Usar valores padrão baseados no tipo de operação
-            default_transaction_type = 'DB' if self.operation_type in ['BUY', 'SUB'] else 'CR'
-        else:
-            default_transaction_type = config.transaction_type_principal
-        
+        # Se não criou transferência, criar Transaction simples na conta de investimento
         # Usar cash_account se fornecido, senão usar self.account
         transaction_account = cash_account if cash_account else self.account
         
-        # Calcular valores
-        calculated_base = self.quantity * self.price
+        # Usar get_net_value() para obter o valor líquido (já considera fees)
+        net_value = self.get_net_value()
         
-        # Determinar valor principal baseado no tipo de operação
-        if self.operation_type in ['BUY', 'SELL', 'SUB', 'REDEMPTION']:
-            principal_value = calculated_base
-        elif self.operation_type in ['DIVIDEND', 'JCP', 'INTEREST', 'AMORTIZATION']:
-            principal_value = self.income_value
+        # Determinar tipo de transação baseado no sinal do net_value
+        # net_value negativo = saída de dinheiro (DB), positivo = entrada (CR)
+        if net_value != 0:
+            transaction_value = abs(net_value)
+            default_transaction_type = 'DB' if net_value < 0 else 'CR'
         else:
-            principal_value = Decimal('0')
+            transaction_value = Decimal('0')
+            default_transaction_type = 'DB'
         
         # Criar Transaction principal se houver valor
-        if principal_value > 0:
-            # Usar subcategoria override se fornecida, senão usar a da configuração
-            transaction_subcategory = subcategory_override if subcategory_override else (config.subcategory_principal if config else None)
+        if transaction_value > 0:
+            # Usar subcategoria override se fornecida, senão None (sem subcategoria)
+            transaction_subcategory = subcategory_override
             
-            # Só criar se houver subcategoria (override ou da configuração)
-            if transaction_subcategory:
-                Transaction.objects.create(
-                    account=transaction_account,
-                    beneficiary=None,  # Transações de ativos não têm beneficiário
-                    subcategory=transaction_subcategory,
-                    transaction_type=default_transaction_type,
-                    value=principal_value,
-                    due_date=self.date,
-                    transaction_date=self.date,
-                    purchase_date=None,
-                    notes=f"Gerado automaticamente de: {self.asset.code} - {self.get_operation_type_display()}",
-                    asset_transaction=self
-                )
-        
-        # Criar Transaction de taxas se houver fees e subcategory_fees configurada
-        if self.fees > 0 and config and config.subcategory_fees:
             Transaction.objects.create(
                 account=transaction_account,
-                beneficiary=None,
-                subcategory=config.subcategory_fees,
-                transaction_type=config.transaction_type_fees,
-                value=self.fees,
+                beneficiary=None,  # Transações de ativos não têm beneficiário
+                subcategory=transaction_subcategory,  # Pode ser None
+                transaction_type=default_transaction_type,
+                value=transaction_value,
                 due_date=self.date,
                 transaction_date=self.date,
                 purchase_date=None,
-                notes=f"Taxas de: {self.asset.code} - {self.get_operation_type_display()}",
+                notes=f"Gerado automaticamente de: {self.asset.code} - {self.get_operation_type_display()}",
                 asset_transaction=self
             )
     

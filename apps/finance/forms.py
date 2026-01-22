@@ -667,7 +667,7 @@ class AssetForm(forms.ModelForm):
 class AssetTransactionForm(forms.ModelForm):
     class Meta:
         model = AssetTransaction
-        fields = ['asset', 'account', 'operation_type', 'date', 'quantity', 'price', 'total_value', 'fees', 'income_value', 'transaction', 'notes']
+        fields = ['asset', 'account', 'operation_type', 'date', 'quantity', 'price', 'total_value', 'fees', 'income_value', 'notes']
         widgets = {
             'asset': forms.Select(attrs={'required': True}),
             'account': forms.Select(attrs={'required': True}),
@@ -678,7 +678,6 @@ class AssetTransactionForm(forms.ModelForm):
             'total_value': forms.NumberInput(attrs={'step': '0.01', 'required': False}),
             'fees': forms.NumberInput(attrs={'step': '0.01', 'required': False}),
             'income_value': forms.NumberInput(attrs={'step': '0.01', 'required': False}),
-            'transaction': forms.Select(attrs={'required': False}),
             'notes': forms.Textarea(attrs={'rows': 4, 'required': False}),
         }
 
@@ -686,11 +685,6 @@ class AssetTransactionForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         # Filtrar contas do tipo INVEST para o campo account e ordenar
         self.fields['account'].queryset = Account.objects.filter(account_type='INVEST').order_by('name')
-        # Tornar transaction opcional
-        self.fields['transaction'].required = False
-        # Limitar a 200 transações mais recentes para evitar lentidão na renderização
-        # O campo é opcional, então limitar não afeta a funcionalidade
-        self.fields['transaction'].queryset = Transaction.objects.all().order_by('-transaction_date', '-due_date', '-created_at')[:200]
 
     def clean(self):
         cleaned_data = super().clean()

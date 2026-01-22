@@ -138,17 +138,6 @@
                     {% endif %}
                 </div>
 
-                <!-- Transação Relacionada -->
-                <div class="col-md-6">
-                    <label for="{{ form.transaction.id_for_label }}" class="form-label">
-                        <i class="fas fa-link me-1 text-info"></i>Transação relacionada
-                    </label>
-                    {{ form.transaction }}
-                    {% if form.transaction.errors %}
-                        <div class="text-danger small mt-1">{{ form.transaction.errors }}</div>
-                    {% endif %}
-                </div>
-
                 <!-- Observações -->
                 <div class="col-12">
                     <label for="{{ form.notes.id_for_label }}" class="form-label">
