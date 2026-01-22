@@ -155,16 +155,17 @@ class AssetTransactionsParser:
             return 'OTHER'
     
     @staticmethod
-    def map_operation_type(activity_str, category_str=''):
+    def map_operation_type(activity_str, category_str='', investment_str=''):
         """
         Mapeia atividade para operation_type do modelo.
-        Atividades possíveis: Comprar, Vender, Dividendo, Juros, Adicionar ações
+        Atividades possíveis: Comprar, Vender, Dividendo, Juros, Adicionar ações, Rendimento
         """
         if not activity_str:
             return None
         
         activity_lower = activity_str.strip().lower()
         category_lower = category_str.lower() if category_str else ''
+        investment_lower = investment_str.lower() if investment_str else ''
         
         if 'comprar' in activity_lower or 'compra' in activity_lower:
             return 'BUY'
@@ -179,12 +180,23 @@ class AssetTransactionsParser:
             else:
                 return 'INTEREST'
         elif 'adicionar' in activity_lower and 'ações' in activity_lower:
-            # Se quantidade > 0, será tratado como BUY; senão, como BONUS
-            return 'BUY'  # Será ajustado na view se necessário
+            # Transferência de ativos de fonte externa para conta de investimento
+            return 'TRANSFER_IN'
+        elif 'portabilidade' in activity_lower or 'portar' in activity_lower:
+            # Portabilidade entre contas de investimento
+            return 'PORTABILITY'
         elif 'bonificação' in activity_lower or 'bonus' in activity_lower:
             return 'BONUS'
         elif 'resgate' in activity_lower:
             return 'REDEMPTION'
+        elif 'rendimento' in activity_lower or 'outros rendimentos' in activity_lower:
+            # Rendimentos podem ser INTEREST (renda fixa) ou DIVIDEND (ações/FIIs)
+            # Verificar categoria e investimento para determinar o tipo
+            if 'renda fixa' in category_lower or 'cdb' in category_lower or 'renda fixa' in investment_lower:
+                return 'INTEREST'
+            else:
+                # Para outros tipos de rendimento, tratar como DIVIDEND
+                return 'DIVIDEND'
         else:
             return None
     
@@ -275,8 +287,8 @@ class AssetTransactionsParser:
             if not asset_code:
                 return None
             
-            # Mapear tipo de operação
-            operation_type = AssetTransactionsParser.map_operation_type(activity_str, category_str)
+            # Mapear tipo de operação (passar investment_str para verificar tipo de investimento)
+            operation_type = AssetTransactionsParser.map_operation_type(activity_str, category_str, investment_str)
             if not operation_type:
                 return None
             

@@ -4164,12 +4164,38 @@ def transactions_import_staging(request):
     safe_debug_log(log_data)
     # #endregion
     
+    # Extrair todas as contas únicas das transações
+    unique_accounts = set()
+    for trans in transactions_data:
+        account_name = trans.get('account', '')
+        if account_name:
+            normalized = TransactionsParser.normalize_name(account_name)
+            if normalized:
+                unique_accounts.add(normalized)
+        
+        # Para transferências, incluir também source_account e destination_account
+        if trans.get('is_transfer'):
+            source_account = trans.get('source_account', '')
+            destination_account = trans.get('destination_account', '')
+            if source_account:
+                normalized = TransactionsParser.normalize_name(source_account)
+                if normalized:
+                    unique_accounts.add(normalized)
+            if destination_account:
+                normalized = TransactionsParser.normalize_name(destination_account)
+                if normalized:
+                    unique_accounts.add(normalized)
+    
+    # Ordenar contas alfabeticamente
+    unique_accounts = sorted(unique_accounts)
+    
     return render(request, 'finance/transactions_import_staging.html', {
         'transactions': page_obj,
         'filter_form': filter_form,
         'total_count': len(transactions_data),
         'filtered_count': len(filtered_transactions),
         'selected_count': selected_count,
+        'unique_accounts': unique_accounts,
     })
 
 
@@ -4941,6 +4967,60 @@ def transactions_import_execute(request):
             messages.warning(request, 'Nenhuma transação selecionada para importar')
             return redirect('finance:transactions_import_staging')
         
+        # Filtrar transações de contas de investimento
+        # Buscar todas as contas do tipo INVEST do banco de dados
+        investment_accounts_queryset = Account.objects.filter(account_type='INVEST')
+        investment_accounts_set = set()
+        for account in investment_accounts_queryset:
+            normalized = TransactionsParser.normalize_name(account.name)
+            if normalized:
+                investment_accounts_set.add(normalized)
+        
+        filtered_by_investment = []
+        if investment_accounts_set:
+            original_count = len(selected_transactions)
+            filtered_transactions = []
+            for trans_data in selected_transactions:
+                should_filter = False
+                
+                # Verificar conta principal
+                account_name = TransactionsParser.normalize_name(trans_data.get('account', ''))
+                if account_name in investment_accounts_set:
+                    should_filter = True
+                
+                # Para transferências, verificar também source_account e destination_account
+                if trans_data.get('is_transfer'):
+                    source_account = TransactionsParser.normalize_name(trans_data.get('source_account', ''))
+                    destination_account = TransactionsParser.normalize_name(trans_data.get('destination_account', ''))
+                    if source_account in investment_accounts_set or destination_account in investment_accounts_set:
+                        should_filter = True
+                
+                if not should_filter:
+                    filtered_transactions.append(trans_data)
+                else:
+                    filtered_by_investment.append(trans_data)
+            
+            selected_transactions = filtered_transactions
+            filtered_count = len(filtered_by_investment)
+            
+            # #region agent log
+            log_data = {
+                'sessionId': 'debug-session',
+                'runId': 'run1',
+                'hypothesisId': 'INVESTMENT_FILTER',
+                'location': 'views.py:5007',
+                'message': 'Filtered transactions by investment accounts',
+                'data': {
+                    'original_count': original_count,
+                    'filtered_count': filtered_count,
+                    'remaining_count': len(selected_transactions),
+                    'investment_accounts_count': len(investment_accounts_set)
+                },
+                'timestamp': int(time.time() * 1000)
+            }
+            safe_debug_log(log_data)
+            # #endregion
+        
         # Estatísticas
         stats = {
             'created_accounts': 0,
@@ -4950,6 +5030,7 @@ def transactions_import_execute(request):
             'created_transactions': 0,
             'errors': [],
             'duplicates': 0,
+            'filtered_by_investment': len(filtered_by_investment),
         }
         
         # Processar transações
@@ -5940,14 +6021,20 @@ def transactions_import_execute(request):
         # #endregion
         
         # Mensagens de sucesso
-        messages.success(request, 
+        success_msg = (
             f'Importação concluída! '
             f'{stats["created_transactions"]} transações criadas, '
             f'{stats["created_accounts"]} contas, '
             f'{stats["created_beneficiaries"]} beneficiários, '
             f'{stats["created_categories"]} categorias, '
             f'{stats["created_subcategories"]} subcategorias. '
-            f'{stats["duplicates"]} duplicatas ignoradas.')
+            f'{stats["duplicates"]} duplicatas ignoradas.'
+        )
+        
+        if stats.get('filtered_by_investment', 0) > 0:
+            success_msg += f' {stats["filtered_by_investment"]} transação(ões) filtrada(s) (contas de investimento).'
+        
+        messages.success(request, success_msg)
         
         if stats['errors']:
             messages.warning(request, f'{len(stats["errors"])} erros encontrados durante a importação.')
@@ -6817,9 +6904,14 @@ def asset_transactions_import_execute(request):
                     total = trans_data.get('total', Decimal('0'))
                     operation_type = trans_data['operation_type']
                     
-                    # Ajustar operation_type para "Adicionar ações" com quantidade 0
-                    if operation_type == 'BUY' and quantity == 0:
-                        operation_type = 'BONUS'
+                    # Detectar portabilidade: se investment_account e cash_account são ambos tipo INVEST
+                    if cash_account and investment_account.account_type == 'INVEST' and cash_account.account_type == 'INVEST':
+                        operation_type = 'PORTABILITY'
+                    # Se operation_type ainda é BUY e não há cash_account, pode ser TRANSFER_IN
+                    # (já mapeado pelo parser, mas garantir que não seja alterado)
+                    elif operation_type == 'TRANSFER_IN' and not cash_account:
+                        # Manter como TRANSFER_IN
+                        pass
                     
                     # Determinar total_value e income_value
                     is_income = trans_data.get('is_income_operation', False)

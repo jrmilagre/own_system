@@ -885,6 +885,8 @@ class AssetTransactionCategoryConfig(BaseModel):
         ('AMORTIZATION', 'Amortização'),
         ('INTEREST', 'Juros (Renda Fixa)'),
         ('REDEMPTION', 'Resgate (Renda Fixa)'),
+        ('TRANSFER_IN', 'Transferência Entrada'),
+        ('PORTABILITY', 'Portabilidade'),
     ]
     
     ASSET_TYPE_CHOICES = [
@@ -1086,6 +1088,8 @@ class AssetTransaction(BaseModel):
         ('AMORTIZATION', 'Amortização'),
         ('INTEREST', 'Juros (Renda Fixa)'),
         ('REDEMPTION', 'Resgate (Renda Fixa)'),
+        ('TRANSFER_IN', 'Transferência Entrada'),
+        ('PORTABILITY', 'Portabilidade'),
     ]
     
     # Relacionamentos
@@ -1216,6 +1220,14 @@ class AssetTransaction(BaseModel):
         elif self.operation_type in ['BONUS', 'SPLIT', 'GROUP', 'CAPITAL_INCREASE', 'RIGHTS_EXERCISE']:
             # Operações que não envolvem dinheiro
             self.total_value = 0
+        elif self.operation_type == 'TRANSFER_IN':
+            # Transferência de entrada: total_value = quantity * price
+            if abs(self.total_value) < 0.01:
+                self.total_value = calculated_base
+        elif self.operation_type == 'PORTABILITY':
+            # Portabilidade: total_value = quantity * price (valor transferido)
+            if abs(self.total_value) < 0.01:
+                self.total_value = calculated_base
         
         # Verificar se é uma atualização (já existe no banco)
         is_update = self.pk is not None
@@ -1256,6 +1268,86 @@ class AssetTransaction(BaseModel):
         # Verificar se deve criar transferência entre contas
         # Precisa ter cash_account e investment_account (self.account) e serem diferentes
         investment_account = self.account
+        
+        # Para rendimentos (DIVIDEND, JCP, INTEREST, AMORTIZATION), criar apenas crédito na conta cash
+        # Não precisa de débito na conta investimento (não é transferência, é recebimento)
+        if self.operation_type in ['DIVIDEND', 'JCP', 'INTEREST', 'AMORTIZATION']:
+            if cash_account is not None and self.income_value and self.income_value > 0:
+                # Criar apenas transação de crédito na conta cash
+                Transaction.objects.create(
+                    account=cash_account,
+                    beneficiary=None,
+                    subcategory=subcategory_override,
+                    transaction_type='CR',
+                    value=self.income_value,
+                    due_date=self.date,
+                    transaction_date=self.date,
+                    purchase_date=None,
+                    notes=f"Gerado automaticamente de: {self.asset.code} - {self.get_operation_type_display()}",
+                    asset_transaction=self
+                )
+                # Transação criada, não precisa criar Transaction adicional
+                return
+        
+        # Para TRANSFER_IN: criar apenas crédito na conta de investimento (sem saída de dinheiro)
+        if self.operation_type == 'TRANSFER_IN':
+            calculated_base = self.quantity * self.price
+            if calculated_base > 0:
+                Transaction.objects.create(
+                    account=investment_account,
+                    beneficiary=None,
+                    subcategory=subcategory_override,
+                    transaction_type='CR',
+                    value=calculated_base,
+                    due_date=self.date,
+                    transaction_date=self.date,
+                    purchase_date=None,
+                    notes=f"Gerado automaticamente de: {self.asset.code} - {self.get_operation_type_display()}",
+                    asset_transaction=self
+                )
+            return
+        
+        # Para PORTABILITY: criar transferência entre contas de investimento
+        if self.operation_type == 'PORTABILITY':
+            if cash_account is not None and cash_account.account_type == 'INVEST' and investment_account.account_type == 'INVEST':
+                calculated_base = self.quantity * self.price
+                if calculated_base > 0:
+                    transfer_group_id = uuid.uuid4()
+                    transfer_notes = f"Portabilidade gerada de: {self.asset.code} - {self.get_operation_type_display()}"
+                    
+                    # Débito na conta origem (investment_account)
+                    Transaction.objects.create(
+                        account=investment_account,
+                        beneficiary=None,
+                        subcategory=None,
+                        transaction_type='DB',
+                        value=calculated_base,
+                        due_date=self.date,
+                        transaction_date=self.date,
+                        purchase_date=None,
+                        notes=transfer_notes,
+                        transfer_group_id=transfer_group_id,
+                        is_transfer=True,
+                        asset_transaction=self
+                    )
+                    
+                    # Crédito na conta destino (cash_account)
+                    Transaction.objects.create(
+                        account=cash_account,
+                        beneficiary=None,
+                        subcategory=None,
+                        transaction_type='CR',
+                        value=calculated_base,
+                        due_date=self.date,
+                        transaction_date=self.date,
+                        purchase_date=None,
+                        notes=transfer_notes,
+                        transfer_group_id=transfer_group_id,
+                        is_transfer=True,
+                        asset_transaction=self
+                    )
+            return
+        
         should_create_transfer = (
             cash_account is not None and 
             investment_account is not None and 
@@ -1281,12 +1373,6 @@ class AssetTransaction(BaseModel):
                 # Venda: investment_account (origem, DB) → cash_account (destino, CR)
                 # Valor: calculated_base - fees (valor líquido recebido)
                 transfer_value = calculated_base - self.fees
-                source_account = investment_account
-                destination_account = cash_account
-            elif self.operation_type in ['DIVIDEND', 'JCP', 'INTEREST', 'AMORTIZATION']:
-                # Recebimentos: investment_account (origem, DB) → cash_account (destino, CR)
-                # Valor: income_value
-                transfer_value = self.income_value
                 source_account = investment_account
                 destination_account = cash_account
             else:
@@ -1387,6 +1473,12 @@ class AssetTransaction(BaseModel):
             return calculated_base - self.fees
         elif self.operation_type in ['DIVIDEND', 'JCP', 'INTEREST', 'AMORTIZATION']:
             return self.income_value  # Entrada de dinheiro
+        elif self.operation_type == 'TRANSFER_IN':
+            # Transferência de entrada: aumenta valor da carteira (entrada positiva)
+            return calculated_base
+        elif self.operation_type == 'PORTABILITY':
+            # Portabilidade: não afeta fluxo de caixa líquido (apenas transferência entre contas)
+            return 0
         return 0
 
 

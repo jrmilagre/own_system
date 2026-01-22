@@ -696,11 +696,23 @@ class AssetTransactionForm(forms.ModelForm):
         # Renomear label do campo account
         self.fields['account'].label = 'Conta Investimento'
         
-        # Filtrar contas do tipo BANK, CASH, CREDCARD para o campo cash_account (não INVEST)
-        # Excluir contas de investimento, pois essas são para o campo account
-        self.fields['cash_account'].queryset = Account.objects.filter(
-            account_type__in=['BANK', 'CASH', 'CREDCARD']
-        ).order_by('name')
+        # Filtrar contas para o campo cash_account
+        # Para PORTABILITY: permitir contas de investimento (portabilidade entre contas INVEST)
+        # Para outros tipos: apenas BANK, CASH, CREDCARD (não INVEST)
+        operation_type = self.instance.operation_type if self.instance and self.instance.pk else None
+        if not operation_type and 'operation_type' in self.data:
+            operation_type = self.data.get('operation_type')
+        
+        if operation_type == 'PORTABILITY':
+            # Para portabilidade, permitir contas de investimento
+            self.fields['cash_account'].queryset = Account.objects.filter(
+                account_type='INVEST'
+            ).order_by('name')
+        else:
+            # Para outros tipos, excluir contas de investimento
+            self.fields['cash_account'].queryset = Account.objects.filter(
+                account_type__in=['BANK', 'CASH', 'CREDCARD']
+            ).order_by('name')
         
         # Se for edição, tentar obter cash_account das Transactions relacionadas
         if self.instance and self.instance.pk:
@@ -744,6 +756,33 @@ class AssetTransactionForm(forms.ModelForm):
             if income_value <= 0:
                 raise forms.ValidationError({
                     'income_value': 'Valor de rendimento deve ser maior que zero para este tipo de operação.'
+                })
+        elif operation_type == 'TRANSFER_IN':
+            if quantity <= 0:
+                raise forms.ValidationError({
+                    'quantity': 'Quantidade deve ser maior que zero para transferência de entrada.'
+                })
+            if price <= 0:
+                raise forms.ValidationError({
+                    'price': 'Preço deve ser maior que zero para transferência de entrada.'
+                })
+        elif operation_type == 'PORTABILITY':
+            if quantity <= 0:
+                raise forms.ValidationError({
+                    'quantity': 'Quantidade deve ser maior que zero para portabilidade.'
+                })
+            if price <= 0:
+                raise forms.ValidationError({
+                    'price': 'Preço deve ser maior que zero para portabilidade.'
+                })
+            cash_account = cleaned_data.get('cash_account')
+            if not cash_account:
+                raise forms.ValidationError({
+                    'cash_account': 'Conta de destino é obrigatória para portabilidade.'
+                })
+            if cash_account.account_type != 'INVEST':
+                raise forms.ValidationError({
+                    'cash_account': 'A conta de destino deve ser uma conta de investimento para portabilidade.'
                 })
 
         return cleaned_data
@@ -853,6 +892,8 @@ class CashFlowCalculationRuleForm(forms.Form):
         ('AMORTIZATION', 'Amortização'),
         ('REDEMPTION', 'Resgate (Renda Fixa)'),
         ('SUB', 'Subscrição'),
+        ('TRANSFER_IN', 'Transferência Entrada'),
+        ('PORTABILITY', 'Portabilidade'),
     ]
     
     ASSET_TYPE_CHOICES = [
