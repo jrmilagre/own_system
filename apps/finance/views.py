@@ -2664,6 +2664,11 @@ def asset_transaction_create(request):
     if request.method == 'POST':
         form = AssetTransactionForm(request.POST)
         if form.is_valid():
+            # Capturar cash_account do formulário
+            cash_account = form.cleaned_data.get('cash_account')
+            # Definir cash_account temporariamente para uso no save
+            if cash_account:
+                form.instance._cash_account = cash_account
             form.save()
             messages.success(request, 'Transação de ativo criada com sucesso!')
             return redirect('finance:asset_transaction_list')
@@ -2678,6 +2683,11 @@ def asset_transaction_update(request, pk):
     if request.method == 'POST':
         form = AssetTransactionForm(request.POST, instance=transaction)
         if form.is_valid():
+            # Capturar cash_account do formulário
+            cash_account = form.cleaned_data.get('cash_account')
+            # Definir cash_account temporariamente para uso no save
+            if cash_account:
+                form.instance._cash_account = cash_account
             form.save()
             messages.success(request, 'Transação de ativo atualizada com sucesso!')
             return redirect('finance:asset_transaction_list')

@@ -665,6 +665,14 @@ class AssetForm(forms.ModelForm):
 
 
 class AssetTransactionForm(forms.ModelForm):
+    cash_account = forms.ModelChoiceField(
+        queryset=Account.objects.none(),
+        required=False,
+        label='Conta Cash',
+        empty_label='Selecione uma conta',
+        widget=forms.Select(attrs={'class': 'form-select'})
+    )
+    
     class Meta:
         model = AssetTransaction
         fields = ['asset', 'account', 'operation_type', 'date', 'quantity', 'price', 'total_value', 'fees', 'income_value', 'notes']
@@ -685,6 +693,29 @@ class AssetTransactionForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         # Filtrar contas do tipo INVEST para o campo account e ordenar
         self.fields['account'].queryset = Account.objects.filter(account_type='INVEST').order_by('name')
+        # Renomear label do campo account
+        self.fields['account'].label = 'Conta Investimento'
+        
+        # Filtrar contas do tipo BANK, CASH, CREDCARD para o campo cash_account (não INVEST)
+        # Excluir contas de investimento, pois essas são para o campo account
+        self.fields['cash_account'].queryset = Account.objects.filter(
+            account_type__in=['BANK', 'CASH', 'CREDCARD']
+        ).order_by('name')
+        
+        # Se for edição, tentar obter cash_account das Transactions relacionadas
+        if self.instance and self.instance.pk:
+            from .models import Transaction
+            # Buscar Transaction de débito relacionada que não seja da conta de investimento
+            related_transactions = Transaction.objects.filter(
+                asset_transaction=self.instance, 
+                is_transfer=True
+            )
+            if related_transactions.exists():
+                # Pegar a primeira transaction de débito que não seja da conta de investimento
+                for trans in related_transactions.filter(transaction_type='DB'):
+                    if trans.account != self.instance.account:
+                        self.fields['cash_account'].initial = trans.account
+                        break
 
     def clean(self):
         cleaned_data = super().clean()

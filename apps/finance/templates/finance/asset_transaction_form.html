@@ -33,10 +33,10 @@
                     {% endif %}
                 </div>
 
-                <!-- Conta -->
+                <!-- Conta Investimento -->
                 <div class="col-md-6">
                     <label for="{{ form.account.id_for_label }}" class="form-label">
-                        <i class="fas fa-university me-1 text-info"></i>Conta <span class="text-danger">*</span>
+                        <i class="fas fa-university me-1 text-info"></i>Conta Investimento <span class="text-danger">*</span>
                     </label>
                     <div class="input-group">
                         {{ form.account }}
@@ -46,6 +46,22 @@
                     </div>
                     {% if form.account.errors %}
                         <div class="text-danger small mt-1">{{ form.account.errors }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Conta Cash -->
+                <div id="cash-account-row" class="col-md-6">
+                    <label for="{{ form.cash_account.id_for_label }}" class="form-label">
+                        <i class="fas fa-wallet me-1 text-success"></i>Conta Cash
+                    </label>
+                    <div class="input-group">
+                        {{ form.cash_account }}
+                        <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#quickCreateAccountModal" title="Criar nova conta">
+                            <i class="fas fa-plus"></i>
+                        </button>
+                    </div>
+                    {% if form.cash_account.errors %}
+                        <div class="text-danger small mt-1">{{ form.cash_account.errors }}</div>
                     {% endif %}
                 </div>
 
@@ -323,6 +339,46 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
+    // Lógica de mostrar/ocultar campo Conta Cash baseado no tipo de operação
+    const operationTypeSelect = document.getElementById('id_operation_type');
+    const cashAccountRow = document.getElementById('cash-account-row');
+    
+    // Operações que afetam fluxo de caixa e precisam de Conta Cash
+    const operationsWithCashAccount = ['BUY', 'SELL', 'DIVIDEND', 'JCP', 'INTEREST', 'AMORTIZATION', 'REDEMPTION', 'SUB'];
+    
+    function toggleCashAccountField() {
+        if (operationTypeSelect && cashAccountRow) {
+            const selectedOperation = operationTypeSelect.value;
+            if (selectedOperation && operationsWithCashAccount.includes(selectedOperation)) {
+                cashAccountRow.style.display = 'block';
+            } else {
+                // Ocultar apenas se não for uma operação que precisa de cash account
+                // Mas manter visível se não houver seleção (para criação)
+                if (selectedOperation && !operationsWithCashAccount.includes(selectedOperation)) {
+                    cashAccountRow.style.display = 'none';
+                    // Limpar o valor quando ocultar
+                    const cashAccountSelect = document.getElementById('id_cash_account');
+                    if (cashAccountSelect) {
+                        cashAccountSelect.value = '';
+                    }
+                } else if (!selectedOperation) {
+                    // Se não há seleção, mostrar o campo (para criação)
+                    cashAccountRow.style.display = 'block';
+                }
+            }
+        }
+    }
+    
+    // Executar na inicialização
+    toggleCashAccountField();
+    
+    // Adicionar listener para mudanças no tipo de operação
+    if (operationTypeSelect) {
+        operationTypeSelect.addEventListener('change', toggleCashAccountField);
+        // Também adicionar listener para eventos de input (caso o valor seja alterado programaticamente)
+        operationTypeSelect.addEventListener('input', toggleCashAccountField);
+    }
+    
     // Lógica de cálculo de valores
     const quantityInput = document.getElementById('id_quantity');
     const priceInput = document.getElementById('id_price');
@@ -455,6 +511,22 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     // Quick Create Account
+    // Detectar qual botão abriu o modal para adicionar ao campo correto
+    let targetAccountField = 'id_account'; // Default
+    
+    // Adicionar listeners aos botões que abrem o modal
+    document.querySelectorAll('[data-bs-target="#quickCreateAccountModal"]').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            // Determinar qual campo deve receber a nova conta
+            const parentRow = this.closest('.col-md-6');
+            if (parentRow && parentRow.querySelector('#id_cash_account')) {
+                targetAccountField = 'id_cash_account';
+            } else {
+                targetAccountField = 'id_account';
+            }
+        });
+    });
+    
     document.getElementById('saveAccountBtn')?.addEventListener('click', function() {
         const form = document.getElementById('quickCreateAccountForm');
         const formData = new FormData(form);
@@ -475,12 +547,20 @@ document.addEventListener('DOMContentLoaded', function() {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                addOptionToSelect('id_account', data.id, data.name);
+                // Adicionar ao campo apropriado
+                addOptionToSelect(targetAccountField, data.id, data.name);
                 const modal = bootstrap.Modal.getInstance(document.getElementById('quickCreateAccountModal'));
                 modal.hide();
                 form.reset();
-                // Resetar o tipo para INVEST
-                document.getElementById('account_type').value = 'INVEST';
+                // Resetar o tipo baseado no campo alvo
+                const accountTypeSelect = document.getElementById('account_type');
+                if (accountTypeSelect) {
+                    if (targetAccountField === 'id_cash_account') {
+                        accountTypeSelect.value = 'BANK'; // Default para cash account
+                    } else {
+                        accountTypeSelect.value = 'INVEST'; // Default para investment account
+                    }
+                }
             } else {
                 errorMsg.textContent = Object.values(data.errors || {}).flat().join(', ') || 'Erro ao criar conta';
                 errorMsg.style.display = 'block';
