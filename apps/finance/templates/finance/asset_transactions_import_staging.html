@@ -135,9 +135,6 @@
                         <th class="sortable" data-sort="cash_account" style="cursor: pointer;">
                             Conta Cash <i class="fas fa-sort sort-icon" style="opacity: 0.3;"></i>
                         </th>
-                        <th class="sortable" data-sort="category" style="cursor: pointer;">
-                            Subcategoria <i class="fas fa-sort sort-icon" style="opacity: 0.3;"></i>
-                        </th>
                         <th class="sortable" data-sort="notes" style="cursor: pointer;">
                             Memo <i class="fas fa-sort sort-icon" style="opacity: 0.3;"></i>
                         </th>
@@ -181,6 +178,8 @@
                                 <option value="INTEREST" {% if transaction.operation_type == 'INTEREST' %}selected{% endif %}>Juros</option>
                                 <option value="BONUS" {% if transaction.operation_type == 'BONUS' %}selected{% endif %}>Bonificação</option>
                                 <option value="REDEMPTION" {% if transaction.operation_type == 'REDEMPTION' %}selected{% endif %}>Resgate</option>
+                                <option value="TRANSFER_IN" {% if transaction.operation_type == 'TRANSFER_IN' %}selected{% endif %}>Transferência Entrada</option>
+                                <option value="PORTABILITY" {% if transaction.operation_type == 'PORTABILITY' %}selected{% endif %}>Portabilidade</option>
                             </select>
                         </td>
                         <td>
@@ -206,13 +205,6 @@
                                    data-field="cash_account" 
                                    value="{{ transaction.cash_account|default:'' }}" 
                                    style="min-width: 150px;">
-                        </td>
-                        <td>
-                            <input type="text" class="form-control form-control-sm editable-field" 
-                                   data-field="category" 
-                                   value="{{ transaction.category|default:'' }}" 
-                                   style="min-width: 200px;"
-                                   placeholder="Categoria : Subcategoria">
                         </td>
                         <td>
                             <input type="text" class="form-control form-control-sm editable-field" 
@@ -246,7 +238,7 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="13" class="text-center text-muted">
+                        <td colspan="12" class="text-center text-muted">
                             Nenhuma transação encontrada.
                         </td>
                     </tr>

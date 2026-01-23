@@ -6198,34 +6198,9 @@ def asset_transactions_import_staging(request):
             .values_list('import_hash', flat=True)
         )
     
-    # Adicionar campo is_imported a cada transação e mapear subcategory_id
+    # Adicionar campo is_imported a cada transação
     for trans in transactions_data:
         trans['is_imported'] = trans.get('import_hash') in imported_hashes_set
-        
-        # Mapear subcategory_id se houver categoria
-        if trans.get('category') and not trans.get('subcategory_id'):
-            category_str = trans.get('category', '')
-            try:
-                # Formato esperado: "Categoria : Subcategoria"
-                if ' : ' in category_str:
-                    parts = category_str.split(' : ', 1)
-                    category_name = parts[0].strip()
-                    subcategory_name = parts[1].strip()
-                    subcategory = Subcategory.objects.filter(
-                        category__category=category_name,
-                        subcategory=subcategory_name
-                    ).first()
-                    if subcategory:
-                        trans['subcategory_id'] = subcategory.id
-                else:
-                    # Tentar buscar apenas pela subcategoria
-                    subcategory = Subcategory.objects.filter(subcategory=category_str).first()
-                    if subcategory:
-                        trans['subcategory_id'] = subcategory.id
-                        # Atualizar formato da categoria
-                        trans['category'] = f"{subcategory.category.category} : {subcategory.subcategory}"
-            except Exception:
-                pass  # Se não encontrar, deixar sem subcategory_id
     
     # Aplicar filtros (usar transactions_data que tem objetos date/Decimal para comparação)
     filter_form = AssetTransactionsStagingFilterForm(request.GET)
@@ -6369,48 +6344,8 @@ def asset_transactions_import_edit_item(request):
                 return JsonResponse({'success': False, 'error': 'Valor inválido'}, status=400)
         elif field in ['investment_account', 'asset_code', 'asset_name', 'notes', 'cash_account']:
             trans[field] = str(value)
-        elif field == 'subcategory_id':
-            # Campo subcategory_id: salvar o ID da subcategoria
-            try:
-                subcategory_id = int(value) if value else None
-                if subcategory_id:
-                    # Validar que a subcategoria existe
-                    subcategory = Subcategory.objects.get(pk=subcategory_id)
-                    # Salvar como string no formato "Categoria : Subcategoria" para compatibilidade
-                    trans['category'] = f"{subcategory.category.category} : {subcategory.subcategory}"
-                    # Também salvar o ID para facilitar busca
-                    trans['subcategory_id'] = subcategory_id
-                else:
-                    trans['category'] = ''
-                    trans['subcategory_id'] = None
-            except (ValueError, Subcategory.DoesNotExist):
-                return JsonResponse({'success': False, 'error': 'Subcategoria inválida'}, status=400)
-        elif field == 'category':
-            # Manter compatibilidade: se ainda vier como category (string), converter para subcategory_id se possível
-            trans[field] = str(value)
-            # Tentar encontrar subcategoria pelo texto
-            if value:
-                try:
-                    # Formato esperado: "Categoria : Subcategoria"
-                    if ' : ' in value:
-                        parts = value.split(' : ', 1)
-                        category_name = parts[0].strip()
-                        subcategory_name = parts[1].strip()
-                        subcategory = Subcategory.objects.get(
-                            category__category=category_name,
-                            subcategory=subcategory_name
-                        )
-                        trans['subcategory_id'] = subcategory.id
-                    else:
-                        # Tentar buscar apenas pela subcategoria
-                        subcategory = Subcategory.objects.filter(subcategory=value).first()
-                        if subcategory:
-                            trans['subcategory_id'] = subcategory.id
-                            trans['category'] = f"{subcategory.category.category} : {subcategory.subcategory}"
-                except (Subcategory.DoesNotExist, ValueError):
-                    trans['subcategory_id'] = None
         elif field == 'operation_type':
-            valid_types = ['BUY', 'SELL', 'DIVIDEND', 'JCP', 'INTEREST', 'BONUS', 'REDEMPTION']
+            valid_types = ['BUY', 'SELL', 'DIVIDEND', 'JCP', 'INTEREST', 'BONUS', 'REDEMPTION', 'TRANSFER_IN', 'PORTABILITY']
             if value not in valid_types:
                 return JsonResponse({'success': False, 'error': 'Tipo de operação inválido'}, status=400)
             trans['operation_type'] = value
@@ -6799,7 +6734,6 @@ def asset_transactions_import_execute(request):
         stats = {
             'created_accounts': 0,
             'created_assets': 0,
-            'created_subcategories': 0,
             'created_transactions': 0,
             'errors': [],
             'duplicates': 0,
@@ -6873,30 +6807,6 @@ def asset_transactions_import_execute(request):
                     if created:
                         stats['created_assets'] += 1
                     
-                    # Criar/obter Subcategory (se houver categoria)
-                    subcategory = None
-                    if trans_data.get('category'):
-                        category_str = trans_data['category']
-                        # Separar categoria e subcategoria
-                        if ' : ' in category_str:
-                            parts = category_str.split(' : ', 1)
-                            category_name = parts[0].strip()
-                            subcategory_name = parts[1].strip()
-                        else:
-                            category_name = category_str.strip()
-                            subcategory_name = category_name
-                        
-                        # Buscar ou criar categoria
-                        category, _ = Category.objects.get_or_create(category=category_name)
-                        
-                        # Buscar ou criar subcategoria
-                        subcategory, created = Subcategory.objects.get_or_create(
-                            category=category,
-                            subcategory=subcategory_name
-                        )
-                        if created:
-                            stats['created_subcategories'] += 1
-                    
                     # Determinar valores
                     quantity = trans_data.get('quantity', Decimal('0'))
                     price = trans_data.get('price', Decimal('0'))
@@ -6937,11 +6847,9 @@ def asset_transactions_import_execute(request):
                         import_hash=trans_data.get('import_hash'),
                     )
                     
-                    # Definir cash_account e subcategory temporariamente para uso no save
+                    # Definir cash_account temporariamente para uso no save
                     if cash_account:
                         asset_transaction._cash_account = cash_account
-                    if subcategory:
-                        asset_transaction._subcategory_override = subcategory
                     
                     # Salvar para criar Transactions relacionadas
                     asset_transaction.save()
@@ -6958,7 +6866,6 @@ def asset_transactions_import_execute(request):
             f'{stats["created_transactions"]} transações criadas, '
             f'{stats["created_accounts"]} contas criadas, '
             f'{stats["created_assets"]} ativos criados, '
-            f'{stats["created_subcategories"]} subcategorias criadas, '
             f'{stats["duplicates"]} duplicatas ignoradas.'
         )
         if stats['errors']:

@@ -167,7 +167,18 @@ class AssetTransactionsParser:
         category_lower = category_str.lower() if category_str else ''
         investment_lower = investment_str.lower() if investment_str else ''
         
-        if 'comprar' in activity_lower or 'compra' in activity_lower:
+        # Verificar padrões mais específicos primeiro
+        if 'adicionar' in activity_lower and 'ações' in activity_lower:
+            # Transferência de ativos de fonte externa para conta de investimento
+            return 'TRANSFER_IN'
+        elif 'portabilidade' in activity_lower or 'portar' in activity_lower:
+            # Portabilidade entre contas de investimento
+            return 'PORTABILITY'
+        elif 'bonificação' in activity_lower or 'bonus' in activity_lower:
+            return 'BONUS'
+        elif 'resgate' in activity_lower:
+            return 'REDEMPTION'
+        elif 'comprar' in activity_lower or 'compra' in activity_lower:
             return 'BUY'
         elif 'vender' in activity_lower or 'venda' in activity_lower:
             return 'SELL'
@@ -179,16 +190,6 @@ class AssetTransactionsParser:
                 return 'JCP'
             else:
                 return 'INTEREST'
-        elif 'adicionar' in activity_lower and 'ações' in activity_lower:
-            # Transferência de ativos de fonte externa para conta de investimento
-            return 'TRANSFER_IN'
-        elif 'portabilidade' in activity_lower or 'portar' in activity_lower:
-            # Portabilidade entre contas de investimento
-            return 'PORTABILITY'
-        elif 'bonificação' in activity_lower or 'bonus' in activity_lower:
-            return 'BONUS'
-        elif 'resgate' in activity_lower:
-            return 'REDEMPTION'
         elif 'rendimento' in activity_lower or 'outros rendimentos' in activity_lower:
             # Rendimentos podem ser INTEREST (renda fixa) ou DIVIDEND (ações/FIIs)
             # Verificar categoria e investimento para determinar o tipo
