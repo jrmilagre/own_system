@@ -979,6 +979,11 @@ def transaction_update(request, pk):
                     )
                 
                 messages.success(request, 'Transação convertida em transferência com sucesso!')
+                # Verificar se há parâmetro 'next' para redirecionar de volta ao extrato (GET ou POST)
+                next_url = request.POST.get('next') or request.GET.get('next')
+                if next_url:
+                    return redirect(next_url)
+                return redirect('finance:transaction_list')
             elif is_converting_to_normal:
                 # Converter transferência para transação normal
                 transfer_pair = transaction.get_transfer_pair()
@@ -1016,6 +1021,11 @@ def transaction_update(request, pk):
                     )
                 
                 messages.success(request, 'Transferência convertida em transação normal com sucesso!')
+                # Verificar se há parâmetro 'next' para redirecionar de volta ao extrato (GET ou POST)
+                next_url = request.POST.get('next') or request.GET.get('next')
+                if next_url:
+                    return redirect(next_url)
+                return redirect('finance:transaction_list')
             elif transaction.is_transfer:
                 # Atualizar ambas as transações da transferência
                 transfer_pair = transaction.get_transfer_pair()
@@ -1059,6 +1069,11 @@ def transaction_update(request, pk):
                         credit_transaction.save()
                     
                     messages.success(request, 'Transferência atualizada com sucesso!')
+                    # Verificar se há parâmetro 'next' para redirecionar de volta ao extrato (GET ou POST)
+                    next_url = request.POST.get('next') or request.GET.get('next')
+                    if next_url:
+                        return redirect(next_url)
+                    return redirect('finance:transaction_list')
                 else:
                     messages.error(request, 'Transação vinculada não encontrada.')
             else:
@@ -1071,6 +1086,10 @@ def transaction_update(request, pk):
                 transaction.save()
                 messages.success(request, 'Transação atualizada com sucesso!')
             
+            # Verificar se há parâmetro 'next' para redirecionar de volta ao extrato (GET ou POST)
+            next_url = request.POST.get('next') or request.GET.get('next')
+            if next_url:
+                return redirect(next_url)
             return redirect('finance:transaction_list')
         else:
             # Formulário inválido - mostrar erros
@@ -1106,7 +1125,8 @@ def transaction_update(request, pk):
             form = TransactionForm(instance=transaction)
     
     categories = Category.objects.all().order_by('category')
-    return render(request, 'finance/transaction_form.html', {'form': form, 'transaction': transaction, 'categories': categories})
+    next_url = request.GET.get('next', '')
+    return render(request, 'finance/transaction_form.html', {'form': form, 'transaction': transaction, 'categories': categories, 'next_url': next_url})
 
 
 def transaction_delete(request, pk):
@@ -2690,10 +2710,15 @@ def asset_transaction_update(request, pk):
                 form.instance._cash_account = cash_account
             form.save()
             messages.success(request, 'Transação de ativo atualizada com sucesso!')
+            # Verificar se há parâmetro 'next' para redirecionar de volta ao extrato (GET ou POST)
+            next_url = request.POST.get('next') or request.GET.get('next')
+            if next_url:
+                return redirect(next_url)
             return redirect('finance:asset_transaction_list')
     else:
         form = AssetTransactionForm(instance=transaction)
-    return render(request, 'finance/asset_transaction_form.html', {'form': form, 'transaction': transaction})
+    next_url = request.GET.get('next', '')
+    return render(request, 'finance/asset_transaction_form.html', {'form': form, 'transaction': transaction, 'next_url': next_url})
 
 
 def asset_transaction_delete(request, pk):
