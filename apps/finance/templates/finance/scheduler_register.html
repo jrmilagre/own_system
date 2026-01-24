@@ -1,91 +1,591 @@
 {% extends 'finance/base.html' %}
 
-{% block title %}Registrar Transação{% endblock %}
+{% block section_name %}Registrar Transação do Agendamento{% endblock %}
+
+{% block title %}Registrar Transação do Agendamento{% endblock %}
 
 {% block content %}
-<h1>Registrar Transação do Agendamento</h1>
-<p>Edite os campos abaixo antes de registrar a transação:</p>
+<div class="card shadow-sm border-0">
+    <div class="card-header bg-light">
+        <h5 class="mb-0">
+            <i class="fas fa-calendar-check me-2"></i>
+            Registrar Transação do Agendamento
+        </h5>
+    </div>
+    <div class="card-body" style="background-color: #f8f9fa;">
+        {% if next_due_date %}
+        <div class="alert alert-info mb-3">
+            <i class="fas fa-info-circle me-2"></i>
+            <strong>Próxima data (após registro):</strong> {{ next_due_date|date:"d/m/Y" }}
+        </div>
+        {% endif %}
+        
+        <p class="text-muted mb-4">Edite os campos abaixo antes de registrar a transação:</p>
+        
+        <form method="post" class="needs-validation" novalidate>
+            {% csrf_token %}
+            
+            <div class="row g-3">
+                <!-- Conta -->
+                <div class="col-md-6">
+                    <label for="{{ form.account.id_for_label }}" class="form-label">
+                        <i class="fas fa-university me-1 text-primary"></i>Conta
+                    </label>
+                    <div class="input-group">
+                        {{ form.account }}
+                        <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#quickCreateAccountModal" title="Criar nova conta">
+                            <i class="fas fa-plus"></i>
+                        </button>
+                    </div>
+                    {% if form.account.errors %}
+                        <div class="text-danger small mt-1">{{ form.account.errors }}</div>
+                    {% endif %}
+                </div>
 
-{% if next_due_date %}
-<p><strong>Próxima data (após registro):</strong> {{ next_due_date|date:"d-m-Y" }}</p>
-{% endif %}
+                <!-- Beneficiário -->
+                <div class="col-md-6">
+                    <label for="{{ form.beneficiary.id_for_label }}" class="form-label">
+                        <i class="fas fa-user me-1 text-info"></i>Beneficiário
+                    </label>
+                    <div class="input-group">
+                        {{ form.beneficiary }}
+                        <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#quickCreateBeneficiaryModal" title="Criar novo beneficiário">
+                            <i class="fas fa-plus"></i>
+                        </button>
+                    </div>
+                    {% if form.beneficiary.errors %}
+                        <div class="text-danger small mt-1">{{ form.beneficiary.errors }}</div>
+                    {% endif %}
+                </div>
 
-<form method="post">
-    {% csrf_token %}
-    <table>
-        <tr>
-            <td><label for="{{ form.account.id_for_label }}">Conta:</label></td>
-            <td>{{ form.account }}</td>
-            {% if form.account.errors %}
-            <td>{{ form.account.errors }}</td>
-            {% endif %}
-        </tr>
-        <tr>
-            <td><label for="{{ form.beneficiary.id_for_label }}">Beneficiário:</label></td>
-            <td>{{ form.beneficiary }}</td>
-            {% if form.beneficiary.errors %}
-            <td>{{ form.beneficiary.errors }}</td>
-            {% endif %}
-        </tr>
-        <tr>
-            <td><label for="{{ form.subcategory.id_for_label }}">Subcategoria:</label></td>
-            <td>{{ form.subcategory }}</td>
-            {% if form.subcategory.errors %}
-            <td>{{ form.subcategory.errors }}</td>
-            {% endif %}
-        </tr>
-        <tr>
-            <td><label for="{{ form.transaction_type.id_for_label }}">Tipo de transação:</label></td>
-            <td>{{ form.transaction_type }}</td>
-            {% if form.transaction_type.errors %}
-            <td>{{ form.transaction_type.errors }}</td>
-            {% endif %}
-        </tr>
-        <tr>
-            <td><label for="{{ form.value.id_for_label }}">Valor:</label></td>
-            <td>{{ form.value }}</td>
-            {% if form.value.errors %}
-            <td>{{ form.value.errors }}</td>
-            {% endif %}
-        </tr>
-        <tr>
-            <td><label for="{{ form.due_date.id_for_label }}">Data do vencimento:</label></td>
-            <td>{{ form.due_date }}</td>
-            {% if form.due_date.errors %}
-            <td>{{ form.due_date.errors }}</td>
-            {% endif %}
-        </tr>
-        <tr>
-            <td><label for="{{ form.transaction_date.id_for_label }}">Data da transação (pagamento/recebimento):</label></td>
-            <td>{{ form.transaction_date }}</td>
-            {% if form.transaction_date.errors %}
-            <td>{{ form.transaction_date.errors }}</td>
-            {% endif %}
-        </tr>
-        <tr>
-            <td><label for="{{ form.purchase_date.id_for_label }}">Data da compra:</label></td>
-            <td>{{ form.purchase_date }}</td>
-            {% if form.purchase_date.errors %}
-            <td>{{ form.purchase_date.errors }}</td>
-            {% endif %}
-        </tr>
-        <tr>
-            <td><label for="{{ form.notes.id_for_label }}">Anotações:</label></td>
-            <td>{{ form.notes }}</td>
-            {% if form.notes.errors %}
-            <td>{{ form.notes.errors }}</td>
-            {% endif %}
-        </tr>
-    </table>
-    <button type="submit">Registrar Transação</button>
-    <a href="{% url 'finance:scheduler_list' %}">Cancelar</a>
-</form>
+                <!-- Subcategoria -->
+                <div class="col-md-6">
+                    <label for="{{ form.subcategory.id_for_label }}" class="form-label">
+                        <i class="fas fa-tags me-1 text-warning"></i>Subcategoria
+                    </label>
+                    <div class="input-group">
+                        {{ form.subcategory }}
+                        <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#quickCreateSubcategoryModal" title="Criar nova subcategoria">
+                            <i class="fas fa-plus"></i>
+                        </button>
+                    </div>
+                    {% if form.subcategory.errors %}
+                        <div class="text-danger small mt-1">{{ form.subcategory.errors }}</div>
+                    {% endif %}
+                </div>
 
+                <!-- Tipo de Transação -->
+                <div class="col-md-6">
+                    <label for="{{ form.transaction_type.id_for_label }}" class="form-label">
+                        <i class="fas fa-arrows-alt-v me-1 text-secondary"></i>Tipo de transação
+                    </label>
+                    {{ form.transaction_type }}
+                    {% if form.transaction_type.errors %}
+                        <div class="text-danger small mt-1">{{ form.transaction_type.errors }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Valor -->
+                <div class="col-md-6">
+                    <label for="{{ form.value.id_for_label }}" class="form-label">
+                        <i class="fas fa-money-bill-wave me-1 text-success"></i>Valor <span class="text-danger">*</span>
+                    </label>
+                    <div class="input-group">
+                        <span class="input-group-text">R$</span>
+                        {{ form.value }}
+                    </div>
+                    {% if form.value.errors %}
+                        <div class="text-danger small mt-1">{{ form.value.errors }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Data do Vencimento -->
+                <div class="col-md-4">
+                    <label for="{{ form.due_date.id_for_label }}" class="form-label">
+                        <i class="fas fa-calendar-alt me-1 text-primary"></i>Data do vencimento
+                    </label>
+                    {{ form.due_date }}
+                    {% if form.due_date.errors %}
+                        <div class="text-danger small mt-1">{{ form.due_date.errors }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Data da Transação -->
+                <div class="col-md-4">
+                    <label for="{{ form.transaction_date.id_for_label }}" class="form-label">
+                        <i class="fas fa-calendar-check me-1 text-info"></i>Data da transação
+                    </label>
+                    {{ form.transaction_date }}
+                    {% if form.transaction_date.errors %}
+                        <div class="text-danger small mt-1">{{ form.transaction_date.errors }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Data da Compra -->
+                <div class="col-md-4">
+                    <label for="{{ form.purchase_date.id_for_label }}" class="form-label">
+                        <i class="fas fa-shopping-cart me-1 text-warning"></i>Data da compra
+                    </label>
+                    {{ form.purchase_date }}
+                    {% if form.purchase_date.errors %}
+                        <div class="text-danger small mt-1">{{ form.purchase_date.errors }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Anotações -->
+                <div class="col-12">
+                    <label for="{{ form.notes.id_for_label }}" class="form-label">
+                        <i class="fas fa-sticky-note me-1 text-muted"></i>Anotações
+                    </label>
+                    {{ form.notes }}
+                    {% if form.notes.errors %}
+                        <div class="text-danger small mt-1">{{ form.notes.errors }}</div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Informações de Orçamento e Gastos -->
+            {% if budget_info %}
+            <div class="card shadow-sm border-0 mb-4 mt-4">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">
+                        <i class="fas fa-chart-pie me-2"></i>
+                        Informações de Orçamento e Gastos
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <!-- Tabs para Subcategoria e Categoria -->
+                    <ul class="nav nav-tabs mb-3" id="budgetInfoTabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="subcategory-tab" data-bs-toggle="tab" data-bs-target="#subcategory-info" type="button" role="tab">
+                                <i class="fas fa-tags me-1"></i>Por Subcategoria
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="category-tab" data-bs-toggle="tab" data-bs-target="#category-info" type="button" role="tab">
+                                <i class="fas fa-folder me-1"></i>Por Categoria
+                            </button>
+                        </li>
+                    </ul>
+                    
+                    <div class="tab-content" id="budgetInfoTabContent">
+                        <!-- Tab Subcategoria -->
+                        <div class="tab-pane fade show active" id="subcategory-info" role="tabpanel">
+                            <div class="table-responsive">
+                                <table class="table table-bordered table-sm">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Período</th>
+                                        <th class="text-end">Gasto (Antes)</th>
+                                        <th class="text-end">Gasto (Depois) / Projeção</th>
+                                        <th class="text-end">Orçado</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><strong>Acumulado</strong></td>
+                                        <td id="subcategory-accumulated-spent-before" class="text-end">R$ {{ budget_info.subcategory.accumulated.spent_before|floatformat:2 }}</td>
+                                        <td id="subcategory-accumulated-spent-after" class="fw-bold text-end">R$ {{ budget_info.subcategory.accumulated.spent_after|floatformat:2 }}</td>
+                                        <td class="text-end">R$ {{ budget_info.subcategory.accumulated.budgeted|floatformat:2 }}</td>
+                                        <td id="subcategory-accumulated-status">
+                                            {% if budget_info.subcategory.accumulated.budgeted > 0 %}
+                                                {% if budget_info.subcategory.accumulated.spent_after|add:"0" <= budget_info.subcategory.accumulated.budgeted|add:"0" %}
+                                                    <span class="badge bg-success">Dentro do orçamento</span>
+                                                {% else %}
+                                                    <span class="badge bg-danger">Acima do orçamento</span>
+                                                {% endif %}
+                                            {% else %}
+                                                <span class="badge bg-secondary">Sem orçamento</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Ano</strong></td>
+                                        <td id="subcategory-year-spent-before" class="text-end">R$ {{ budget_info.subcategory.year.spent_before|floatformat:2 }}</td>
+                                        <td id="subcategory-year-projection" class="fw-bold text-end">R$ {{ budget_info.subcategory.year.projection|floatformat:2 }}</td>
+                                        <td class="text-end">R$ {{ budget_info.subcategory.year.budgeted|floatformat:2 }}</td>
+                                        <td id="subcategory-year-status">
+                                            {% if budget_info.subcategory.year.budgeted > 0 %}
+                                                {% if budget_info.subcategory.year.projection|add:"0" <= budget_info.subcategory.year.budgeted|add:"0" %}
+                                                    <span class="badge bg-success">Dentro do orçamento</span>
+                                                {% else %}
+                                                    <span class="badge bg-danger">Acima do orçamento</span>
+                                                {% endif %}
+                                            {% else %}
+                                                <span class="badge bg-secondary">Sem orçamento</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        
+                        <!-- Tab Categoria -->
+                        <div class="tab-pane fade" id="category-info" role="tabpanel">
+                            <div class="table-responsive">
+                                <table class="table table-bordered table-sm">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Período</th>
+                                        <th class="text-end">Gasto (Antes)</th>
+                                        <th class="text-end">Gasto (Depois) / Projeção</th>
+                                        <th class="text-end">Orçado</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><strong>Acumulado</strong></td>
+                                        <td id="category-accumulated-spent-before" class="text-end">R$ {{ budget_info.category.accumulated.spent_before|floatformat:2 }}</td>
+                                        <td id="category-accumulated-spent-after" class="fw-bold text-end">R$ {{ budget_info.category.accumulated.spent_after|floatformat:2 }}</td>
+                                        <td class="text-end">R$ {{ budget_info.category.accumulated.budgeted|floatformat:2 }}</td>
+                                        <td id="category-accumulated-status">
+                                            {% if budget_info.category.accumulated.budgeted > 0 %}
+                                                {% if budget_info.category.accumulated.spent_after|floatformat:2|add:"0" <= budget_info.category.accumulated.budgeted|floatformat:2|add:"0" %}
+                                                    <span class="badge bg-success">Dentro do orçamento</span>
+                                                {% else %}
+                                                    <span class="badge bg-danger">Acima do orçamento</span>
+                                                {% endif %}
+                                            {% else %}
+                                                <span class="badge bg-secondary">Sem orçamento</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Ano</strong></td>
+                                        <td id="category-year-spent-before" class="text-end">R$ {{ budget_info.category.year.spent_before|floatformat:2 }}</td>
+                                        <td id="category-year-projection" class="fw-bold text-end">R$ {{ budget_info.category.year.projection|floatformat:2 }}</td>
+                                        <td class="text-end">R$ {{ budget_info.category.year.budgeted|floatformat:2 }}</td>
+                                        <td id="category-year-status">
+                                            {% if budget_info.category.year.budgeted > 0 %}
+                                                {% if budget_info.category.year.projection|add:"0" <= budget_info.category.year.budgeted|add:"0" %}
+                                                    <span class="badge bg-success">Dentro do orçamento</span>
+                                                {% else %}
+                                                    <span class="badge bg-danger">Acima do orçamento</span>
+                                                {% endif %}
+                                            {% else %}
+                                                <span class="badge bg-secondary">Sem orçamento</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Botões de ação -->
+            <div class="mt-4 pt-3 border-top">
+                <div class="d-flex gap-2 justify-content-end">
+                    <a href="{% url 'finance:scheduler_list' %}" class="btn btn-secondary">
+                        <i class="fas fa-times me-1"></i>Cancelar
+                    </a>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save me-1"></i>Registrar Transação
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal: Criar Conta Rápida -->
+<div class="modal fade" id="quickCreateAccountModal" tabindex="-1" aria-labelledby="quickCreateAccountModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="quickCreateAccountModalLabel">
+                    <i class="fas fa-university me-2"></i>Criar Nova Conta
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="quickCreateAccountForm">
+                    <div class="mb-3">
+                        <label for="account_name" class="form-label">Nome da Conta <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="account_name" name="name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="account_type" class="form-label">Tipo <span class="text-danger">*</span></label>
+                        <select class="form-select" id="account_type" name="account_type" required>
+                            <option value="BANK">Banco</option>
+                            <option value="CASH">Dinheiro</option>
+                            <option value="INVEST">Investimento</option>
+                            <option value="CREDCARD">Cartão de crédito</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="account_currency" class="form-label">Moeda <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="account_currency" name="currency" value="Real brasileiro" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="account_opening_balance" class="form-label">Saldo de Abertura <span class="text-danger">*</span></label>
+                        <input type="number" class="form-control" id="account_opening_balance" name="opening_balance" step="0.01" value="0" required>
+                    </div>
+                    <div id="accountErrorMsg" class="text-danger small mb-2" style="display: none;"></div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="saveAccountBtn">
+                    <i class="fas fa-save me-1"></i>Salvar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Criar Beneficiário Rápido -->
+<div class="modal fade" id="quickCreateBeneficiaryModal" tabindex="-1" aria-labelledby="quickCreateBeneficiaryModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="quickCreateBeneficiaryModalLabel">
+                    <i class="fas fa-user me-2"></i>Criar Novo Beneficiário
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="quickCreateBeneficiaryForm">
+                    <div class="mb-3">
+                        <label for="beneficiary_full_name" class="form-label">Nome Completo <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="beneficiary_full_name" name="full_name" required>
+                    </div>
+                    <div id="beneficiaryErrorMsg" class="text-danger small mb-2" style="display: none;"></div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="saveBeneficiaryBtn">
+                    <i class="fas fa-save me-1"></i>Salvar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Criar Subcategoria Rápida -->
+<div class="modal fade" id="quickCreateSubcategoryModal" tabindex="-1" aria-labelledby="quickCreateSubcategoryModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="quickCreateSubcategoryModalLabel">
+                    <i class="fas fa-tags me-2"></i>Criar Nova Subcategoria
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="quickCreateSubcategoryForm">
+                    <div class="mb-3">
+                        <label for="subcategory_category" class="form-label">Categoria <span class="text-danger">*</span></label>
+                        <select class="form-select" id="subcategory_category" name="category" required>
+                            <option value="">Selecione uma categoria</option>
+                            {% for category in categories %}
+                            <option value="{{ category.id }}">{{ category.category }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="subcategory_name" class="form-label">Nome da Subcategoria <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="subcategory_name" name="subcategory" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="subcategory_default_transaction_type" class="form-label">Tipo de Transação Padrão <span class="text-danger">*</span></label>
+                        <select class="form-select" id="subcategory_default_transaction_type" name="default_transaction_type" required>
+                            <option value="DB">Débito</option>
+                            <option value="CR">Crédito</option>
+                        </select>
+                    </div>
+                    <div id="subcategoryErrorMsg" class="text-danger small mb-2" style="display: none;"></div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="saveSubcategoryBtn">
+                    <i class="fas fa-save me-1"></i>Salvar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .form-label {
+        font-weight: 500;
+        font-size: 0.9rem;
+        margin-bottom: 0.5rem;
+        color: #495057;
+    }
+    
+    .form-control, .form-select {
+        font-size: 0.9rem;
+        border-radius: 0.375rem;
+        border: 1px solid #dee2e6;
+        background-color: #fff;
+        transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+    }
+    
+    .form-control:focus, .form-select:focus {
+        border-color: #86b7fe;
+        box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+        background-color: #fff;
+    }
+    
+    .form-control:hover, .form-select:hover {
+        border-color: #adb5bd;
+    }
+    
+    .input-group-text {
+        background-color: #f8f9fa;
+        border: 1px solid #dee2e6;
+        font-weight: 500;
+    }
+</style>
+{% endblock %}
+
+{% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const subcategorySelect = document.getElementById('id_subcategory');
     const transactionTypeSelect = document.getElementById('id_transaction_type');
+    const valueInput = document.getElementById('id_value');
+    const transactionDateInput = document.getElementById('id_transaction_date');
+    const dueDateInput = document.getElementById('id_due_date');
     
+    // Aplicar classes Bootstrap aos campos do formulário
+    document.querySelectorAll('input[type="text"], input[type="number"], input[type="date"], select, textarea').forEach(function(field) {
+        if (!field.classList.contains('form-control') && !field.classList.contains('form-select') && !field.classList.contains('form-check-input')) {
+            if (field.tagName === 'SELECT') {
+                field.classList.add('form-select');
+            } else if (field.tagName === 'TEXTAREA') {
+                field.classList.add('form-control');
+            } else {
+                field.classList.add('form-control');
+            }
+        }
+    });
+    
+    // Função para atualizar informações de orçamento
+    function updateBudgetInfo() {
+        const subcategoryId = subcategorySelect ? subcategorySelect.value : null;
+        const value = valueInput ? valueInput.value : '0';
+        const transactionType = transactionTypeSelect ? transactionTypeSelect.value : 'DB';
+        const transactionDate = transactionDateInput ? transactionDateInput.value : (dueDateInput ? dueDateInput.value : '');
+        
+        if (!subcategoryId) {
+            // Limpar valores se não houver subcategoria
+            clearBudgetInfo();
+            return;
+        }
+        
+        // Construir URL com parâmetros
+        const params = new URLSearchParams({
+            'subcategory_id': subcategoryId,
+            'value': value || '0',
+            'transaction_type': transactionType,
+            'transaction_date': transactionDate || ''
+        });
+        
+        // Fazer requisição AJAX
+        fetch('{% url "finance:get_budget_info" %}?' + params.toString())
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    console.error('Erro ao buscar informações de orçamento:', data.error);
+                    return;
+                }
+                
+                // Atualizar valores da subcategoria
+                updateBudgetValues('subcategory', data.subcategory);
+                
+                // Atualizar valores da categoria
+                updateBudgetValues('category', data.category);
+            })
+            .catch(error => {
+                console.error('Erro ao buscar informações de orçamento:', error);
+            });
+    }
+    
+    // Função para atualizar valores na tabela
+    function updateBudgetValues(prefix, data) {
+        // Acumulado
+        const accumulatedSpentBefore = document.getElementById(prefix + '-accumulated-spent-before');
+        const accumulatedSpentAfter = document.getElementById(prefix + '-accumulated-spent-after');
+        const accumulatedBudgeted = document.querySelector('#' + prefix + '-info .table tbody tr:first-child td:nth-child(4)');
+        const accumulatedStatus = document.getElementById(prefix + '-accumulated-status');
+        
+        if (accumulatedSpentBefore) accumulatedSpentBefore.textContent = 'R$ ' + parseFloat(data.accumulated.spent_before).toFixed(2);
+        if (accumulatedSpentAfter) accumulatedSpentAfter.textContent = 'R$ ' + parseFloat(data.accumulated.spent_after).toFixed(2);
+        if (accumulatedBudgeted) accumulatedBudgeted.textContent = 'R$ ' + parseFloat(data.accumulated.budgeted).toFixed(2);
+        
+        // Atualizar status do acumulado
+        if (accumulatedStatus) {
+            const budgeted = parseFloat(data.accumulated.budgeted);
+            const spentAfter = parseFloat(data.accumulated.spent_after);
+            if (budgeted > 0) {
+                // Para gastos (negativos), comparar valor absoluto; para créditos (positivos), comparar diretamente
+                const valueToCompare = spentAfter < 0 ? Math.abs(spentAfter) : spentAfter;
+                if (valueToCompare <= budgeted) {
+                    accumulatedStatus.innerHTML = '<span class="badge bg-success">Dentro do orçamento</span>';
+                } else {
+                    accumulatedStatus.innerHTML = '<span class="badge bg-danger">Acima do orçamento</span>';
+                }
+            } else {
+                accumulatedStatus.innerHTML = '<span class="badge bg-secondary">Sem orçamento</span>';
+            }
+        }
+        
+        // Ano
+        const yearSpentBefore = document.getElementById(prefix + '-year-spent-before');
+        const yearProjection = document.getElementById(prefix + '-year-projection');
+        const yearBudgeted = document.querySelector('#' + prefix + '-info .table tbody tr:last-child td:nth-child(4)');
+        const yearStatus = document.getElementById(prefix + '-year-status');
+        
+        if (yearSpentBefore) yearSpentBefore.textContent = 'R$ ' + parseFloat(data.year.spent_before).toFixed(2);
+        if (yearProjection) yearProjection.textContent = 'R$ ' + parseFloat(data.year.projection || data.year.spent_after || 0).toFixed(2);
+        if (yearBudgeted) yearBudgeted.textContent = 'R$ ' + parseFloat(data.year.budgeted).toFixed(2);
+        
+        // Atualizar status do ano (comparar projeção com orçamento)
+        if (yearStatus) {
+            const budgeted = parseFloat(data.year.budgeted);
+            const projection = parseFloat(data.year.projection || data.year.spent_after || 0);
+            if (budgeted > 0) {
+                // Para projeções negativas (gastos), comparar valor absoluto; para positivas (créditos), comparar diretamente
+                const valueToCompare = projection < 0 ? Math.abs(projection) : projection;
+                if (valueToCompare <= budgeted) {
+                    yearStatus.innerHTML = '<span class="badge bg-success">Dentro do orçamento</span>';
+                } else {
+                    yearStatus.innerHTML = '<span class="badge bg-danger">Acima do orçamento</span>';
+                }
+            } else {
+                yearStatus.innerHTML = '<span class="badge bg-secondary">Sem orçamento</span>';
+            }
+        }
+    }
+    
+    // Função para limpar valores
+    function clearBudgetInfo() {
+        ['subcategory', 'category'].forEach(prefix => {
+            const accumulatedSpentBefore = document.getElementById(prefix + '-accumulated-spent-before');
+            const accumulatedSpentAfter = document.getElementById(prefix + '-accumulated-spent-after');
+            const yearSpentBefore = document.getElementById(prefix + '-year-spent-before');
+            const yearProjection = document.getElementById(prefix + '-year-projection');
+            
+            if (accumulatedSpentBefore) accumulatedSpentBefore.textContent = 'R$ 0.00';
+            if (accumulatedSpentAfter) accumulatedSpentAfter.textContent = 'R$ 0.00';
+            if (yearSpentBefore) yearSpentBefore.textContent = 'R$ 0.00';
+            if (yearProjection) yearProjection.textContent = 'R$ 0.00';
+        });
+    }
+    
+    // Listener para subcategoria
     if (subcategorySelect && transactionTypeSelect) {
         subcategorySelect.addEventListener('change', function() {
             const subcategoryId = this.value;
@@ -94,12 +594,190 @@ document.addEventListener('DOMContentLoaded', function() {
                     .then(response => response.json())
                     .then(data => {
                         transactionTypeSelect.value = data.default_transaction_type;
+                        // Atualizar informações de orçamento após mudar tipo
+                        updateBudgetInfo();
                     })
                     .catch(error => console.error('Erro ao buscar tipo de transação padrão:', error));
+            } else {
+                clearBudgetInfo();
             }
+            // Atualizar informações de orçamento
+            updateBudgetInfo();
         });
     }
+    
+    // Listener para valor
+    if (valueInput) {
+        valueInput.addEventListener('input', function() {
+            updateBudgetInfo();
+        });
+    }
+    
+    // Listener para tipo de transação
+    if (transactionTypeSelect) {
+        transactionTypeSelect.addEventListener('change', function() {
+            updateBudgetInfo();
+        });
+    }
+    
+    // Listener para data da transação
+    if (transactionDateInput) {
+        transactionDateInput.addEventListener('change', function() {
+            updateBudgetInfo();
+        });
+    }
+    
+    // Listener para data de vencimento (fallback)
+    if (dueDateInput && !transactionDateInput) {
+        dueDateInput.addEventListener('change', function() {
+            updateBudgetInfo();
+        });
+    }
+    
+    // Quick Create Functions
+    function addOptionToSelect(selectId, value, text) {
+        const select = document.getElementById(selectId);
+        if (select) {
+            const option = document.createElement('option');
+            option.value = value;
+            option.textContent = text;
+            select.appendChild(option);
+            select.value = value;
+        }
+    }
+    
+    function updateAccountSelects(value, text) {
+        addOptionToSelect('id_account', value, text);
+    }
+    
+    // Quick Create Account
+    document.getElementById('saveAccountBtn')?.addEventListener('click', function() {
+        const form = document.getElementById('quickCreateAccountForm');
+        const formData = new FormData(form);
+        const errorMsg = document.getElementById('accountErrorMsg');
+        const btn = this;
+        
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Salvando...';
+        errorMsg.style.display = 'none';
+        
+        fetch('{% url "finance:quick_create_account" %}', {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                updateAccountSelects(data.id, data.name);
+                const modal = bootstrap.Modal.getInstance(document.getElementById('quickCreateAccountModal'));
+                modal.hide();
+                form.reset();
+            } else {
+                errorMsg.textContent = Object.values(data.errors || {}).flat().join(', ') || 'Erro ao criar conta';
+                errorMsg.style.display = 'block';
+            }
+        })
+        .catch(error => {
+            errorMsg.textContent = 'Erro ao criar conta: ' + error.message;
+            errorMsg.style.display = 'block';
+        })
+        .finally(() => {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-save me-1"></i>Salvar';
+        });
+    });
+    
+    // Quick Create Beneficiary
+    document.getElementById('saveBeneficiaryBtn')?.addEventListener('click', function() {
+        const form = document.getElementById('quickCreateBeneficiaryForm');
+        const formData = new FormData(form);
+        const errorMsg = document.getElementById('beneficiaryErrorMsg');
+        const btn = this;
+        
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Salvando...';
+        errorMsg.style.display = 'none';
+        
+        fetch('{% url "finance:quick_create_beneficiary" %}', {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                addOptionToSelect('id_beneficiary', data.id, data.name);
+                const modal = bootstrap.Modal.getInstance(document.getElementById('quickCreateBeneficiaryModal'));
+                modal.hide();
+                form.reset();
+            } else {
+                errorMsg.textContent = Object.values(data.errors || {}).flat().join(', ') || 'Erro ao criar beneficiário';
+                errorMsg.style.display = 'block';
+            }
+        })
+        .catch(error => {
+            errorMsg.textContent = 'Erro ao criar beneficiário: ' + error.message;
+            errorMsg.style.display = 'block';
+        })
+        .finally(() => {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-save me-1"></i>Salvar';
+        });
+    });
+    
+    // Quick Create Subcategory
+    document.getElementById('saveSubcategoryBtn')?.addEventListener('click', function() {
+        const form = document.getElementById('quickCreateSubcategoryForm');
+        const formData = new FormData(form);
+        const errorMsg = document.getElementById('subcategoryErrorMsg');
+        const btn = this;
+        
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Salvando...';
+        errorMsg.style.display = 'none';
+        
+        fetch('{% url "finance:quick_create_subcategory" %}', {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                addOptionToSelect('id_subcategory', data.id, data.name);
+                // Se houver um listener de subcategoria, disparar o evento change
+                const subcategorySelect = document.getElementById('id_subcategory');
+                if (subcategorySelect && transactionTypeSelect) {
+                    subcategorySelect.dispatchEvent(new Event('change'));
+                    // Atualizar informações de orçamento após mudar subcategoria
+                    if (typeof updateBudgetInfo === 'function') {
+                        updateBudgetInfo();
+                    }
+                }
+                const modal = bootstrap.Modal.getInstance(document.getElementById('quickCreateSubcategoryModal'));
+                modal.hide();
+                form.reset();
+            } else {
+                errorMsg.textContent = Object.values(data.errors || {}).flat().join(', ') || 'Erro ao criar subcategoria';
+                errorMsg.style.display = 'block';
+            }
+        })
+        .catch(error => {
+            errorMsg.textContent = 'Erro ao criar subcategoria: ' + error.message;
+            errorMsg.style.display = 'block';
+        })
+        .finally(() => {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-save me-1"></i>Salvar';
+        });
+    });
 });
 </script>
 {% endblock %}
-

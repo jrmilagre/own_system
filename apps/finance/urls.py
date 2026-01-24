@@ -50,6 +50,8 @@ urlpatterns = [
     path('schedulers/multiple/<uuid:group_id>/register/', views.multiple_scheduler_register, name='multiple_scheduler_register'),
     # API endpoint for JavaScript
     path('api/subcategory/<int:subcategory_id>/default-transaction-type/', views.get_subcategory_default_transaction_type, name='subcategory_default_transaction_type'),
+    path('api/budget-info/', views.get_budget_info, name='get_budget_info'),
+    path('api/multiple-budget-info/', views.get_multiple_budget_info, name='get_multiple_budget_info'),
     # Quick create endpoints (AJAX)
     path('api/quick-create/account/', views.quick_create_account, name='quick_create_account'),
     path('api/quick-create/beneficiary/', views.quick_create_beneficiary, name='quick_create_beneficiary'),

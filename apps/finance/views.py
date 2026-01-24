@@ -6,7 +6,7 @@ from django.db import transaction as db_transaction
 from django.core.paginator import Paginator
 from django.db.models import Q
 from django.db import close_old_connections
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 import uuid
 import json as json_module
 import time
@@ -839,6 +839,97 @@ def transaction_list(request):
 def transaction_create(request):
     """Criar nova transação"""
     categories = Category.objects.all().order_by('category')
+    
+    def calculate_budget_info(subcategory, transaction_value, transaction_type, transaction_date):
+        """Calcula informações de orçamento e gastos"""
+        if not subcategory:
+            return {
+                'subcategory': {
+                    'accumulated': {'spent_before': Decimal('0'), 'spent_after': Decimal('0'), 'budgeted': Decimal('0')},
+                    'year': {'spent_before': Decimal('0'), 'spent_after': Decimal('0'), 'projection': Decimal('0'), 'budgeted': Decimal('0')}
+                },
+                'category': {
+                    'accumulated': {'spent_before': Decimal('0'), 'spent_after': Decimal('0'), 'budgeted': Decimal('0')},
+                    'year': {'spent_before': Decimal('0'), 'spent_after': Decimal('0'), 'projection': Decimal('0'), 'budgeted': Decimal('0')}
+                }
+            }
+        
+        category = subcategory.category
+        transaction_value = Decimal(str(transaction_value)) if transaction_value else Decimal('0')
+        
+        # Determinar data da transação
+        if transaction_date:
+            trans_date = transaction_date
+        else:
+            trans_date = date.today()
+        
+        # Calcular períodos
+        # Acumulado: desde o início do ano até o último dia do mês da transação
+        year_start = date(trans_date.year, 1, 1)
+        if trans_date.month == 12:
+            accumulated_end = date(trans_date.year, 12, 31)
+        else:
+            accumulated_end = date(trans_date.year, trans_date.month + 1, 1) - timedelta(days=1)
+        
+        year_end = date(trans_date.year, 12, 31)
+        
+        # Calcular gastos acumulados antes do registro (desde início do ano até o mês da transação)
+        subcategory_spent_accumulated_before = _calculate_spent_by_subcategory(subcategory, year_start, accumulated_end)
+        subcategory_spent_year_before = _calculate_spent_by_subcategory(subcategory, year_start, year_end)
+        category_spent_accumulated_before = _calculate_spent_by_category(category, year_start, accumulated_end)
+        category_spent_year_before = _calculate_spent_by_category(category, year_start, year_end)
+        
+        # Calcular gastos depois do registro (adicionar valor da transação)
+        transaction_impact = transaction_value if transaction_type == 'CR' else -transaction_value
+        subcategory_spent_accumulated_after = subcategory_spent_accumulated_before + transaction_impact
+        subcategory_spent_year_after = subcategory_spent_year_before + transaction_impact
+        category_spent_accumulated_after = category_spent_accumulated_before + transaction_impact
+        category_spent_year_after = category_spent_year_before + transaction_impact
+        
+        # Calcular orçamentos acumulados (desde início do ano até o mês da transação)
+        subcategory_budget_accumulated = _calculate_budget_accumulated_by_subcategory(subcategory, trans_date.year, trans_date.month)
+        subcategory_budget_year = _calculate_budget_by_subcategory_year(subcategory, trans_date.year)
+        category_budget_accumulated = _calculate_budget_accumulated_by_category(category, trans_date.year, trans_date.month)
+        category_budget_year = _calculate_budget_by_category_year(category, trans_date.year)
+        
+        # Calcular projeção anual (média mensal × 12)
+        current_month = trans_date.month
+        if current_month > 0:
+            subcategory_projection = (subcategory_spent_accumulated_after / current_month) * 12
+            category_projection = (category_spent_accumulated_after / current_month) * 12
+        else:
+            subcategory_projection = Decimal('0')
+            category_projection = Decimal('0')
+        
+        return {
+            'subcategory': {
+                'accumulated': {
+                    'spent_before': subcategory_spent_accumulated_before,
+                    'spent_after': subcategory_spent_accumulated_after,
+                    'budgeted': subcategory_budget_accumulated
+                },
+                'year': {
+                    'spent_before': subcategory_spent_year_before,
+                    'spent_after': subcategory_spent_year_after,
+                    'projection': subcategory_projection,
+                    'budgeted': subcategory_budget_year
+                }
+            },
+            'category': {
+                'accumulated': {
+                    'spent_before': category_spent_accumulated_before,
+                    'spent_after': category_spent_accumulated_after,
+                    'budgeted': category_budget_accumulated
+                },
+                'year': {
+                    'spent_before': category_spent_year_before,
+                    'spent_after': category_spent_year_after,
+                    'projection': category_projection,
+                    'budgeted': category_budget_year
+                }
+            }
+        }
+    
     if request.method == 'POST':
         form = TransactionForm(request.POST)
         if form.is_valid():
@@ -901,11 +992,28 @@ def transaction_create(request):
             return redirect('finance:transaction_list')
         else:
             # Formulário inválido - mostrar erros
-            messages.error(request, 'Por favor, corrija os erros abaixo.')
-            return render(request, 'finance/transaction_form.html', {'form': form, 'categories': categories})
+            # Calcular budget_info mesmo com formulário inválido para mostrar informações
+            subcategory = form.cleaned_data.get('subcategory') if form.cleaned_data else None
+            value = form.cleaned_data.get('value') if form.cleaned_data else None
+            transaction_type = form.cleaned_data.get('transaction_type') if form.cleaned_data else None
+            transaction_date = form.cleaned_data.get('transaction_date') if form.cleaned_data else None
+            
+            budget_info = calculate_budget_info(subcategory, value, transaction_type, transaction_date) if subcategory else None
+            return render(request, 'finance/transaction_form.html', {
+                'form': form, 
+                'categories': categories,
+                'budget_info': budget_info
+            })
     else:
-        form = TransactionForm()
-    return render(request, 'finance/transaction_form.html', {'form': form, 'categories': categories})
+        # Pré-preencher data de transação com data de hoje
+        form = TransactionForm(initial={'transaction_date': date.today()})
+        # Calcular budget_info inicial (vazio)
+        budget_info = calculate_budget_info(None, None, None, None)
+    return render(request, 'finance/transaction_form.html', {
+        'form': form, 
+        'categories': categories,
+        'budget_info': budget_info
+    })
 
 
 def transaction_update(request, pk):
@@ -1341,6 +1449,169 @@ def scheduler_delete(request, pk):
     return render(request, 'finance/scheduler_confirm_delete.html', {'scheduler': scheduler})
 
 
+# Funções auxiliares para cálculo de gastos e orçamentos
+def _calculate_spent_by_subcategory(subcategory, start_date, end_date):
+    """Calcula gastos por subcategoria em um período"""
+    if not subcategory:
+        return Decimal('0')
+    
+    date_filter = Q(
+        Q(transaction_date__gte=start_date, transaction_date__lte=end_date) |
+        Q(transaction_date__isnull=True, due_date__gte=start_date, due_date__lte=end_date)
+    )
+    
+    transactions = Transaction.objects.filter(
+        subcategory=subcategory
+    ).filter(date_filter)
+    
+    total = Decimal('0')
+    for trans in transactions:
+        if trans.transaction_type == 'CR':
+            total += trans.value
+        elif trans.transaction_type == 'DB':
+            total -= trans.value
+    
+    return total
+
+
+def _calculate_spent_by_category(category, start_date, end_date):
+    """Calcula gastos por categoria (agregando todas as subcategorias) em um período"""
+    if not category:
+        return Decimal('0')
+    
+    date_filter = Q(
+        Q(transaction_date__gte=start_date, transaction_date__lte=end_date) |
+        Q(transaction_date__isnull=True, due_date__gte=start_date, due_date__lte=end_date)
+    )
+    
+    transactions = Transaction.objects.filter(
+        subcategory__category=category
+    ).filter(date_filter)
+    
+    total = Decimal('0')
+    for trans in transactions:
+        if trans.transaction_type == 'CR':
+            total += trans.value
+        elif trans.transaction_type == 'DB':
+            total -= trans.value
+    
+    return total
+
+
+def _calculate_budget_by_subcategory(subcategory, year, month):
+    """Calcula orçamento por subcategoria em um mês/ano"""
+    if not subcategory:
+        return Decimal('0')
+    
+    budget_date = date(year, month, 1)
+    budgets = Budget.objects.filter(
+        subcategory=subcategory,
+        budget_date=budget_date
+    )
+    
+    total = Decimal('0')
+    for budget in budgets:
+        total += budget.amount
+    
+    return total
+
+
+def _calculate_budget_by_category(category, year, month):
+    """Calcula orçamento por categoria (agregando todas as subcategorias) em um mês/ano"""
+    if not category:
+        return Decimal('0')
+    
+    budget_date = date(year, month, 1)
+    budgets = Budget.objects.filter(
+        subcategory__category=category,
+        budget_date=budget_date
+    )
+    
+    total = Decimal('0')
+    for budget in budgets:
+        total += budget.amount
+    
+    return total
+
+
+def _calculate_budget_by_subcategory_year(subcategory, year):
+    """Calcula orçamento total por subcategoria em um ano"""
+    if not subcategory:
+        return Decimal('0')
+    
+    budgets = Budget.objects.filter(
+        subcategory=subcategory,
+        budget_date__year=year
+    )
+    
+    total = Decimal('0')
+    for budget in budgets:
+        total += budget.amount
+    
+    return total
+
+
+def _calculate_budget_by_category_year(category, year):
+    """Calcula orçamento total por categoria (agregando todas as subcategorias) em um ano"""
+    if not category:
+        return Decimal('0')
+    
+    budgets = Budget.objects.filter(
+        subcategory__category=category,
+        budget_date__year=year
+    )
+    
+    total = Decimal('0')
+    for budget in budgets:
+        total += budget.amount
+    
+    return total
+
+
+def _calculate_budget_accumulated_by_subcategory(subcategory, year, month):
+    """Calcula orçamento acumulado por subcategoria desde o início do ano até o mês especificado"""
+    if not subcategory:
+        return Decimal('0')
+    
+    # Buscar todos os budgets desde janeiro até o mês especificado
+    year_start = date(year, 1, 1)
+    month_end = date(year, month, 1)
+    
+    budgets = Budget.objects.filter(
+        subcategory=subcategory,
+        budget_date__gte=year_start,
+        budget_date__lte=month_end
+    )
+    
+    total = Decimal('0')
+    for budget in budgets:
+        total += budget.amount
+    
+    return total
+
+
+def _calculate_budget_accumulated_by_category(category, year, month):
+    """Calcula orçamento acumulado por categoria desde o início do ano até o mês especificado"""
+    if not category:
+        return Decimal('0')
+    
+    # Buscar todos os budgets desde janeiro até o mês especificado
+    year_start = date(year, 1, 1)
+    month_end = date(year, month, 1)
+    
+    budgets = Budget.objects.filter(
+        subcategory__category=category,
+        budget_date__gte=year_start,
+        budget_date__lte=month_end
+    )
+    
+    total = Decimal('0')
+    for budget in budgets:
+        total += budget.amount
+    
+    return total
+
+
 def scheduler_register(request, pk):
     """Registrar uma transação do agendamento"""
     scheduler = get_object_or_404(Scheduler, pk=pk)
@@ -1348,6 +1619,96 @@ def scheduler_register(request, pk):
     scheduler.refresh_from_db()
     # Sincronizar registered_count com transações existentes para evitar inconsistências
     scheduler.sync_registered_count()
+    
+    def calculate_budget_info(subcategory, transaction_value, transaction_type, transaction_date):
+        """Calcula informações de orçamento e gastos"""
+        if not subcategory:
+            return {
+                'subcategory': {
+                    'accumulated': {'spent_before': Decimal('0'), 'spent_after': Decimal('0'), 'budgeted': Decimal('0')},
+                    'year': {'spent_before': Decimal('0'), 'spent_after': Decimal('0'), 'projection': Decimal('0'), 'budgeted': Decimal('0')}
+                },
+                'category': {
+                    'accumulated': {'spent_before': Decimal('0'), 'spent_after': Decimal('0'), 'budgeted': Decimal('0')},
+                    'year': {'spent_before': Decimal('0'), 'spent_after': Decimal('0'), 'projection': Decimal('0'), 'budgeted': Decimal('0')}
+                }
+            }
+        
+        category = subcategory.category
+        transaction_value = Decimal(str(transaction_value)) if transaction_value else Decimal('0')
+        
+        # Determinar data da transação
+        if transaction_date:
+            trans_date = transaction_date
+        else:
+            trans_date = date.today()
+        
+        # Calcular períodos
+        # Acumulado: desde o início do ano até o último dia do mês da transação
+        year_start = date(trans_date.year, 1, 1)
+        if trans_date.month == 12:
+            accumulated_end = date(trans_date.year, 12, 31)
+        else:
+            accumulated_end = date(trans_date.year, trans_date.month + 1, 1) - timedelta(days=1)
+        
+        year_end = date(trans_date.year, 12, 31)
+        
+        # Calcular gastos acumulados antes do registro (desde início do ano até o mês da transação)
+        subcategory_spent_accumulated_before = _calculate_spent_by_subcategory(subcategory, year_start, accumulated_end)
+        subcategory_spent_year_before = _calculate_spent_by_subcategory(subcategory, year_start, year_end)
+        category_spent_accumulated_before = _calculate_spent_by_category(category, year_start, accumulated_end)
+        category_spent_year_before = _calculate_spent_by_category(category, year_start, year_end)
+        
+        # Calcular gastos depois do registro (adicionar valor da transação)
+        transaction_impact = transaction_value if transaction_type == 'CR' else -transaction_value
+        subcategory_spent_accumulated_after = subcategory_spent_accumulated_before + transaction_impact
+        subcategory_spent_year_after = subcategory_spent_year_before + transaction_impact
+        category_spent_accumulated_after = category_spent_accumulated_before + transaction_impact
+        category_spent_year_after = category_spent_year_before + transaction_impact
+        
+        # Calcular orçamentos acumulados (desde início do ano até o mês da transação)
+        subcategory_budget_accumulated = _calculate_budget_accumulated_by_subcategory(subcategory, trans_date.year, trans_date.month)
+        subcategory_budget_year = _calculate_budget_by_subcategory_year(subcategory, trans_date.year)
+        category_budget_accumulated = _calculate_budget_accumulated_by_category(category, trans_date.year, trans_date.month)
+        category_budget_year = _calculate_budget_by_category_year(category, trans_date.year)
+        
+        # Calcular projeção anual (média mensal × 12)
+        current_month = trans_date.month
+        if current_month > 0:
+            subcategory_projection = (subcategory_spent_accumulated_after / current_month) * 12
+            category_projection = (category_spent_accumulated_after / current_month) * 12
+        else:
+            subcategory_projection = Decimal('0')
+            category_projection = Decimal('0')
+        
+        return {
+            'subcategory': {
+                'accumulated': {
+                    'spent_before': subcategory_spent_accumulated_before,
+                    'spent_after': subcategory_spent_accumulated_after,
+                    'budgeted': subcategory_budget_accumulated
+                },
+                'year': {
+                    'spent_before': subcategory_spent_year_before,
+                    'spent_after': subcategory_spent_year_after,
+                    'projection': subcategory_projection,
+                    'budgeted': subcategory_budget_year
+                }
+            },
+            'category': {
+                'accumulated': {
+                    'spent_before': category_spent_accumulated_before,
+                    'spent_after': category_spent_accumulated_after,
+                    'budgeted': category_budget_accumulated
+                },
+                'year': {
+                    'spent_before': category_spent_year_before,
+                    'spent_after': category_spent_year_after,
+                    'projection': category_projection,
+                    'budgeted': category_budget_year
+                }
+            }
+        }
     
     if request.method == 'POST':
         form = TransactionForm(request.POST)
@@ -1370,14 +1731,26 @@ def scheduler_register(request, pk):
                 return redirect('finance:scheduler_list')
             except ValueError as e:
                 messages.error(request, str(e))
-        else:
-            # Se o formulário não for válido, mostrar erros
-            next_due_date = scheduler.get_next_due_date_after_registration()
-            return render(request, 'finance/scheduler_register.html', {
-                'scheduler': scheduler,
-                'form': form,
-                'next_due_date': next_due_date
-            })
+        
+        # Se o formulário não for válido, mostrar erros
+        next_due_date = scheduler.get_next_due_date_after_registration()
+        categories = Category.objects.all().order_by('category')
+        
+        # Calcular informações de orçamento
+        subcategory = form.cleaned_data.get('subcategory') if form.is_valid() else form.initial.get('subcategory', scheduler.subcategory)
+        transaction_value = form.cleaned_data.get('value') if form.is_valid() else form.initial.get('value', scheduler.value)
+        transaction_type = form.cleaned_data.get('transaction_type') if form.is_valid() else form.initial.get('transaction_type', scheduler.transaction_type)
+        transaction_date = form.cleaned_data.get('transaction_date') if form.is_valid() else form.initial.get('transaction_date', scheduler.due_date or date.today())
+        
+        budget_info = calculate_budget_info(subcategory, transaction_value, transaction_type, transaction_date)
+        
+        return render(request, 'finance/scheduler_register.html', {
+            'scheduler': scheduler,
+            'form': form,
+            'next_due_date': next_due_date,
+            'categories': categories,
+            'budget_info': budget_info
+        })
     else:
         # Criar formulário com valores iniciais do agendamento
         initial_data = {
@@ -1393,11 +1766,359 @@ def scheduler_register(request, pk):
         }
         form = TransactionForm(initial=initial_data)
         next_due_date = scheduler.get_next_due_date_after_registration()
+        categories = Category.objects.all().order_by('category')
+        
+        # Calcular informações de orçamento
+        budget_info = calculate_budget_info(
+            scheduler.subcategory,
+            scheduler.value,
+            scheduler.transaction_type,
+            scheduler.due_date or date.today()
+        )
+        
         return render(request, 'finance/scheduler_register.html', {
             'scheduler': scheduler,
             'form': form,
-            'next_due_date': next_due_date
+            'next_due_date': next_due_date,
+            'categories': categories,
+            'budget_info': budget_info
         })
+
+
+def _calculate_multiple_budget_info(items_data, transaction_date):
+    """
+    Calcula informações de orçamento e gastos para múltiplas subcategorias.
+    
+    items_data: lista de dicionários com 'subcategory', 'value', 'transaction_type', 'is_transfer'
+    transaction_date: data da transação
+    
+    Retorna estrutura com:
+    - by_category: agregado por categoria
+    - by_subcategory: detalhado por subcategoria
+    """
+    from collections import defaultdict
+    
+    if not items_data:
+        return {
+            'by_category': {},
+            'by_subcategory': []
+        }
+    
+    if not transaction_date:
+        transaction_date = date.today()
+    
+    # Calcular períodos
+    year_start = date(transaction_date.year, 1, 1)
+    if transaction_date.month == 12:
+        accumulated_end = date(transaction_date.year, 12, 31)
+    else:
+        accumulated_end = date(transaction_date.year, transaction_date.month + 1, 1) - timedelta(days=1)
+    
+    year_end = date(transaction_date.year, 12, 31)
+    
+    # Agrupar por categoria e subcategoria
+    category_totals = defaultdict(lambda: {
+        'accumulated': {'spent_before': Decimal('0'), 'spent_after': Decimal('0'), 'budgeted': Decimal('0')},
+        'year': {'spent_before': Decimal('0'), 'spent_after': Decimal('0'), 'budgeted': Decimal('0')}
+    })
+    
+    subcategory_details = {}
+    subcategory_items = defaultdict(list)  # Agrupar itens por subcategoria
+    
+    # Agrupar itens por subcategoria primeiro
+    for item in items_data:
+        if item.get('is_transfer') or not item.get('subcategory'):
+            continue  # Ignorar transferências
+        
+        subcategory = item['subcategory']
+        subcategory_items[subcategory.id].append(item)
+    
+    # Processar cada subcategoria única
+    for subcategory_id, items_list in subcategory_items.items():
+        subcategory = items_list[0]['subcategory']
+        category = subcategory.category
+        
+        # Calcular gastos antes do registro (uma vez por subcategoria)
+        subcategory_spent_accumulated_before = _calculate_spent_by_subcategory(subcategory, year_start, accumulated_end)
+        subcategory_spent_year_before = _calculate_spent_by_subcategory(subcategory, year_start, year_end)
+        
+        # Calcular orçamentos (uma vez por subcategoria)
+        subcategory_budget_accumulated = _calculate_budget_accumulated_by_subcategory(subcategory, transaction_date.year, transaction_date.month)
+        subcategory_budget_year = _calculate_budget_by_subcategory_year(subcategory, transaction_date.year)
+        
+        # Somar impactos de todos os itens desta subcategoria
+        total_transaction_impact = Decimal('0')
+        total_value = Decimal('0')
+        
+        for item in items_list:
+            value = Decimal(str(item.get('value', 0)))
+            transaction_type = item.get('transaction_type', 'DB')
+            transaction_impact = value if transaction_type == 'CR' else -value
+            total_transaction_impact += transaction_impact
+            total_value += value
+        
+        # Calcular gastos depois do registro
+        subcategory_spent_accumulated_after = subcategory_spent_accumulated_before + total_transaction_impact
+        subcategory_spent_year_after = subcategory_spent_year_before + total_transaction_impact
+        
+        # Calcular projeção anual (média mensal × 12)
+        current_month = transaction_date.month
+        if current_month > 0:
+            subcategory_projection = (subcategory_spent_accumulated_after / current_month) * 12
+        else:
+            subcategory_projection = Decimal('0')
+        
+        # Adicionar aos totais da categoria
+        category_totals[category.id]['accumulated']['spent_before'] += subcategory_spent_accumulated_before
+        category_totals[category.id]['accumulated']['spent_after'] += subcategory_spent_accumulated_after
+        category_totals[category.id]['accumulated']['budgeted'] += subcategory_budget_accumulated
+        category_totals[category.id]['year']['spent_before'] += subcategory_spent_year_before
+        category_totals[category.id]['year']['spent_after'] += subcategory_spent_year_after
+        category_totals[category.id]['year']['budgeted'] += subcategory_budget_year
+        
+        # Detalhes por subcategoria
+        subcategory_details[subcategory_id] = {
+            'subcategory': subcategory,
+            'category': category,
+            'accumulated': {
+                'spent_before': subcategory_spent_accumulated_before,
+                'spent_after': subcategory_spent_accumulated_after,
+                'budgeted': subcategory_budget_accumulated
+            },
+            'year': {
+                'spent_before': subcategory_spent_year_before,
+                'spent_after': subcategory_spent_year_after,
+                'projection': subcategory_projection,
+                'budgeted': subcategory_budget_year
+            },
+            'items_count': len(items_list),
+            'total_value': total_value
+        }
+    
+    # Converter para estrutura final
+    by_category = {}
+    current_month = transaction_date.month
+    for cat_id, totals in category_totals.items():
+        category = Category.objects.get(pk=cat_id)
+        # Calcular projeção da categoria (média mensal × 12)
+        if current_month > 0:
+            category_projection = (totals['accumulated']['spent_after'] / current_month) * 12
+        else:
+            category_projection = Decimal('0')
+        totals['year']['projection'] = category_projection
+        
+        by_category[cat_id] = {
+            'category': category,
+            'accumulated': totals['accumulated'],
+            'year': totals['year']
+        }
+    
+    by_subcategory = list(subcategory_details.values())
+    
+    return {
+        'by_category': by_category,
+        'by_subcategory': by_subcategory
+    }
+
+
+def get_budget_info(request):
+    """Endpoint AJAX para obter informações de orçamento e gastos"""
+    if request.method != 'GET':
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
+    
+    subcategory_id = request.GET.get('subcategory_id')
+    value = request.GET.get('value', '0')
+    transaction_type = request.GET.get('transaction_type', 'DB')
+    transaction_date_str = request.GET.get('transaction_date')
+    
+    try:
+        value = Decimal(str(value))
+    except (ValueError, InvalidOperation):
+        value = Decimal('0')
+    
+    if transaction_date_str:
+        try:
+            transaction_date = datetime.strptime(transaction_date_str, '%Y-%m-%d').date()
+        except ValueError:
+            transaction_date = date.today()
+    else:
+        transaction_date = date.today()
+    
+    if not subcategory_id:
+        return JsonResponse({
+            'subcategory': {
+                'accumulated': {'spent_before': '0.00', 'spent_after': '0.00', 'budgeted': '0.00'},
+                'year': {'spent_before': '0.00', 'spent_after': '0.00', 'projection': '0.00', 'budgeted': '0.00'}
+            },
+            'category': {
+                'accumulated': {'spent_before': '0.00', 'spent_after': '0.00', 'budgeted': '0.00'},
+                'year': {'spent_before': '0.00', 'spent_after': '0.00', 'projection': '0.00', 'budgeted': '0.00'}
+            }
+        })
+    
+    try:
+        subcategory = Subcategory.objects.get(pk=subcategory_id)
+    except Subcategory.DoesNotExist:
+        return JsonResponse({'error': 'Subcategoria não encontrada'}, status=404)
+    
+    category = subcategory.category
+    
+    # Calcular períodos
+    # Acumulado: desde o início do ano até o último dia do mês da transação
+    year_start = date(transaction_date.year, 1, 1)
+    if transaction_date.month == 12:
+        accumulated_end = date(transaction_date.year, 12, 31)
+    else:
+        accumulated_end = date(transaction_date.year, transaction_date.month + 1, 1) - timedelta(days=1)
+    
+    year_end = date(transaction_date.year, 12, 31)
+    
+    # Calcular gastos acumulados antes do registro (desde início do ano até o mês da transação)
+    subcategory_spent_accumulated_before = _calculate_spent_by_subcategory(subcategory, year_start, accumulated_end)
+    subcategory_spent_year_before = _calculate_spent_by_subcategory(subcategory, year_start, year_end)
+    category_spent_accumulated_before = _calculate_spent_by_category(category, year_start, accumulated_end)
+    category_spent_year_before = _calculate_spent_by_category(category, year_start, year_end)
+    
+    # Calcular gastos depois do registro
+    transaction_impact = value if transaction_type == 'CR' else -value
+    subcategory_spent_accumulated_after = subcategory_spent_accumulated_before + transaction_impact
+    subcategory_spent_year_after = subcategory_spent_year_before + transaction_impact
+    category_spent_accumulated_after = category_spent_accumulated_before + transaction_impact
+    category_spent_year_after = category_spent_year_before + transaction_impact
+    
+    # Calcular projeção anual (média mensal × 12)
+    current_month = transaction_date.month
+    if current_month > 0:
+        subcategory_projection = (subcategory_spent_accumulated_after / current_month) * 12
+        category_projection = (category_spent_accumulated_after / current_month) * 12
+    else:
+        subcategory_projection = Decimal('0')
+        category_projection = Decimal('0')
+    
+    # Calcular orçamentos acumulados (desde início do ano até o mês da transação)
+    subcategory_budget_accumulated = _calculate_budget_accumulated_by_subcategory(subcategory, transaction_date.year, transaction_date.month)
+    subcategory_budget_year = _calculate_budget_by_subcategory_year(subcategory, transaction_date.year)
+    category_budget_accumulated = _calculate_budget_accumulated_by_category(category, transaction_date.year, transaction_date.month)
+    category_budget_year = _calculate_budget_by_category_year(category, transaction_date.year)
+    
+    return JsonResponse({
+        'subcategory': {
+            'accumulated': {
+                'spent_before': str(subcategory_spent_accumulated_before.quantize(Decimal('0.01'))),
+                'spent_after': str(subcategory_spent_accumulated_after.quantize(Decimal('0.01'))),
+                'budgeted': str(subcategory_budget_accumulated.quantize(Decimal('0.01')))
+            },
+            'year': {
+                'spent_before': str(subcategory_spent_year_before.quantize(Decimal('0.01'))),
+                'spent_after': str(subcategory_spent_year_after.quantize(Decimal('0.01'))),
+                'projection': str(subcategory_projection.quantize(Decimal('0.01'))),
+                'budgeted': str(subcategory_budget_year.quantize(Decimal('0.01')))
+            }
+        },
+        'category': {
+            'accumulated': {
+                'spent_before': str(category_spent_accumulated_before.quantize(Decimal('0.01'))),
+                'spent_after': str(category_spent_accumulated_after.quantize(Decimal('0.01'))),
+                'budgeted': str(category_budget_accumulated.quantize(Decimal('0.01')))
+            },
+            'year': {
+                'spent_before': str(category_spent_year_before.quantize(Decimal('0.01'))),
+                'spent_after': str(category_spent_year_after.quantize(Decimal('0.01'))),
+                'projection': str(category_projection.quantize(Decimal('0.01'))),
+                'budgeted': str(category_budget_year.quantize(Decimal('0.01')))
+            }
+        }
+    })
+
+
+def get_multiple_budget_info(request):
+    """Endpoint AJAX para obter informações de orçamento e gastos para múltiplas subcategorias"""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
+    
+    try:
+        data = json.loads(request.body)
+        items = data.get('items', [])
+        transaction_date_str = data.get('transaction_date')
+    except (json.JSONDecodeError, KeyError):
+        return JsonResponse({'error': 'Invalid request data'}, status=400)
+    
+    if transaction_date_str:
+        try:
+            transaction_date = datetime.strptime(transaction_date_str, '%Y-%m-%d').date()
+        except ValueError:
+            transaction_date = date.today()
+    else:
+        transaction_date = date.today()
+    
+    # Converter items para formato esperado
+    items_data = []
+    for item in items:
+        if item.get('is_transfer'):
+            continue  # Ignorar transferências
+        
+        subcategory_id = item.get('subcategory_id')
+        if not subcategory_id:
+            continue
+        
+        try:
+            subcategory = Subcategory.objects.get(pk=subcategory_id)
+        except Subcategory.DoesNotExist:
+            continue
+        
+        items_data.append({
+            'subcategory': subcategory,
+            'value': Decimal(str(item.get('value', 0))),
+            'transaction_type': item.get('transaction_type', 'DB'),
+            'is_transfer': False
+        })
+    
+    budget_info = _calculate_multiple_budget_info(items_data, transaction_date)
+    
+    # Converter para formato JSON
+    result = {
+        'by_category': {},
+        'by_subcategory': []
+    }
+    
+    for cat_id, cat_data in budget_info['by_category'].items():
+        result['by_category'][str(cat_id)] = {
+            'category_name': cat_data['category'].category,
+            'accumulated': {
+                'spent_before': str(cat_data['accumulated']['spent_before'].quantize(Decimal('0.01'))),
+                'spent_after': str(cat_data['accumulated']['spent_after'].quantize(Decimal('0.01'))),
+                'budgeted': str(cat_data['accumulated']['budgeted'].quantize(Decimal('0.01')))
+            },
+            'year': {
+                'spent_before': str(cat_data['year']['spent_before'].quantize(Decimal('0.01'))),
+                'spent_after': str(cat_data['year']['spent_after'].quantize(Decimal('0.01'))),
+                'projection': str(cat_data['year'].get('projection', Decimal('0')).quantize(Decimal('0.01'))),
+                'budgeted': str(cat_data['year']['budgeted'].quantize(Decimal('0.01')))
+            }
+        }
+    
+    for subcat_data in budget_info['by_subcategory']:
+        subcategory = subcat_data['subcategory']
+        result['by_subcategory'].append({
+            'subcategory_id': subcategory.id,
+            'subcategory_name': str(subcategory),
+            'category_name': subcategory.category.category,
+            'accumulated': {
+                'spent_before': str(subcat_data['accumulated']['spent_before'].quantize(Decimal('0.01'))),
+                'spent_after': str(subcat_data['accumulated']['spent_after'].quantize(Decimal('0.01'))),
+                'budgeted': str(subcat_data['accumulated']['budgeted'].quantize(Decimal('0.01')))
+            },
+            'year': {
+                'spent_before': str(subcat_data['year']['spent_before'].quantize(Decimal('0.01'))),
+                'spent_after': str(subcat_data['year']['spent_after'].quantize(Decimal('0.01'))),
+                'projection': str(subcat_data['year'].get('projection', Decimal('0')).quantize(Decimal('0.01'))),
+                'budgeted': str(subcat_data['year']['budgeted'].quantize(Decimal('0.01')))
+            },
+            'items_count': subcat_data['items_count'],
+            'total_value': str(subcat_data['total_value'].quantize(Decimal('0.01')))
+        })
+    
+    return JsonResponse(result)
 
 
 # Multiple Transaction Views
@@ -2271,6 +2992,19 @@ def multiple_scheduler_register(request, group_id):
     # Usar o primeiro scheduler como referência para dados compartilhados
     first_scheduler = schedulers.first()
     
+    def calculate_multiple_budget_info_from_formset(formset, transaction_date):
+        """Extrai dados do formset e calcula informações de orçamento"""
+        items_data = []
+        for form in formset:
+            if form.is_valid() and not form.cleaned_data.get('DELETE', False):
+                items_data.append({
+                    'subcategory': form.cleaned_data.get('subcategory'),
+                    'value': form.cleaned_data.get('value', 0),
+                    'transaction_type': form.cleaned_data.get('transaction_type', 'DB'),
+                    'is_transfer': form.cleaned_data.get('is_transfer', False)
+                })
+        return _calculate_multiple_budget_info(items_data, transaction_date)
+    
     if request.method == 'POST':
         formset = MultipleSchedulerRegisterItemFormSet(request.POST)
         
@@ -2284,11 +3018,17 @@ def multiple_scheduler_register(request, group_id):
                         if destination_account and destination_account == first_scheduler.account:
                             messages.error(request, 'A conta de destino deve ser diferente da conta de origem para transferências.')
                             next_due_date = first_scheduler.get_next_due_date_after_registration()
+                            
+                            # Calcular informações de orçamento
+                            transaction_date = first_scheduler.due_date or date.today()
+                            budget_info = calculate_multiple_budget_info_from_formset(formset, transaction_date)
+                            
                             return render(request, 'finance/multiple_scheduler_register.html', {
                                 'schedulers': schedulers,
                                 'formset': formset,
                                 'next_due_date': next_due_date,
-                                'group_id': group_id
+                                'group_id': group_id,
+                                'budget_info': budget_info
                             })
                 
                 # Agrupar schedulers na mesma ordem que foi usado no GET
@@ -2329,11 +3069,16 @@ def multiple_scheduler_register(request, group_id):
                     if len(formset) != len(grouped_schedulers):
                         messages.error(request, f'Erro: número de itens no formulário ({len(formset)}) não corresponde ao número de schedulers ({len(grouped_schedulers)}).')
                         next_due_date = first_scheduler.get_next_due_date_after_registration()
+                        # Calcular informações de orçamento
+                        transaction_date = first_scheduler.due_date or date.today()
+                        budget_info = calculate_multiple_budget_info_from_formset(formset, transaction_date)
+                        
                         return render(request, 'finance/multiple_scheduler_register.html', {
                             'schedulers': schedulers,
                             'formset': formset,
                             'next_due_date': next_due_date,
-                            'group_id': group_id
+                            'group_id': group_id,
+                            'budget_info': budget_info
                         })
                     
                     for i, item_form in enumerate(formset):
@@ -2357,11 +3102,17 @@ def multiple_scheduler_register(request, group_id):
                             if source_account == destination_account:
                                 messages.error(request, 'A conta de destino deve ser diferente da conta de origem para transferências.')
                                 next_due_date = first_scheduler.get_next_due_date_after_registration()
+                                
+                                # Calcular informações de orçamento
+                                transaction_date = first_scheduler.due_date or date.today()
+                                budget_info = calculate_multiple_budget_info_from_formset(formset, transaction_date)
+                                
                                 return render(request, 'finance/multiple_scheduler_register.html', {
                                     'schedulers': schedulers,
                                     'formset': formset,
                                     'next_due_date': next_due_date,
-                                    'group_id': group_id
+                                    'group_id': group_id,
+                                    'budget_info': budget_info
                                 })
                             
                             value = item_data.get('value', scheduler.value)
@@ -2513,11 +3264,25 @@ def multiple_scheduler_register(request, group_id):
         formset = MultipleSchedulerRegisterItemFormSet(initial=initial_data)
     
     next_due_date = first_scheduler.get_next_due_date_after_registration()
+    
+    # Calcular informações de orçamento
+    transaction_date = first_scheduler.due_date or date.today()
+    items_data = []
+    for item in initial_data:
+        items_data.append({
+            'subcategory': item.get('subcategory'),
+            'value': item.get('value', 0),
+            'transaction_type': item.get('transaction_type', 'DB'),
+            'is_transfer': item.get('is_transfer', False)
+        })
+    budget_info = _calculate_multiple_budget_info(items_data, transaction_date)
+    
     return render(request, 'finance/multiple_scheduler_register.html', {
         'schedulers': schedulers,
         'formset': formset,
         'next_due_date': next_due_date,
-        'group_id': group_id
+        'group_id': group_id,
+        'budget_info': budget_info
     })
 
 

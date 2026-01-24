@@ -108,6 +108,156 @@
                 {% endfor %}
             </div>
             
+            <!-- Informações de Orçamento e Gastos -->
+            {% if budget_info %}
+            <div class="card shadow-sm border-0 mb-4 mt-4">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">
+                        <i class="fas fa-chart-pie me-2"></i>
+                        Informações de Orçamento e Gastos
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <!-- Tabs para Resumo por Categoria e Detalhado por Subcategoria -->
+                    <ul class="nav nav-tabs mb-3" id="budgetInfoTabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="category-summary-tab" data-bs-toggle="tab" data-bs-target="#category-summary" type="button" role="tab">
+                                <i class="fas fa-folder me-1"></i>Resumo por Categoria
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="subcategory-detail-tab" data-bs-toggle="tab" data-bs-target="#subcategory-detail" type="button" role="tab">
+                                <i class="fas fa-tags me-1"></i>Detalhado por Subcategoria
+                            </button>
+                        </li>
+                    </ul>
+                    
+                    <div class="tab-content" id="budgetInfoTabContent">
+                        <!-- Tab Resumo por Categoria -->
+                        <div class="tab-pane fade show active" id="category-summary" role="tabpanel">
+                            {% if budget_info.by_category %}
+                            <div class="table-responsive">
+                                <table class="table table-bordered table-sm">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Categoria</th>
+                                            <th class="text-end">Gasto (Antes)</th>
+                                            <th class="text-end">Gasto (Depois) / Projeção</th>
+                                            <th class="text-end">Orçado</th>
+                                            <th>Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for cat_id, cat_data in budget_info.by_category.items %}
+                                        <tr>
+                                            <td><strong>{{ cat_data.category.category }}</strong></td>
+                                            <td class="text-end" id="category-{{ cat_id }}-accumulated-spent-before">R$ {{ cat_data.accumulated.spent_before|floatformat:2 }}</td>
+                                            <td class="text-end fw-bold" id="category-{{ cat_id }}-accumulated-spent-after">R$ {{ cat_data.accumulated.spent_after|floatformat:2 }}</td>
+                                            <td class="text-end" id="category-{{ cat_id }}-accumulated-budgeted">R$ {{ cat_data.accumulated.budgeted|floatformat:2 }}</td>
+                                            <td id="category-{{ cat_id }}-accumulated-status">
+                                                {% if cat_data.accumulated.budgeted > 0 %}
+                                                    {% if cat_data.accumulated.spent_after <= cat_data.accumulated.budgeted %}
+                                                        <span class="badge bg-success">Dentro do orçamento</span>
+                                                    {% else %}
+                                                        <span class="badge bg-danger">Acima do orçamento</span>
+                                                    {% endif %}
+                                                {% else %}
+                                                    <span class="badge bg-secondary">Sem orçamento</span>
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td><em>{{ cat_data.category.category }} (Ano)</em></td>
+                                            <td class="text-end" id="category-{{ cat_id }}-year-spent-before">R$ {{ cat_data.year.spent_before|floatformat:2 }}</td>
+                                            <td class="text-end fw-bold" id="category-{{ cat_id }}-year-projection">R$ {{ cat_data.year.projection|floatformat:2 }}</td>
+                                            <td class="text-end" id="category-{{ cat_id }}-year-budgeted">R$ {{ cat_data.year.budgeted|floatformat:2 }}</td>
+                                            <td id="category-{{ cat_id }}-year-status">
+                                                {% if cat_data.year.budgeted > 0 %}
+                                                    {% if cat_data.year.projection <= cat_data.year.budgeted %}
+                                                        <span class="badge bg-success">Dentro do orçamento</span>
+                                                    {% else %}
+                                                        <span class="badge bg-danger">Acima do orçamento</span>
+                                                    {% endif %}
+                                                {% else %}
+                                                    <span class="badge bg-secondary">Sem orçamento</span>
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                            {% else %}
+                            <p class="text-muted">Nenhuma subcategoria válida encontrada nos itens.</p>
+                            {% endif %}
+                        </div>
+                        
+                        <!-- Tab Detalhado por Subcategoria -->
+                        <div class="tab-pane fade" id="subcategory-detail" role="tabpanel">
+                            {% if budget_info.by_subcategory %}
+                            <div class="table-responsive">
+                                <table class="table table-bordered table-sm">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Subcategoria</th>
+                                            <th>Categoria</th>
+                                            <th class="text-end">Gasto (Antes)</th>
+                                            <th class="text-end">Gasto (Depois) / Projeção</th>
+                                            <th class="text-end">Orçado</th>
+                                            <th>Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for subcat_data in budget_info.by_subcategory %}
+                                        <tr>
+                                            <td><strong>{{ subcat_data.subcategory.subcategory }}</strong>{% if subcat_data.items_count > 1 %} <span class="badge bg-info">{{ subcat_data.items_count }} itens</span>{% endif %}</td>
+                                            <td>{{ subcat_data.category.category }}</td>
+                                            <td class="text-end" id="subcategory-{{ subcat_data.subcategory.id }}-accumulated-spent-before">R$ {{ subcat_data.accumulated.spent_before|floatformat:2 }}</td>
+                                            <td class="text-end fw-bold" id="subcategory-{{ subcat_data.subcategory.id }}-accumulated-spent-after">R$ {{ subcat_data.accumulated.spent_after|floatformat:2 }}</td>
+                                            <td class="text-end" id="subcategory-{{ subcat_data.subcategory.id }}-accumulated-budgeted">R$ {{ subcat_data.accumulated.budgeted|floatformat:2 }}</td>
+                                            <td id="subcategory-{{ subcat_data.subcategory.id }}-accumulated-status">
+                                                {% if subcat_data.accumulated.budgeted > 0 %}
+                                                    {% if subcat_data.accumulated.spent_after <= subcat_data.accumulated.budgeted %}
+                                                        <span class="badge bg-success">Dentro do orçamento</span>
+                                                    {% else %}
+                                                        <span class="badge bg-danger">Acima do orçamento</span>
+                                                    {% endif %}
+                                                {% else %}
+                                                    <span class="badge bg-secondary">Sem orçamento</span>
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td><em>{{ subcat_data.subcategory.subcategory }} (Ano)</em></td>
+                                            <td></td>
+                                            <td class="text-end" id="subcategory-{{ subcat_data.subcategory.id }}-year-spent-before">R$ {{ subcat_data.year.spent_before|floatformat:2 }}</td>
+                                            <td class="text-end fw-bold" id="subcategory-{{ subcat_data.subcategory.id }}-year-projection">R$ {{ subcat_data.year.projection|floatformat:2 }}</td>
+                                            <td class="text-end" id="subcategory-{{ subcat_data.subcategory.id }}-year-budgeted">R$ {{ subcat_data.year.budgeted|floatformat:2 }}</td>
+                                            <td id="subcategory-{{ subcat_data.subcategory.id }}-year-status">
+                                                {% if subcat_data.year.budgeted > 0 %}
+                                                    {% if subcat_data.year.projection <= subcat_data.year.budgeted %}
+                                                        <span class="badge bg-success">Dentro do orçamento</span>
+                                                    {% else %}
+                                                        <span class="badge bg-danger">Acima do orçamento</span>
+                                                    {% endif %}
+                                                {% else %}
+                                                    <span class="badge bg-secondary">Sem orçamento</span>
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                            {% else %}
+                            <p class="text-muted">Nenhuma subcategoria válida encontrada nos itens.</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+            
             <!-- Botões de ação -->
             <div class="mt-4 pt-3 border-top">
                 <div class="d-flex gap-2 justify-content-end">
@@ -264,6 +414,210 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         }
     });
+    
+    // Função para atualizar informações de orçamento
+    function updateMultipleBudgetInfo() {
+        const items = [];
+        const itemForms = document.querySelectorAll('.item-form');
+        
+        itemForms.forEach((itemForm, index) => {
+            const isTransferCheckbox = itemForm.querySelector('input[type="checkbox"][name*="is_transfer"]');
+            const isTransfer = isTransferCheckbox && isTransferCheckbox.checked;
+            
+            if (isTransfer) {
+                return; // Ignorar transferências
+            }
+            
+            const subcategorySelect = itemForm.querySelector('select[name*="subcategory"]');
+            const valueInput = itemForm.querySelector('input[name*="value"]');
+            const transactionTypeSelect = itemForm.querySelector('select[name*="transaction_type"]');
+            
+            if (subcategorySelect && valueInput) {
+                const subcategoryId = subcategorySelect.value;
+                const value = valueInput.value || '0';
+                const transactionType = transactionTypeSelect ? transactionTypeSelect.value : 'DB';
+                
+                if (subcategoryId) {
+                    items.push({
+                        subcategory_id: subcategoryId,
+                        value: value,
+                        transaction_type: transactionType,
+                        is_transfer: false
+                    });
+                }
+            }
+        });
+        
+        if (items.length === 0) {
+            // Limpar informações se não houver itens válidos
+            clearMultipleBudgetInfo();
+            return;
+        }
+        
+        // Usar a data do primeiro scheduler (assumindo que todos têm a mesma data)
+        const transactionDate = ''; // Será calculado no backend
+        
+        // Fazer requisição AJAX
+        fetch('{% url "finance:get_multiple_budget_info" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            },
+            body: JSON.stringify({
+                items: items,
+                transaction_date: transactionDate
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                console.error('Erro ao buscar informações de orçamento:', data.error);
+                return;
+            }
+            
+            // Atualizar resumo por categoria
+            updateCategorySummary(data.by_category);
+            
+            // Atualizar detalhado por subcategoria
+            updateSubcategoryDetail(data.by_subcategory);
+        })
+        .catch(error => {
+            console.error('Erro ao buscar informações de orçamento:', error);
+        });
+    }
+    
+    // Função para atualizar resumo por categoria
+    function updateCategorySummary(categoryData) {
+        const tbody = document.querySelector('#category-summary tbody');
+        if (!tbody) return;
+        
+        tbody.innerHTML = '';
+        
+        for (const [catId, catData] of Object.entries(categoryData)) {
+            // Linha Acumulado
+            const row1 = document.createElement('tr');
+            row1.innerHTML = `
+                <td><strong>${catData.category_name}</strong></td>
+                <td class="text-end" id="category-${catId}-accumulated-spent-before">R$ ${parseFloat(catData.accumulated.spent_before).toFixed(2)}</td>
+                <td class="text-end fw-bold" id="category-${catId}-accumulated-spent-after">R$ ${parseFloat(catData.accumulated.spent_after).toFixed(2)}</td>
+                <td class="text-end" id="category-${catId}-accumulated-budgeted">R$ ${parseFloat(catData.accumulated.budgeted).toFixed(2)}</td>
+                <td id="category-${catId}-accumulated-status">${getStatusBadge(catData.accumulated.budgeted, catData.accumulated.spent_after)}</td>
+            `;
+            tbody.appendChild(row1);
+            
+            // Linha Ano
+            const row2 = document.createElement('tr');
+            const projection = parseFloat(catData.year.projection || catData.year.spent_after || 0);
+            row2.innerHTML = `
+                <td><em>${catData.category_name} (Ano)</em></td>
+                <td class="text-end" id="category-${catId}-year-spent-before">R$ ${parseFloat(catData.year.spent_before).toFixed(2)}</td>
+                <td class="text-end fw-bold" id="category-${catId}-year-projection">R$ ${projection.toFixed(2)}</td>
+                <td class="text-end" id="category-${catId}-year-budgeted">R$ ${parseFloat(catData.year.budgeted).toFixed(2)}</td>
+                <td id="category-${catId}-year-status">${getStatusBadge(catData.year.budgeted, projection)}</td>
+            `;
+            tbody.appendChild(row2);
+        }
+    }
+    
+    // Função para atualizar detalhado por subcategoria
+    function updateSubcategoryDetail(subcategoryData) {
+        const tbody = document.querySelector('#subcategory-detail tbody');
+        if (!tbody) return;
+        
+        tbody.innerHTML = '';
+        
+        subcategoryData.forEach(subcatData => {
+            const itemsCountBadge = subcatData.items_count > 1 ? ` <span class="badge bg-info">${subcatData.items_count} itens</span>` : '';
+            
+            // Linha Acumulado
+            const row1 = document.createElement('tr');
+            row1.innerHTML = `
+                <td><strong>${subcatData.subcategory_name}</strong>${itemsCountBadge}</td>
+                <td>${subcatData.category_name}</td>
+                <td class="text-end" id="subcategory-${subcatData.subcategory_id}-accumulated-spent-before">R$ ${parseFloat(subcatData.accumulated.spent_before).toFixed(2)}</td>
+                <td class="text-end fw-bold" id="subcategory-${subcatData.subcategory_id}-accumulated-spent-after">R$ ${parseFloat(subcatData.accumulated.spent_after).toFixed(2)}</td>
+                <td class="text-end" id="subcategory-${subcatData.subcategory_id}-accumulated-budgeted">R$ ${parseFloat(subcatData.accumulated.budgeted).toFixed(2)}</td>
+                <td id="subcategory-${subcatData.subcategory_id}-accumulated-status">${getStatusBadge(subcatData.accumulated.budgeted, subcatData.accumulated.spent_after)}</td>
+            `;
+            tbody.appendChild(row1);
+            
+            // Linha Ano
+            const row2 = document.createElement('tr');
+            const projection = parseFloat(subcatData.year.projection || subcatData.year.spent_after || 0);
+            row2.innerHTML = `
+                <td><em>${subcatData.subcategory_name} (Ano)</em></td>
+                <td></td>
+                <td class="text-end" id="subcategory-${subcatData.subcategory_id}-year-spent-before">R$ ${parseFloat(subcatData.year.spent_before).toFixed(2)}</td>
+                <td class="text-end fw-bold" id="subcategory-${subcatData.subcategory_id}-year-projection">R$ ${projection.toFixed(2)}</td>
+                <td class="text-end" id="subcategory-${subcatData.subcategory_id}-year-budgeted">R$ ${parseFloat(subcatData.year.budgeted).toFixed(2)}</td>
+                <td id="subcategory-${subcatData.subcategory_id}-year-status">${getStatusBadge(subcatData.year.budgeted, projection)}</td>
+            `;
+            tbody.appendChild(row2);
+        });
+    }
+    
+    // Função para obter badge de status
+    function getStatusBadge(budgeted, spentAfter) {
+        const budgetedNum = parseFloat(budgeted);
+        const spentAfterNum = parseFloat(spentAfter);
+        
+        if (budgetedNum > 0) {
+            if (spentAfterNum <= budgetedNum) {
+                return '<span class="badge bg-success">Dentro do orçamento</span>';
+            } else {
+                return '<span class="badge bg-danger">Acima do orçamento</span>';
+            }
+        } else {
+            return '<span class="badge bg-secondary">Sem orçamento</span>';
+        }
+    }
+    
+    // Função para limpar informações
+    function clearMultipleBudgetInfo() {
+        const categoryTbody = document.querySelector('#category-summary tbody');
+        const subcategoryTbody = document.querySelector('#subcategory-detail tbody');
+        
+        if (categoryTbody) categoryTbody.innerHTML = '<tr><td colspan="5" class="text-muted">Nenhuma subcategoria válida encontrada nos itens.</td></tr>';
+        if (subcategoryTbody) subcategoryTbody.innerHTML = '<tr><td colspan="6" class="text-muted">Nenhuma subcategoria válida encontrada nos itens.</td></tr>';
+    }
+    
+    // Adicionar listeners para atualização dinâmica
+    document.querySelectorAll('.item-form').forEach(itemForm => {
+        const subcategorySelect = itemForm.querySelector('select[name*="subcategory"]');
+        const valueInput = itemForm.querySelector('input[name*="value"]');
+        const transactionTypeSelect = itemForm.querySelector('select[name*="transaction_type"]');
+        const isTransferCheckbox = itemForm.querySelector('input[type="checkbox"][name*="is_transfer"]');
+        
+        if (subcategorySelect) {
+            subcategorySelect.addEventListener('change', function() {
+                updateMultipleBudgetInfo();
+            });
+        }
+        
+        if (valueInput) {
+            valueInput.addEventListener('input', function() {
+                updateMultipleBudgetInfo();
+            });
+        }
+        
+        if (transactionTypeSelect) {
+            transactionTypeSelect.addEventListener('change', function() {
+                updateMultipleBudgetInfo();
+            });
+        }
+        
+        if (isTransferCheckbox) {
+            isTransferCheckbox.addEventListener('change', function() {
+                updateMultipleBudgetInfo();
+            });
+        }
+    });
+    
+    // Atualizar informações ao carregar a página
+    setTimeout(function() {
+        updateMultipleBudgetInfo();
+    }, 500);
 });
 </script>
 {% endblock %}
