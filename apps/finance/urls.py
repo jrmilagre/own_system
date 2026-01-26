@@ -52,6 +52,9 @@ urlpatterns = [
     path('api/subcategory/<int:subcategory_id>/default-transaction-type/', views.get_subcategory_default_transaction_type, name='subcategory_default_transaction_type'),
     path('api/budget-info/', views.get_budget_info, name='get_budget_info'),
     path('api/multiple-budget-info/', views.get_multiple_budget_info, name='get_multiple_budget_info'),
+    # Chatbot URLs
+    path('chatbot/', views.chatbot_view, name='chatbot'),
+    path('api/chatbot/', views.chatbot_api, name='chatbot_api'),
     # Quick create endpoints (AJAX)
     path('api/quick-create/account/', views.quick_create_account, name='quick_create_account'),
     path('api/quick-create/beneficiary/', views.quick_create_beneficiary, name='quick_create_beneficiary'),

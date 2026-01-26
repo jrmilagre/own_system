@@ -168,3 +168,22 @@ STORAGES = {
         "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
     },
 }
+
+# LangChain Chatbot Configuration
+# Configure as variáveis de ambiente no arquivo .env:
+# LLM_PROVIDER=gemini (padrão, gratuito), ollama ou openai
+# 
+# Para Google Gemini (GRATUITO, recomendado - não requer instalação):
+#   LLM_PROVIDER=gemini
+#   GOOGLE_API_KEY=sua-chave-api-aqui (obter em: https://makersuite.google.com/app/apikey)
+#   GEMINI_MODEL=gemini-pro (padrão)
+# 
+# Para Ollama (local, gratuito, requer instalação):
+#   LLM_PROVIDER=ollama
+#   OLLAMA_BASE_URL=http://localhost:11434 (padrão)
+#   OLLAMA_MODEL=llama3.1 (padrão) ou mistral, qwen2.5, etc.
+# 
+# Para OpenAI (produção, requer API key e créditos):
+#   LLM_PROVIDER=openai
+#   OPENAI_API_KEY=sua-chave-api-aqui
+#   OPENAI_MODEL=gpt-3.5-turbo (padrão) ou gpt-4, gpt-4o, etc.

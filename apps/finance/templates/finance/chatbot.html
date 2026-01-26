@@ -1,0 +1,229 @@
+{% extends "finance/base.html" %}
+
+{% block section_name %}Chatbot - Consulta de Orçamento e Transações{% endblock %}
+
+{% block content %}
+<div class="card shadow-sm border-0">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0">
+            <i class="fas fa-robot me-2"></i>Assistente Financeiro
+        </h5>
+    </div>
+    <div class="card-body p-0">
+        <!-- Área de mensagens -->
+        <div id="chat-messages" class="p-3" style="height: 500px; overflow-y: auto; background-color: #f8f9fa;">
+            <div class="alert alert-info mb-3">
+                <i class="fas fa-info-circle me-2"></i>
+                <strong>Bem-vindo!</strong> Faça perguntas sobre orçamento e transações. 
+                Exemplos: "Qual o orçamento de Alimentação em janeiro de 2025?", 
+                "Compare orçamento vs gastos de Transporte em 2025"
+            </div>
+        </div>
+        
+        <!-- Área de input -->
+        <div class="border-top p-3 bg-white">
+            <form id="chat-form" class="d-flex gap-2">
+                {% csrf_token %}
+                <input 
+                    type="text" 
+                    id="chat-input" 
+                    class="form-control" 
+                    placeholder="Digite sua pergunta..." 
+                    autocomplete="off"
+                    required
+                >
+                <button type="submit" class="btn btn-primary" id="send-btn">
+                    <i class="fas fa-paper-plane me-1"></i>Enviar
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<style>
+    .message {
+        margin-bottom: 1rem;
+        animation: fadeIn 0.3s;
+    }
+    
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    
+    .message-user {
+        text-align: right;
+    }
+    
+    .message-user .message-content {
+        display: inline-block;
+        background-color: #007bff;
+        color: white;
+        padding: 0.75rem 1rem;
+        border-radius: 1rem 1rem 0 1rem;
+        max-width: 70%;
+        word-wrap: break-word;
+    }
+    
+    .message-assistant {
+        text-align: left;
+    }
+    
+    .message-assistant .message-content {
+        display: inline-block;
+        background-color: white;
+        color: #333;
+        padding: 0.75rem 1rem;
+        border-radius: 1rem 1rem 1rem 0;
+        max-width: 70%;
+        word-wrap: break-word;
+        border: 1px solid #dee2e6;
+    }
+    
+    .message-time {
+        font-size: 0.75rem;
+        color: #6c757d;
+        margin-top: 0.25rem;
+    }
+    
+    .loading {
+        display: inline-block;
+        width: 20px;
+        height: 20px;
+        border: 3px solid #f3f3f3;
+        border-top: 3px solid #007bff;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+    
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+    
+    #chat-messages {
+        scroll-behavior: smooth;
+    }
+    
+    #chat-messages::-webkit-scrollbar {
+        width: 8px;
+    }
+    
+    #chat-messages::-webkit-scrollbar-track {
+        background: #f1f1f1;
+    }
+    
+    #chat-messages::-webkit-scrollbar-thumb {
+        background: #888;
+        border-radius: 4px;
+    }
+    
+    #chat-messages::-webkit-scrollbar-thumb:hover {
+        background: #555;
+    }
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const chatForm = document.getElementById('chat-form');
+    const chatInput = document.getElementById('chat-input');
+    const chatMessages = document.getElementById('chat-messages');
+    const sendBtn = document.getElementById('send-btn');
+    
+    function addMessage(content, isUser) {
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `message ${isUser ? 'message-user' : 'message-assistant'}`;
+        
+        const contentDiv = document.createElement('div');
+        contentDiv.className = 'message-content';
+        contentDiv.textContent = content;
+        
+        const timeDiv = document.createElement('div');
+        timeDiv.className = 'message-time';
+        const now = new Date();
+        timeDiv.textContent = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        
+        messageDiv.appendChild(contentDiv);
+        messageDiv.appendChild(timeDiv);
+        chatMessages.appendChild(messageDiv);
+        
+        // Scroll para o final
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+    
+    function addLoadingMessage() {
+        const loadingDiv = document.createElement('div');
+        loadingDiv.className = 'message message-assistant';
+        loadingDiv.id = 'loading-message';
+        
+        const contentDiv = document.createElement('div');
+        contentDiv.className = 'message-content';
+        contentDiv.innerHTML = '<div class="loading"></div> Processando...';
+        
+        loadingDiv.appendChild(contentDiv);
+        chatMessages.appendChild(loadingDiv);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+    
+    function removeLoadingMessage() {
+        const loadingMsg = document.getElementById('loading-message');
+        if (loadingMsg) {
+            loadingMsg.remove();
+        }
+    }
+    
+    chatForm.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const query = chatInput.value.trim();
+        if (!query) return;
+        
+        // Adicionar mensagem do usuário
+        addMessage(query, true);
+        chatInput.value = '';
+        
+        // Desabilitar input e botão
+        chatInput.disabled = true;
+        sendBtn.disabled = true;
+        sendBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Enviando...';
+        
+        // Adicionar mensagem de loading
+        addLoadingMessage();
+        
+        try {
+            const response = await fetch('{% url "finance:chatbot_api" %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                },
+                body: JSON.stringify({ query: query })
+            });
+            
+            const data = await response.json();
+            
+            removeLoadingMessage();
+            
+            if (data.success) {
+                addMessage(data.response, false);
+            } else {
+                addMessage('Erro: ' + (data.error || 'Não foi possível processar sua pergunta.'), false);
+            }
+        } catch (error) {
+            removeLoadingMessage();
+            addMessage('Erro de conexão. Por favor, tente novamente.', false);
+            console.error('Erro:', error);
+        } finally {
+            // Reabilitar input e botão
+            chatInput.disabled = false;
+            sendBtn.disabled = false;
+            sendBtn.innerHTML = '<i class="fas fa-paper-plane me-1"></i>Enviar';
+            chatInput.focus();
+        }
+    });
+    
+    // Focar no input ao carregar
+    chatInput.focus();
+});
+</script>
+{% endblock %}

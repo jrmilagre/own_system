@@ -7675,3 +7675,51 @@ def asset_transactions_import_execute(request):
     except Exception as e:
         messages.error(request, f'Erro durante importação: {str(e)}')
         return redirect('finance:asset_transactions_import_staging')
+
+
+# Chatbot Views
+def chatbot_view(request):
+    """View para renderizar a interface do chatbot"""
+    return render(request, 'finance/chatbot.html')
+
+
+def chatbot_api(request):
+    """API endpoint para processar mensagens do chatbot"""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
+    
+    try:
+        data = json.loads(request.body)
+        query = data.get('query', '').strip()
+        
+        if not query:
+            return JsonResponse({'error': 'Query não fornecida'}, status=400)
+        
+        # Importar serviço do chatbot
+        from .chatbot_service import get_chatbot_response
+        
+        # Obter histórico da sessão (opcional)
+        chat_history = request.session.get('chat_history', [])
+        
+        # Processar query
+        response = get_chatbot_response(query, chat_history)
+        
+        # Atualizar histórico na sessão (manter últimas 10 mensagens)
+        chat_history.append({'role': 'user', 'content': query})
+        chat_history.append({'role': 'assistant', 'content': response})
+        if len(chat_history) > 20:  # Manter últimas 10 interações (20 mensagens)
+            chat_history = chat_history[-20:]
+        request.session['chat_history'] = chat_history
+        
+        return JsonResponse({
+            'response': response,
+            'success': True
+        })
+    
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+    except Exception as e:
+        return JsonResponse({
+            'error': f'Erro ao processar consulta: {str(e)}',
+            'success': False
+        }, status=500)
