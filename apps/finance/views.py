@@ -19,7 +19,7 @@ from .forms import (
     MultipleSchedulerRegisterItemFormSet, AssetForm, AssetTransactionForm, AssetPositionForm, InventoryForm, AssetTransactionCategoryConfigForm,
     CashFlowItemForm, CashFlowCalculationRuleFormSet, TransactionFilterForm, SchedulerFilterForm, BudgetForm,
     TransactionsImportForm, TransactionsStagingFilterForm, SubcategoryMoveForm,
-    AssetTransactionsImportForm, AssetTransactionsStagingFilterForm, AccountFilterForm, AssetTransactionFilterForm,
+    AssetTransactionsImportForm, AssetTransactionsStagingFilterForm, AccountFilterForm, AssetFilterForm, AssetTransactionFilterForm,
     MultipleAssetTransactionForm, MultipleAssetTransactionItemForm, MultipleAssetTransactionItemFormSet
 )
 from .transactions_parser import TransactionsParser
@@ -3289,9 +3289,103 @@ def multiple_scheduler_register(request, group_id):
 
 # Asset Views
 def asset_list(request):
-    """Lista de ativos"""
+    """Lista de ativos com filtros e paginação"""
+    from django.core.paginator import Paginator
+    from django.db.models import Q
+    
+    # Inicializar formulário de filtros
+    filter_form = AssetFilterForm(request.GET)
+    
+    # Query base
     assets = Asset.objects.all()
-    return render(request, 'finance/asset_list.html', {'assets': assets})
+    
+    # Aplicar filtros
+    if filter_form.is_valid():
+        asset_types = filter_form.cleaned_data.get('asset_type')
+        currencies = filter_form.cleaned_data.get('currency')
+        sector = filter_form.cleaned_data.get('sector')
+        code_search = filter_form.cleaned_data.get('code_search')
+        name_search = filter_form.cleaned_data.get('name_search')
+        
+        if asset_types:
+            assets = assets.filter(asset_type__in=asset_types)
+        
+        if currencies:
+            assets = assets.filter(currency__in=currencies)
+        
+        if sector:
+            assets = assets.filter(sector__icontains=sector)
+        
+        if code_search:
+            assets = assets.filter(code__icontains=code_search)
+        
+        if name_search:
+            assets = assets.filter(name__icontains=name_search)
+    
+    # Ordenar - suporte para múltiplas colunas
+    sort_fields_str = request.GET.get('sort', '')
+    sort_orders_str = request.GET.get('order', 'asc')
+    
+    # Mapeamento de campos de ordenação
+    sort_mapping = {
+        'code': 'code',
+        'name': 'name',
+        'asset_type': 'asset_type',
+        'sector': 'sector',
+        'currency': 'currency',
+    }
+    
+    # Processar múltiplos campos de ordenação (separados por vírgula)
+    sort_fields = [f.strip() for f in sort_fields_str.split(',') if f.strip()] if sort_fields_str else []
+    sort_orders = [o.strip() for o in sort_orders_str.split(',')] if sort_fields_str else []
+    
+    # Validar e aplicar ordenações
+    order_fields = []
+    valid_sorts = []
+    valid_orders = []
+    
+    # Se não houver ordenação especificada, usar ordenação padrão por código
+    if not sort_fields:
+        sort_fields = ['code']
+        sort_orders = ['asc']
+    
+    for i, sort_field in enumerate(sort_fields):
+        if sort_field in sort_mapping:
+            sort_order = sort_orders[i] if i < len(sort_orders) else 'asc'
+            if sort_order not in ['asc', 'desc']:
+                sort_order = 'asc'
+            
+            order_prefix = '' if sort_order == 'asc' else '-'
+            order_fields.append(f"{order_prefix}{sort_mapping[sort_field]}")
+            
+            valid_sorts.append(sort_field)
+            valid_orders.append(sort_order)
+    
+    if order_fields:
+        assets = assets.order_by(*order_fields)
+    else:
+        # Ordenação padrão
+        assets = assets.order_by('code')
+    
+    # Paginação
+    paginator = Paginator(assets, 50)  # 50 ativos por página
+    page_number = request.GET.get('page', 1)
+    page_obj = paginator.get_page(page_number)
+    
+    # Passar informações de ordenação para o template
+    sort_info = {}
+    for idx, sort_field in enumerate(valid_sorts):
+        sort_info[sort_field] = {
+            'priority': idx + 1,
+            'order': valid_orders[idx] if idx < len(valid_orders) else 'asc'
+        }
+    
+    return render(request, 'finance/asset_list.html', {
+        'assets': page_obj,
+        'filter_form': filter_form,
+        'page_obj': page_obj,
+        'sort_info': sort_info,
+    })
 
 
 def asset_create(request):

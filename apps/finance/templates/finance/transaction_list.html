@@ -356,20 +356,23 @@
                         </td>
                         <td class="pe-3 py-1">
                             {% if transaction.asset_transaction %}
-                                <div class="btn-group btn-group-sm compact-buttons" role="group">
+                                <div class="d-inline-flex align-items-center gap-1">
                                     {% if transaction.asset_transaction.multiple_group_id %}
                                         <a href="{% url 'finance:multiple_asset_transaction_update' transaction.asset_transaction.multiple_group_id %}" class="btn btn-sm btn-outline-info compact-btn" title="Editar transação múltipla de ativo">
                                             <i class="fas fa-briefcase"></i>
+                                        </a>
+                                        <a href="{% url 'finance:multiple_asset_transaction_update' transaction.asset_transaction.multiple_group_id %}" class="text-muted text-decoration-none" style="font-size: 0.7rem;" title="Editar transação múltipla de ativo">
+                                            Bloqueada
                                         </a>
                                     {% else %}
                                         <a href="{% url 'finance:asset_transaction_update' transaction.asset_transaction.pk %}" class="btn btn-sm btn-outline-info compact-btn" title="Editar transação de ativo">
                                             <i class="fas fa-briefcase"></i>
                                         </a>
+                                        <a href="{% url 'finance:asset_transaction_update' transaction.asset_transaction.pk %}" class="text-muted text-decoration-none" style="font-size: 0.7rem;" title="Editar transação de ativo">
+                                            Bloqueada
+                                        </a>
                                     {% endif %}
                                 </div>
-                                <small class="d-block text-muted mt-1" style="font-size: 0.7rem;">
-                                    <i class="fas fa-lock"></i> Bloqueada
-                                </small>
                             {% else %}
                                 <div class="btn-group btn-group-sm compact-buttons" role="group">
                                     <a href="{% url 'finance:transaction_update' transaction.pk %}" class="btn btn-sm btn-outline-primary compact-btn" title="Editar">

@@ -1327,6 +1327,43 @@ class AccountFilterForm(forms.Form):
     )
 
 
+class AssetFilterForm(forms.Form):
+    """Formulário de filtros para a lista de ativos"""
+    asset_type = forms.MultipleChoiceField(
+        choices=Asset.ASSET_TYPE_CHOICES,
+        required=False,
+        label='Tipo de Ativo',
+        widget=forms.CheckboxSelectMultiple(attrs={'class': 'form-check-input'})
+    )
+    currency = forms.MultipleChoiceField(
+        choices=[],  # Será preenchido no __init__
+        required=False,
+        label='Moeda',
+        widget=forms.CheckboxSelectMultiple(attrs={'class': 'form-check-input'})
+    )
+    sector = forms.CharField(
+        required=False,
+        label='Setor',
+        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Digite o setor...'})
+    )
+    code_search = forms.CharField(
+        required=False,
+        label='Buscar por código',
+        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Digite o código...'})
+    )
+    name_search = forms.CharField(
+        required=False,
+        label='Buscar por nome',
+        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Digite o nome...'})
+    )
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Preencher opções de moeda dinamicamente
+        currencies = Asset.objects.values_list('currency', flat=True).distinct().order_by('currency')
+        self.fields['currency'].choices = [(c, c) for c in currencies if c]
+
+
 class SchedulerFilterForm(forms.Form):
     """Formulário de filtros para a lista de agendamentos"""
     account = forms.ModelChoiceField(
