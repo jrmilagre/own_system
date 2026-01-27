@@ -121,9 +121,15 @@
                             {% if trans.transaction %}
                                 {% url 'finance:account_statement_report' as statement_base_url %}
                                 {% if trans.transaction.asset_transaction %}
-                                    <a href="{% url 'finance:asset_transaction_update' trans.transaction.asset_transaction.pk %}?next={{ statement_base_url }}%3Faccount%3D{{ account.pk }}%26start_date%3D{{ start_date|date:'Y-m-d' }}%26end_date%3D{{ end_date|date:'Y-m-d' }}" class="text-decoration-none" title="Editar transação de ativo">
-                                        {{ trans.id|default:"---" }}
-                                    </a>
+                                    {% if trans.transaction.asset_transaction.multiple_group_id %}
+                                        <a href="{% url 'finance:multiple_asset_transaction_update' trans.transaction.asset_transaction.multiple_group_id %}?next={{ statement_base_url }}%3Faccount%3D{{ account.pk }}%26start_date%3D{{ start_date|date:'Y-m-d' }}%26end_date%3D{{ end_date|date:'Y-m-d' }}" class="text-decoration-none" title="Editar transação múltipla de ativo">
+                                            {{ trans.id|default:"---" }}
+                                        </a>
+                                    {% else %}
+                                        <a href="{% url 'finance:asset_transaction_update' trans.transaction.asset_transaction.pk %}?next={{ statement_base_url }}%3Faccount%3D{{ account.pk }}%26start_date%3D{{ start_date|date:'Y-m-d' }}%26end_date%3D{{ end_date|date:'Y-m-d' }}" class="text-decoration-none" title="Editar transação de ativo">
+                                            {{ trans.id|default:"---" }}
+                                        </a>
+                                    {% endif %}
                                 {% else %}
                                     <a href="{% url 'finance:transaction_update' trans.transaction.pk %}?next={{ statement_base_url }}%3Faccount%3D{{ account.pk }}%26start_date%3D{{ start_date|date:'Y-m-d' }}%26end_date%3D{{ end_date|date:'Y-m-d' }}" class="text-decoration-none" title="Editar transação">
                                         {{ trans.id|default:"---" }}

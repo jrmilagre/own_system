@@ -154,6 +154,30 @@
                     {% endif %}
                 </div>
 
+                <!-- Assessoria -->
+                <div class="col-md-6">
+                    <div class="form-check mt-4">
+                        {{ form.assessoria }}
+                        <label for="{{ form.assessoria.id_for_label }}" class="form-check-label">
+                            <i class="fas fa-user-tie me-1 text-info"></i>Assessoria
+                        </label>
+                    </div>
+                    {% if form.assessoria.errors %}
+                        <div class="text-danger small mt-1">{{ form.assessoria.errors }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Nota Fiscal -->
+                <div class="col-md-6">
+                    <label for="{{ form.invoice.id_for_label }}" class="form-label">
+                        <i class="fas fa-file-invoice me-1 text-primary"></i>Nota Fiscal
+                    </label>
+                    {{ form.invoice }}
+                    {% if form.invoice.errors %}
+                        <div class="text-danger small mt-1">{{ form.invoice.errors }}</div>
+                    {% endif %}
+                </div>
+
                 <!-- Observações -->
                 <div class="col-12">
                     <label for="{{ form.notes.id_for_label }}" class="form-label">

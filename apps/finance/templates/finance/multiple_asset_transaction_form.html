@@ -1,0 +1,842 @@
+{% extends 'finance/base.html' %}
+
+{% block section_name %}{% if group_id %}Editar Transação Múltipla de Ativos{% else %}Criar Nova Transação Múltipla de Ativos{% endif %}{% endblock %}
+
+{% block title %}{% if group_id %}Editar Transação Múltipla de Ativos{% else %}Criar Transação Múltipla de Ativos{% endif %}{% endblock %}
+
+{% block content %}
+<div class="card shadow-sm border-0">
+    <div class="card-header bg-light">
+        <h5 class="mb-0">
+            <i class="fas fa-layer-group me-2"></i>
+            {% if group_id %}Editar Transação Múltipla de Ativos{% else %}Criar Nova Transação Múltipla de Ativos{% endif %}
+        </h5>
+    </div>
+    <div class="card-body" style="background-color: #f8f9fa;">
+        <form method="post" class="needs-validation" novalidate id="multiple-asset-transaction-form">
+            {% csrf_token %}
+            
+            {% if form.errors or formset.non_form_errors %}
+            <div class="alert alert-danger mb-3">
+                <strong><i class="fas fa-exclamation-triangle me-1"></i>Erros no formulário:</strong>
+                <ul class="mb-0 mt-2">
+                    {% for field, errors in form.errors.items %}
+                        {% for error in errors %}
+                        <li>{{ field }}: {{ error }}</li>
+                        {% endfor %}
+                    {% endfor %}
+                    {% for error in formset.non_form_errors %}
+                    <li>{{ error }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+            
+            <h6 class="mb-3 text-muted"><i class="fas fa-info-circle me-1"></i>Campos Compartilhados</h6>
+            <div class="row g-3">
+                <!-- Conta Investimento -->
+                <div class="col-md-6">
+                    <label for="{{ form.account.id_for_label }}" class="form-label">
+                        <i class="fas fa-university me-1 text-primary"></i>Conta Investimento <span class="text-danger">*</span>
+                    </label>
+                    <div class="input-group">
+                        {{ form.account }}
+                        <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#quickCreateAccountModal" title="Criar nova conta">
+                            <i class="fas fa-plus"></i>
+                        </button>
+                    </div>
+                    {% if form.account.errors %}
+                        <div class="text-danger small mt-1">{{ form.account.errors }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Tipo de Operação -->
+                <div class="col-md-6">
+                    <label for="{{ form.operation_type.id_for_label }}" class="form-label">
+                        <i class="fas fa-exchange-alt me-1 text-warning"></i>Tipo de operação <span class="text-danger">*</span>
+                    </label>
+                    {{ form.operation_type }}
+                    {% if form.operation_type.errors %}
+                        <div class="text-danger small mt-1">{{ form.operation_type.errors }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Data da Operação -->
+                <div class="col-md-4">
+                    <label for="{{ form.date.id_for_label }}" class="form-label">
+                        <i class="fas fa-calendar-alt me-1 text-success"></i>Data da operação <span class="text-danger">*</span>
+                    </label>
+                    {{ form.date }}
+                    {% if form.date.errors %}
+                        <div class="text-danger small mt-1">{{ form.date.errors }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Taxas e Impostos (Total) -->
+                <div class="col-md-4">
+                    <label for="{{ form.fees.id_for_label }}" class="form-label">
+                        <i class="fas fa-percent me-1 text-danger"></i>Taxas e impostos (total) <span class="text-danger">*</span>
+                    </label>
+                    <div class="input-group">
+                        <span class="input-group-text">R$</span>
+                        {{ form.fees }}
+                    </div>
+                    <small class="text-muted">Será rateado proporcionalmente entre os ativos</small>
+                    {% if form.fees.errors %}
+                        <div class="text-danger small mt-1">{{ form.fees.errors }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Conta Cash -->
+                <div id="cash-account-row" class="col-md-4">
+                    <label for="{{ form.cash_account.id_for_label }}" class="form-label">
+                        <i class="fas fa-wallet me-1 text-success"></i>Conta Cash
+                    </label>
+                    <div class="input-group">
+                        {{ form.cash_account }}
+                        <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#quickCreateAccountModal" title="Criar nova conta">
+                            <i class="fas fa-plus"></i>
+                        </button>
+                    </div>
+                    {% if form.cash_account.errors %}
+                        <div class="text-danger small mt-1">{{ form.cash_account.errors }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Assessoria -->
+                <div class="col-md-6">
+                    <div class="form-check mt-4">
+                        {{ form.assessoria }}
+                        <label for="{{ form.assessoria.id_for_label }}" class="form-check-label">
+                            <i class="fas fa-user-tie me-1 text-info"></i>Assessoria
+                        </label>
+                    </div>
+                    {% if form.assessoria.errors %}
+                        <div class="text-danger small mt-1">{{ form.assessoria.errors }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Nota Fiscal -->
+                <div class="col-md-6">
+                    <label for="{{ form.invoice.id_for_label }}" class="form-label">
+                        <i class="fas fa-file-invoice me-1 text-primary"></i>Nota Fiscal
+                    </label>
+                    {{ form.invoice }}
+                    {% if form.invoice.errors %}
+                        <div class="text-danger small mt-1">{{ form.invoice.errors }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Observações -->
+                <div class="col-12">
+                    <label for="{{ form.notes.id_for_label }}" class="form-label">
+                        <i class="fas fa-sticky-note me-1 text-muted"></i>Observações
+                    </label>
+                    {{ form.notes }}
+                    {% if form.notes.errors %}
+                        <div class="text-danger small mt-1">{{ form.notes.errors }}</div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Resumo de Totais -->
+            <div class="mt-3 p-3 bg-light rounded border">
+                <div class="row">
+                    <div class="col-md-4">
+                        <strong>Total dos Ativos:</strong> <span id="total-assets" class="text-primary">R$ 0,00</span>
+                    </div>
+                    <div class="col-md-4">
+                        <strong>Taxas Totais:</strong> <span id="total-fees-display" class="text-danger">R$ 0,00</span>
+                    </div>
+                    <div class="col-md-4">
+                        <strong>Total Geral:</strong> <span id="total-general" class="text-success">R$ 0,00</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Itens da Transação -->
+            <div class="mt-4 pt-3 border-top">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h6 class="mb-0 text-muted"><i class="fas fa-list-ul me-1"></i>Itens da Transação Múltipla</h6>
+                    <button type="button" id="add-item" class="btn btn-outline-primary btn-sm">
+                        <i class="fas fa-plus me-1"></i>Adicionar Item
+                    </button>
+                </div>
+                {{ formset.management_form }}
+                <div class="table-responsive">
+                    <table class="table table-bordered table-hover align-middle" id="items-table">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width: 50px;" class="text-center">#</th>
+                                <th style="min-width: 200px;">Ativo</th>
+                                <th style="width: 150px;">Quantidade</th>
+                                <th style="width: 150px;">Preço Unitário</th>
+                                <th style="width: 150px;">Valor Total</th>
+                                <th style="width: 150px;">Taxas Rateadas</th>
+                                <th style="width: 80px;" class="text-center">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="items-container">
+                            {% for item_form in formset %}
+                            <tr class="item-form" data-form-index="{{ forloop.counter0 }}">
+                                <td class="text-center fw-bold">{{ forloop.counter }}</td>
+                                <td>
+                                    <div class="input-group input-group-sm">
+                                        {{ item_form.asset }}
+                                        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#quickCreateAssetModal" title="Criar novo ativo">
+                                            <i class="fas fa-plus"></i>
+                                        </button>
+                                    </div>
+                                    {% if item_form.asset.errors %}
+                                        <div class="text-danger small mt-1">{{ item_form.asset.errors }}</div>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="input-group input-group-sm">
+                                        {{ item_form.quantity }}
+                                    </div>
+                                    {% if item_form.quantity.errors %}
+                                        <div class="text-danger small mt-1">{{ item_form.quantity.errors }}</div>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="input-group input-group-sm">
+                                        <span class="input-group-text">R$</span>
+                                        {{ item_form.price }}
+                                    </div>
+                                    {% if item_form.price.errors %}
+                                        <div class="text-danger small mt-1">{{ item_form.price.errors }}</div>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="input-group input-group-sm">
+                                        <span class="input-group-text">R$</span>
+                                        {{ item_form.total_value }}
+                                    </div>
+                                    <small class="text-muted fees-preview" style="display: none;"></small>
+                                    {% if item_form.total_value.errors %}
+                                        <div class="text-danger small mt-1">{{ item_form.total_value.errors }}</div>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="text-center">
+                                        <span class="fees-allocated text-muted">R$ 0,00</span>
+                                    </div>
+                                </td>
+                                <td class="text-center">
+                                    <button type="button" class="btn btn-sm btn-outline-danger remove-item" data-form-index="{{ forloop.counter0 }}" title="Remover item">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                    {% for hidden in item_form.hidden_fields %}
+                                        {{ hidden }}
+                                    {% endfor %}
+                                </td>
+                            </tr>
+                            {% if item_form.non_field_errors %}
+                            <tr class="item-form" data-form-index="{{ forloop.counter0 }}">
+                                <td colspan="7" class="bg-danger bg-opacity-10">
+                                    <div class="alert alert-danger mb-0 py-2">
+                                        <ul class="mb-0">
+                                            {% for error in item_form.non_field_errors %}
+                                            <li>{{ error }}</li>
+                                            {% endfor %}
+                                        </ul>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endif %}
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Botões de ação -->
+            <div class="mt-4 pt-3 border-top">
+                <div class="d-flex gap-2 justify-content-end">
+                    <a href="{% url 'finance:asset_transaction_list' %}" class="btn btn-secondary">
+                        <i class="fas fa-times me-1"></i>Cancelar
+                    </a>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save me-1"></i>Salvar
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal: Criar Ativo Rápido -->
+<div class="modal fade" id="quickCreateAssetModal" tabindex="-1" aria-labelledby="quickCreateAssetModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="quickCreateAssetModalLabel">
+                    <i class="fas fa-chart-line me-2"></i>Criar Novo Ativo
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="quickCreateAssetForm">
+                    <div class="mb-3">
+                        <label for="asset_code" class="form-label">Código <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="asset_code" name="code" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="asset_name" class="form-label">Nome <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="asset_name" name="name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="asset_type" class="form-label">Tipo de Ativo <span class="text-danger">*</span></label>
+                        <select class="form-select" id="asset_type" name="asset_type" required>
+                            <option value="STOCK">Ação</option>
+                            <option value="FII">Fundo Imobiliário</option>
+                            <option value="ETF">ETF</option>
+                            <option value="BOND">Renda Fixa</option>
+                            <option value="REIT">REIT</option>
+                            <option value="CRYPTO">Criptomoeda</option>
+                            <option value="OTHER">Outro</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="asset_sector" class="form-label">Setor</label>
+                        <input type="text" class="form-control" id="asset_sector" name="sector">
+                    </div>
+                    <div class="mb-3">
+                        <label for="asset_currency" class="form-label">Moeda <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="asset_currency" name="currency" value="BRL" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="asset_notes" class="form-label">Observações</label>
+                        <textarea class="form-control" id="asset_notes" name="notes" rows="3"></textarea>
+                    </div>
+                    <div id="assetErrorMsg" class="text-danger small mb-2" style="display: none;"></div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="saveAssetBtn">
+                    <i class="fas fa-save me-1"></i>Salvar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Criar Conta Rápida -->
+<div class="modal fade" id="quickCreateAccountModal" tabindex="-1" aria-labelledby="quickCreateAccountModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="quickCreateAccountModalLabel">
+                    <i class="fas fa-university me-2"></i>Criar Nova Conta
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="quickCreateAccountForm">
+                    <div class="mb-3">
+                        <label for="account_name" class="form-label">Nome da Conta <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="account_name" name="name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="account_type" class="form-label">Tipo <span class="text-danger">*</span></label>
+                        <select class="form-select" id="account_type" name="account_type" required>
+                            <option value="INVEST" selected>Investimento</option>
+                            <option value="BANK">Banco</option>
+                            <option value="CASH">Dinheiro</option>
+                            <option value="CREDCARD">Cartão de crédito</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="account_currency" class="form-label">Moeda <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="account_currency" name="currency" value="Real brasileiro" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="account_opening_balance" class="form-label">Saldo de Abertura <span class="text-danger">*</span></label>
+                        <input type="number" class="form-control" id="account_opening_balance" name="opening_balance" step="0.01" value="0" required>
+                    </div>
+                    <div id="accountErrorMsg" class="text-danger small mb-2" style="display: none;"></div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="saveAccountBtn">
+                    <i class="fas fa-save me-1"></i>Salvar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.form-label {
+    font-weight: 500;
+    font-size: 0.9rem;
+    margin-bottom: 0.5rem;
+    color: #495057;
+}
+
+.form-control, .form-select {
+    font-size: 0.9rem;
+    border-radius: 0.375rem;
+    border: 1px solid #dee2e6;
+    background-color: #fff;
+    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+}
+
+.form-control:focus, .form-select:focus {
+    border-color: #86b7fe;
+    box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+    background-color: #fff;
+}
+
+.form-control:hover, .form-select:hover {
+    border-color: #adb5bd;
+    background-color: #fff;
+}
+
+.input-group-text {
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    font-weight: 500;
+}
+
+/* Estilos para tabela de itens */
+#items-table {
+    font-size: 0.9rem;
+}
+
+#items-table tbody tr.item-form {
+    transition: background-color 0.2s;
+}
+
+#items-table tbody tr.item-form:hover {
+    background-color: #f8f9fa;
+}
+
+#items-table tbody tr.item-form[style*="display: none"] {
+    display: none !important;
+}
+
+#items-table .form-control,
+#items-table .form-select {
+    font-size: 0.85rem;
+    padding: 0.25rem 0.5rem;
+}
+
+#items-table .input-group-sm > .form-control,
+#items-table .input-group-sm > .form-select {
+    font-size: 0.85rem;
+}
+
+#items-table td {
+    vertical-align: middle;
+    padding: 0.5rem;
+}
+
+#items-table th {
+    font-weight: 600;
+    font-size: 0.85rem;
+}
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Aplicar classes Bootstrap aos campos do formulário
+    document.querySelectorAll('input[type="text"], input[type="number"], input[type="date"], select, textarea').forEach(function(field) {
+        if (!field.classList.contains('form-control') && !field.classList.contains('form-select') && !field.classList.contains('form-check-input')) {
+            if (field.tagName === 'SELECT') {
+                field.classList.add('form-select');
+            } else if (field.tagName === 'TEXTAREA') {
+                field.classList.add('form-control');
+            } else {
+                field.classList.add('form-control');
+            }
+        }
+    });
+    
+    // Lógica de mostrar/ocultar campo Conta Cash baseado no tipo de operação
+    const operationTypeSelect = document.getElementById('id_operation_type');
+    const cashAccountRow = document.getElementById('cash-account-row');
+    
+    const operationsWithCashAccount = ['BUY', 'SELL', 'DIVIDEND', 'JCP', 'INTEREST', 'AMORTIZATION', 'REDEMPTION', 'SUB'];
+    
+    function toggleCashAccountField() {
+        if (operationTypeSelect && cashAccountRow) {
+            const selectedOperation = operationTypeSelect.value;
+            if (selectedOperation && operationsWithCashAccount.includes(selectedOperation)) {
+                cashAccountRow.style.display = 'block';
+            } else if (selectedOperation === 'PORTABILITY') {
+                cashAccountRow.style.display = 'block';
+            } else {
+                cashAccountRow.style.display = 'none';
+                const cashAccountSelect = document.getElementById('id_cash_account');
+                if (cashAccountSelect) {
+                    cashAccountSelect.value = '';
+                }
+            }
+        }
+    }
+    
+    toggleCashAccountField();
+    if (operationTypeSelect) {
+        operationTypeSelect.addEventListener('change', toggleCashAccountField);
+    }
+    
+    // Formset de itens
+    const formset = document.getElementById('items-container');
+    const addButton = document.getElementById('add-item');
+    const totalForms = document.getElementById('id_form-TOTAL_FORMS');
+    let formCount = totalForms ? parseInt(totalForms.value) : 0;
+    
+    // Função para calcular totais e rateio
+    function calculateTotalsAndAllocation() {
+        const feesTotal = parseFloat(document.getElementById('id_fees').value) || 0;
+        const rows = formset.querySelectorAll('tr.item-form:not([style*="display: none"])');
+        
+        let totalAssets = 0;
+        const items = [];
+        
+        rows.forEach(row => {
+            const quantityInput = row.querySelector('input[name*="-quantity"]');
+            const priceInput = row.querySelector('input[name*="-price"]');
+            const totalValueInput = row.querySelector('input[name*="-total_value"]');
+            const feesAllocatedSpan = row.querySelector('.fees-allocated');
+            
+            if (quantityInput && priceInput && totalValueInput) {
+                const quantity = parseFloat(quantityInput.value) || 0;
+                const price = parseFloat(priceInput.value) || 0;
+                const totalValue = quantity * price;
+                
+                totalValueInput.value = totalValue.toFixed(2);
+                totalAssets += totalValue;
+                
+                items.push({ totalValue, row, feesAllocatedSpan });
+            }
+        });
+        
+        // Atualizar total dos ativos
+        document.getElementById('total-assets').textContent = 'R$ ' + totalAssets.toFixed(2).replace('.', ',');
+        
+        // Atualizar taxas totais
+        document.getElementById('total-fees-display').textContent = 'R$ ' + feesTotal.toFixed(2).replace('.', ',');
+        
+        // Calcular total geral
+        const totalGeneral = totalAssets + feesTotal;
+        document.getElementById('total-general').textContent = 'R$ ' + totalGeneral.toFixed(2).replace('.', ',');
+        
+        // Ratear taxas proporcionalmente
+        items.forEach(item => {
+            if (totalAssets > 0) {
+                const feesAllocated = (item.totalValue / totalAssets) * feesTotal;
+                if (item.feesAllocatedSpan) {
+                    item.feesAllocatedSpan.textContent = 'R$ ' + feesAllocated.toFixed(2).replace('.', ',');
+                }
+            } else {
+                if (item.feesAllocatedSpan) {
+                    item.feesAllocatedSpan.textContent = 'R$ 0,00';
+                }
+            }
+        });
+    }
+    
+    // Adicionar novo item
+    if (addButton) {
+        addButton.addEventListener('click', function() {
+            const existingRows = formset.querySelectorAll('tr.item-form:not([style*="display: none"])');
+            if (existingRows.length === 0) return;
+            
+            const lastRow = existingRows[existingRows.length - 1];
+            const newRow = lastRow.cloneNode(true);
+            
+            const newIndex = formCount;
+            
+            // Atualizar IDs e names
+            newRow.querySelectorAll('input, select, textarea, label').forEach(element => {
+                if (element.id) {
+                    element.id = element.id.replace(/-\d+-/, '-' + newIndex + '-');
+                }
+                if (element.name) {
+                    element.name = element.name.replace(/-\d+-/, '-' + newIndex + '-');
+                }
+                if (element.htmlFor) {
+                    element.htmlFor = element.htmlFor.replace(/-\d+-/, '-' + newIndex + '-');
+                }
+            });
+            
+            // Atualizar número da linha
+            const numberCell = newRow.querySelector('td:first-child');
+            if (numberCell) {
+                numberCell.textContent = newIndex + 1;
+            }
+            
+            // Limpar valores
+            newRow.querySelectorAll('input[type="text"], input[type="number"], select, textarea').forEach(element => {
+                if (element.type !== 'checkbox' && element.type !== 'hidden') {
+                    element.value = '';
+                } else if (element.type === 'checkbox') {
+                    element.checked = false;
+                }
+            });
+            
+            // Limpar taxas rateadas
+            const feesAllocatedSpan = newRow.querySelector('.fees-allocated');
+            if (feesAllocatedSpan) {
+                feesAllocatedSpan.textContent = 'R$ 0,00';
+            }
+            
+            // Remover checkbox DELETE se existir
+            const deleteCheckbox = newRow.querySelector('input[type="checkbox"][name*="DELETE"]');
+            if (deleteCheckbox) {
+                const deleteDiv = deleteCheckbox.closest('div[style*="display: none"]');
+                if (deleteDiv) {
+                    deleteDiv.remove();
+                }
+            }
+            
+            // Remover linha de erro se existir
+            const errorRow = newRow.nextElementSibling;
+            if (errorRow && errorRow.classList.contains('item-form')) {
+                errorRow.remove();
+            }
+            
+            // Adicionar nova linha
+            formset.appendChild(newRow);
+            formCount++;
+            if (totalForms) totalForms.value = formCount;
+            
+            // Aplicar classes Bootstrap aos novos campos
+            newRow.querySelectorAll('input[type="text"], input[type="number"], select').forEach(function(field) {
+                if (field.tagName === 'SELECT') {
+                    field.classList.add('form-select');
+                } else {
+                    field.classList.add('form-control');
+                }
+            });
+            
+            // Configurar listeners
+            setupItemListeners(newRow);
+            setupRemoveButton(newRow);
+            calculateTotalsAndAllocation();
+        });
+    }
+    
+    // Função para configurar botão de remover
+    function setupRemoveButton(rowElement) {
+        const removeButton = rowElement.querySelector('.remove-item');
+        if (removeButton) {
+            removeButton.addEventListener('click', function() {
+                const deleteCheckbox = rowElement.querySelector('input[name*="-DELETE"]');
+                const idField = rowElement.querySelector('input[type="hidden"][name*="-id"]');
+                const hasValue = rowElement.querySelector('input[name*="-value"]') && 
+                                 rowElement.querySelector('input[name*="-value"]').value;
+                
+                if (deleteCheckbox && idField && idField.value) {
+                    deleteCheckbox.checked = true;
+                    rowElement.style.display = 'none';
+                    const errorRow = rowElement.nextElementSibling;
+                    if (errorRow && errorRow.classList.contains('item-form')) {
+                        errorRow.style.display = 'none';
+                    }
+                } else if (hasValue) {
+                    if (deleteCheckbox) {
+                        deleteCheckbox.checked = true;
+                    }
+                    rowElement.style.display = 'none';
+                    const errorRow = rowElement.nextElementSibling;
+                    if (errorRow && errorRow.classList.contains('item-form')) {
+                        errorRow.style.display = 'none';
+                    }
+                } else {
+                    rowElement.remove();
+                    const errorRow = rowElement.nextElementSibling;
+                    if (errorRow && errorRow.classList.contains('item-form')) {
+                        errorRow.remove();
+                    }
+                    formCount--;
+                    if (totalForms) totalForms.value = formCount;
+                    renumberItems();
+                }
+                calculateTotalsAndAllocation();
+            });
+        }
+    }
+    
+    // Função para renumerar itens
+    function renumberItems() {
+        const rows = formset.querySelectorAll('tr.item-form:not([style*="display: none"])');
+        rows.forEach((row, index) => {
+            const numberCell = row.querySelector('td:first-child');
+            if (numberCell) {
+                numberCell.textContent = index + 1;
+            }
+        });
+    }
+    
+    // Configurar listeners para cada item
+    function setupItemListeners(rowElement) {
+        const quantityInput = rowElement.querySelector('input[name*="-quantity"]');
+        const priceInput = rowElement.querySelector('input[name*="-price"]');
+        const totalValueInput = rowElement.querySelector('input[name*="-total_value"]');
+        
+        function updateTotal() {
+            calculateTotalsAndAllocation();
+        }
+        
+        if (quantityInput) {
+            quantityInput.addEventListener('input', updateTotal);
+            quantityInput.addEventListener('blur', updateTotal);
+        }
+        
+        if (priceInput) {
+            priceInput.addEventListener('input', updateTotal);
+            priceInput.addEventListener('blur', updateTotal);
+        }
+    }
+    
+    // Configurar listeners para itens existentes
+    document.querySelectorAll('tr.item-form').forEach(row => {
+        setupItemListeners(row);
+        setupRemoveButton(row);
+    });
+    
+    // Listener para taxas totais
+    const feesInput = document.getElementById('id_fees');
+    if (feesInput) {
+        feesInput.addEventListener('input', calculateTotalsAndAllocation);
+        feesInput.addEventListener('blur', calculateTotalsAndAllocation);
+    }
+    
+    // Calcular totais iniciais
+    calculateTotalsAndAllocation();
+    
+    // Quick Create Functions
+    function addOptionToSelect(selectId, value, text) {
+        const select = document.getElementById(selectId);
+        if (select) {
+            const option = document.createElement('option');
+            option.value = value;
+            option.textContent = text;
+            select.appendChild(option);
+            select.value = value;
+        }
+    }
+    
+    function updateAssetSelects(value, text) {
+        document.querySelectorAll('select[name*="-asset"]').forEach(select => {
+            const option = document.createElement('option');
+            option.value = value;
+            option.textContent = text;
+            select.appendChild(option);
+        });
+    }
+    
+    // Quick Create Asset
+    document.getElementById('saveAssetBtn')?.addEventListener('click', function() {
+        const form = document.getElementById('quickCreateAssetForm');
+        const formData = new FormData(form);
+        const errorMsg = document.getElementById('assetErrorMsg');
+        const btn = this;
+        
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Salvando...';
+        errorMsg.style.display = 'none';
+        
+        fetch('{% url "finance:quick_create_asset" %}', {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                updateAssetSelects(data.id, data.name);
+                const modal = bootstrap.Modal.getInstance(document.getElementById('quickCreateAssetModal'));
+                modal.hide();
+                form.reset();
+            } else {
+                errorMsg.textContent = Object.values(data.errors || {}).flat().join(', ') || 'Erro ao criar ativo';
+                errorMsg.style.display = 'block';
+            }
+        })
+        .catch(error => {
+            errorMsg.textContent = 'Erro ao criar ativo: ' + error.message;
+            errorMsg.style.display = 'block';
+        })
+        .finally(() => {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-save me-1"></i>Salvar';
+        });
+    });
+    
+    // Quick Create Account
+    let targetAccountField = 'id_account';
+    
+    document.querySelectorAll('[data-bs-target="#quickCreateAccountModal"]').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            const parentRow = this.closest('.col-md-6, .col-md-4');
+            if (parentRow && parentRow.querySelector('#id_cash_account')) {
+                targetAccountField = 'id_cash_account';
+            } else {
+                targetAccountField = 'id_account';
+            }
+        });
+    });
+    
+    document.getElementById('saveAccountBtn')?.addEventListener('click', function() {
+        const form = document.getElementById('quickCreateAccountForm');
+        const formData = new FormData(form);
+        const errorMsg = document.getElementById('accountErrorMsg');
+        const btn = this;
+        
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Salvando...';
+        errorMsg.style.display = 'none';
+        
+        fetch('{% url "finance:quick_create_account" %}', {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                addOptionToSelect(targetAccountField, data.id, data.name);
+                const modal = bootstrap.Modal.getInstance(document.getElementById('quickCreateAccountModal'));
+                modal.hide();
+                form.reset();
+                const accountTypeSelect = document.getElementById('account_type');
+                if (accountTypeSelect) {
+                    if (targetAccountField === 'id_cash_account') {
+                        accountTypeSelect.value = 'BANK';
+                    } else {
+                        accountTypeSelect.value = 'INVEST';
+                    }
+                }
+            } else {
+                errorMsg.textContent = Object.values(data.errors || {}).flat().join(', ') || 'Erro ao criar conta';
+                errorMsg.style.display = 'block';
+            }
+        })
+        .catch(error => {
+            errorMsg.textContent = 'Erro ao criar conta: ' + error.message;
+            errorMsg.style.display = 'block';
+        })
+        .finally(() => {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-save me-1"></i>Salvar';
+        });
+    });
+});
+</script>
+{% endblock %}

@@ -70,6 +70,10 @@ urlpatterns = [
     path('asset-transactions/create/', views.asset_transaction_create, name='asset_transaction_create'),
     path('asset-transactions/<int:pk>/update/', views.asset_transaction_update, name='asset_transaction_update'),
     path('asset-transactions/<int:pk>/delete/', views.asset_transaction_delete, name='asset_transaction_delete'),
+    # Multiple AssetTransaction URLs
+    path('asset-transactions/multiple/create/', views.multiple_asset_transaction_create, name='multiple_asset_transaction_create'),
+    path('asset-transactions/multiple/<uuid:group_id>/update/', views.multiple_asset_transaction_update, name='multiple_asset_transaction_update'),
+    path('asset-transactions/multiple/<uuid:group_id>/delete/', views.multiple_asset_transaction_delete, name='multiple_asset_transaction_delete'),
     # AssetTransactionCategoryConfig URLs
     path('asset-transaction-category-configs/', views.asset_transaction_category_config_list, name='asset_transaction_category_config_list'),
     path('asset-transaction-category-configs/create/', views.asset_transaction_category_config_create, name='asset_transaction_category_config_create'),

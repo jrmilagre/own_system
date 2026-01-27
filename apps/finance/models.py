@@ -1172,6 +1172,17 @@ class AssetTransaction(BaseModel):
         'Observações',
         blank=True
     )
+    assessoria = models.BooleanField(
+        'Assessoria',
+        default=False,
+        help_text='Indica se há assessoria nesta transação'
+    )
+    invoice = models.CharField(
+        'Nota Fiscal',
+        max_length=100,
+        blank=True,
+        help_text='Número da nota fiscal'
+    )
     import_hash = models.CharField(
         'Hash de importação',
         max_length=32,
@@ -1179,6 +1190,12 @@ class AssetTransaction(BaseModel):
         null=True,
         blank=True,
         help_text='Hash MD5 gerado a partir dos dados originais da importação para prevenir duplicatas'
+    )
+    multiple_group_id = models.UUIDField(
+        'ID do grupo de transação múltipla',
+        null=True,
+        blank=True,
+        help_text='UUID que vincula as transações de uma transação múltipla de ativos'
     )
     
     class Meta:

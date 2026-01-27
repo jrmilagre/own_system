@@ -675,7 +675,7 @@ class AssetTransactionForm(forms.ModelForm):
     
     class Meta:
         model = AssetTransaction
-        fields = ['asset', 'account', 'operation_type', 'date', 'quantity', 'price', 'total_value', 'fees', 'income_value', 'notes']
+        fields = ['asset', 'account', 'operation_type', 'date', 'quantity', 'price', 'total_value', 'fees', 'income_value', 'notes', 'assessoria', 'invoice']
         widgets = {
             'asset': forms.Select(attrs={'required': True}),
             'account': forms.Select(attrs={'required': True}),
@@ -687,6 +687,8 @@ class AssetTransactionForm(forms.ModelForm):
             'fees': forms.NumberInput(attrs={'step': '0.01', 'required': False}),
             'income_value': forms.NumberInput(attrs={'step': '0.01', 'required': False}),
             'notes': forms.Textarea(attrs={'rows': 4, 'required': False}),
+            'assessoria': forms.CheckboxInput(attrs={'class': 'form-check-input', 'required': False}),
+            'invoice': forms.TextInput(attrs={'class': 'form-control', 'maxlength': 100, 'required': False}),
         }
 
     def __init__(self, *args, **kwargs):
@@ -785,6 +787,178 @@ class AssetTransactionForm(forms.ModelForm):
                     'cash_account': 'A conta de destino deve ser uma conta de investimento para portabilidade.'
                 })
 
+        return cleaned_data
+
+
+class MultipleAssetTransactionItemForm(forms.Form):
+    """Formulário para cada item de uma transação múltipla de ativos"""
+    asset = forms.ModelChoiceField(
+        queryset=Asset.objects.all().order_by('code'),
+        label='Ativo',
+        required=True,
+        widget=forms.Select(attrs={'class': 'form-select'})
+    )
+    quantity = forms.DecimalField(
+        label='Quantidade',
+        max_digits=15,
+        decimal_places=8,
+        required=True,
+        widget=forms.NumberInput(attrs={'step': '0.00000001', 'class': 'form-control'})
+    )
+    price = forms.DecimalField(
+        label='Preço unitário',
+        max_digits=12,
+        decimal_places=4,
+        required=True,
+        widget=forms.NumberInput(attrs={'step': '0.0001', 'class': 'form-control'})
+    )
+    total_value = forms.DecimalField(
+        label='Valor total',
+        max_digits=12,
+        decimal_places=2,
+        required=False,
+        widget=forms.NumberInput(attrs={'step': '0.01', 'class': 'form-control', 'readonly': True})
+    )
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Forçar avaliação do queryset para evitar problemas com cursor do banco
+        if self.fields['asset'].queryset:
+            list(self.fields['asset'].queryset)
+    
+    def clean(self):
+        cleaned_data = super().clean()
+        quantity = cleaned_data.get('quantity', 0)
+        price = cleaned_data.get('price', 0)
+        
+        if quantity <= 0:
+            raise forms.ValidationError({
+                'quantity': 'Quantidade deve ser maior que zero.'
+            })
+        
+        if price <= 0:
+            raise forms.ValidationError({
+                'price': 'Preço deve ser maior que zero.'
+            })
+        
+        # Calcular total_value se não foi preenchido
+        if not cleaned_data.get('total_value'):
+            cleaned_data['total_value'] = quantity * price
+        
+        return cleaned_data
+
+
+MultipleAssetTransactionItemFormSet = formset_factory(
+    MultipleAssetTransactionItemForm,
+    extra=1,
+    can_delete=True,
+    min_num=1,
+    validate_min=True
+)
+
+
+class MultipleAssetTransactionForm(forms.Form):
+    """Formulário base para transação múltipla de ativos com campos compartilhados"""
+    account = forms.ModelChoiceField(
+        queryset=Account.objects.filter(account_type='INVEST').order_by('name'),
+        label='Conta Investimento',
+        required=True,
+        widget=forms.Select(attrs={'class': 'form-select'})
+    )
+    operation_type = forms.ChoiceField(
+        choices=AssetTransaction.OPERATION_TYPE_CHOICES,
+        label='Tipo de operação',
+        required=True,
+        widget=forms.Select(attrs={'class': 'form-select'})
+    )
+    date = forms.DateField(
+        label='Data da operação',
+        required=True,
+        widget=forms.DateInput(attrs={'type': 'date', 'class': 'form-control'})
+    )
+    fees = forms.DecimalField(
+        label='Taxas e impostos (total)',
+        max_digits=12,
+        decimal_places=2,
+        required=True,
+        initial=0,
+        widget=forms.NumberInput(attrs={'step': '0.01', 'class': 'form-control'})
+    )
+    cash_account = forms.ModelChoiceField(
+        queryset=Account.objects.none(),
+        required=False,
+        label='Conta Cash',
+        empty_label='Selecione uma conta',
+        widget=forms.Select(attrs={'class': 'form-select'})
+    )
+    notes = forms.CharField(
+        label='Observações',
+        required=False,
+        widget=forms.Textarea(attrs={'rows': 4, 'class': 'form-control'})
+    )
+    assessoria = forms.BooleanField(
+        label='Assessoria',
+        required=False,
+        initial=False,
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'})
+    )
+    invoice = forms.CharField(
+        label='Nota Fiscal',
+        max_length=100,
+        required=False,
+        widget=forms.TextInput(attrs={'class': 'form-control', 'maxlength': 100})
+    )
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Forçar avaliação dos querysets para evitar problemas com cursor do banco
+        if self.fields['account'].queryset:
+            list(self.fields['account'].queryset)
+        
+        # Filtrar contas para o campo cash_account baseado no operation_type
+        operation_type = self.data.get('operation_type') if self.data else None
+        if not operation_type and 'operation_type' in self.initial:
+            operation_type = self.initial.get('operation_type')
+        
+        if operation_type == 'PORTABILITY':
+            # Para portabilidade, permitir contas de investimento
+            self.fields['cash_account'].queryset = Account.objects.filter(
+                account_type='INVEST'
+            ).order_by('name')
+        else:
+            # Para outros tipos, excluir contas de investimento
+            self.fields['cash_account'].queryset = Account.objects.filter(
+                account_type__in=['BANK', 'CASH', 'CREDCARD']
+            ).order_by('name')
+    
+    def clean(self):
+        cleaned_data = super().clean()
+        operation_type = cleaned_data.get('operation_type')
+        fees = cleaned_data.get('fees', 0)
+        
+        if fees < 0:
+            raise forms.ValidationError({
+                'fees': 'Taxas e impostos não podem ser negativos.'
+            })
+        
+        # Validar cash_account para operações que requerem
+        cash_account = cleaned_data.get('cash_account')
+        operations_with_cash_account = ['BUY', 'SELL', 'DIVIDEND', 'JCP', 'INTEREST', 'AMORTIZATION', 'REDEMPTION', 'SUB']
+        
+        if operation_type in operations_with_cash_account and not cash_account:
+            # Não é obrigatório, mas recomendado
+            pass
+        
+        if operation_type == 'PORTABILITY':
+            if not cash_account:
+                raise forms.ValidationError({
+                    'cash_account': 'Conta de destino é obrigatória para portabilidade.'
+                })
+            if cash_account and cash_account.account_type != 'INVEST':
+                raise forms.ValidationError({
+                    'cash_account': 'A conta de destino deve ser uma conta de investimento para portabilidade.'
+                })
+        
         return cleaned_data
 
 

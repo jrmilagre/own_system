@@ -19,7 +19,8 @@ from .forms import (
     MultipleSchedulerRegisterItemFormSet, AssetForm, AssetTransactionForm, AssetPositionForm, InventoryForm, AssetTransactionCategoryConfigForm,
     CashFlowItemForm, CashFlowCalculationRuleFormSet, TransactionFilterForm, SchedulerFilterForm, BudgetForm,
     TransactionsImportForm, TransactionsStagingFilterForm, SubcategoryMoveForm,
-    AssetTransactionsImportForm, AssetTransactionsStagingFilterForm, AccountFilterForm, AssetTransactionFilterForm
+    AssetTransactionsImportForm, AssetTransactionsStagingFilterForm, AccountFilterForm, AssetTransactionFilterForm,
+    MultipleAssetTransactionForm, MultipleAssetTransactionItemForm, MultipleAssetTransactionItemFormSet
 )
 from .transactions_parser import TransactionsParser
 from .asset_transactions_parser import AssetTransactionsParser
@@ -3494,6 +3495,323 @@ def asset_transaction_delete(request, pk):
         messages.success(request, 'Transação de ativo deletada com sucesso!')
         return redirect('finance:asset_transaction_list')
     return render(request, 'finance/asset_transaction_confirm_delete.html', {'transaction': transaction})
+
+
+# Multiple Asset Transaction Views
+def multiple_asset_transaction_create(request):
+    """Criar nova transação múltipla de ativos"""
+    if request.method == 'POST':
+        form = MultipleAssetTransactionForm(request.POST)
+        formset = MultipleAssetTransactionItemFormSet(request.POST)
+        
+        if form.is_valid() and formset.is_valid():
+            # Gerar UUID para vincular todas as transações
+            multiple_group_id = uuid.uuid4()
+            
+            # Campos compartilhados do cabeçalho
+            account = form.cleaned_data['account']
+            operation_type = form.cleaned_data['operation_type']
+            date = form.cleaned_data['date']
+            fees_total = form.cleaned_data['fees']
+            cash_account = form.cleaned_data.get('cash_account')
+            notes = form.cleaned_data.get('notes', '')
+            assessoria = form.cleaned_data.get('assessoria', False)
+            invoice = form.cleaned_data.get('invoice', '')
+            
+            # Coletar itens válidos
+            valid_items = []
+            for item_form in formset:
+                if item_form.cleaned_data and not item_form.cleaned_data.get('DELETE', False):
+                    asset = item_form.cleaned_data.get('asset')
+                    quantity = item_form.cleaned_data.get('quantity')
+                    price = item_form.cleaned_data.get('price')
+                    total_value = item_form.cleaned_data.get('total_value')
+                    
+                    if asset and quantity and price:
+                        # Calcular total_value se não foi fornecido
+                        if not total_value or total_value == 0:
+                            total_value = quantity * price
+                        
+                        valid_items.append({
+                            'asset': asset,
+                            'quantity': quantity,
+                            'price': price,
+                            'total_value': total_value
+                        })
+            
+            if not valid_items:
+                messages.error(request, 'É necessário adicionar pelo menos um ativo.')
+                return render(request, 'finance/multiple_asset_transaction_form.html', {
+                    'form': form,
+                    'formset': formset
+                })
+            
+            # Calcular total geral para rateio
+            total_geral = sum(item['total_value'] for item in valid_items)
+            
+            if total_geral == 0:
+                messages.error(request, 'O valor total dos ativos deve ser maior que zero.')
+                return render(request, 'finance/multiple_asset_transaction_form.html', {
+                    'form': form,
+                    'formset': formset
+                })
+            
+            # Criar todas as AssetTransactions em uma transação atômica
+            try:
+                with db_transaction.atomic():
+                    created_transactions = []
+                    for item in valid_items:
+                        # Ratear taxas proporcionalmente
+                        if total_geral > 0:
+                            fees_item = (item['total_value'] / total_geral) * fees_total
+                        else:
+                            fees_item = Decimal('0')
+                        
+                        # Criar AssetTransaction
+                        asset_transaction = AssetTransaction(
+                            asset=item['asset'],
+                            account=account,
+                            operation_type=operation_type,
+                            date=date,
+                            quantity=item['quantity'],
+                            price=item['price'],
+                            fees=fees_item,
+                            total_value=item['total_value'],
+                            income_value=Decimal('0'),
+                            notes=notes,
+                            assessoria=assessoria,
+                            invoice=invoice,
+                            multiple_group_id=multiple_group_id
+                        )
+                        
+                        # Definir cash_account temporariamente para uso no save
+                        if cash_account:
+                            asset_transaction._cash_account = cash_account
+                        
+                        # Salvar para criar Transactions relacionadas
+                        asset_transaction.save()
+                        created_transactions.append(asset_transaction)
+                    
+                    messages.success(
+                        request, 
+                        f'Transação múltipla criada com sucesso! {len(created_transactions)} transação(ões) de ativo criada(s).'
+                    )
+                    return redirect('finance:asset_transaction_list')
+                    
+            except Exception as e:
+                messages.error(request, f'Erro ao criar transação múltipla: {str(e)}')
+                return render(request, 'finance/multiple_asset_transaction_form.html', {
+                    'form': form,
+                    'formset': formset
+                })
+        else:
+            # Formulário inválido
+            return render(request, 'finance/multiple_asset_transaction_form.html', {
+                'form': form,
+                'formset': formset
+            })
+    else:
+        form = MultipleAssetTransactionForm()
+        formset = MultipleAssetTransactionItemFormSet()
+    
+    return render(request, 'finance/multiple_asset_transaction_form.html', {
+        'form': form,
+        'formset': formset
+    })
+
+
+def multiple_asset_transaction_update(request, group_id):
+    """Editar transação múltipla de ativos existente"""
+    # Buscar todas as transações do grupo
+    transactions = AssetTransaction.objects.filter(multiple_group_id=group_id).order_by('id')
+    
+    if not transactions.exists():
+        messages.error(request, 'Transação múltipla não encontrada.')
+        return redirect('finance:asset_transaction_list')
+    
+    # Pegar dados da primeira transação para preencher o form
+    first_transaction = transactions.first()
+    
+    if request.method == 'POST':
+        form = MultipleAssetTransactionForm(request.POST)
+        formset = MultipleAssetTransactionItemFormSet(request.POST)
+        
+        if form.is_valid() and formset.is_valid():
+            # Campos compartilhados do cabeçalho
+            account = form.cleaned_data['account']
+            operation_type = form.cleaned_data['operation_type']
+            date = form.cleaned_data['date']
+            fees_total = form.cleaned_data['fees']
+            cash_account = form.cleaned_data.get('cash_account')
+            notes = form.cleaned_data.get('notes', '')
+            assessoria = form.cleaned_data.get('assessoria', False)
+            invoice = form.cleaned_data.get('invoice', '')
+            
+            # Coletar itens válidos
+            valid_items = []
+            for item_form in formset:
+                if item_form.cleaned_data and not item_form.cleaned_data.get('DELETE', False):
+                    asset = item_form.cleaned_data.get('asset')
+                    quantity = item_form.cleaned_data.get('quantity')
+                    price = item_form.cleaned_data.get('price')
+                    total_value = item_form.cleaned_data.get('total_value')
+                    
+                    if asset and quantity and price:
+                        if not total_value or total_value == 0:
+                            total_value = quantity * price
+                        
+                        valid_items.append({
+                            'asset': asset,
+                            'quantity': quantity,
+                            'price': price,
+                            'total_value': total_value
+                        })
+            
+            if not valid_items:
+                messages.error(request, 'É necessário adicionar pelo menos um ativo.')
+                return render(request, 'finance/multiple_asset_transaction_form.html', {
+                    'form': form,
+                    'formset': formset,
+                    'group_id': group_id
+                })
+            
+            # Calcular total geral para rateio
+            total_geral = sum(item['total_value'] for item in valid_items)
+            
+            if total_geral == 0:
+                messages.error(request, 'O valor total dos ativos deve ser maior que zero.')
+                return render(request, 'finance/multiple_asset_transaction_form.html', {
+                    'form': form,
+                    'formset': formset,
+                    'group_id': group_id
+                })
+            
+            # Deletar transações antigas e criar novas
+            try:
+                with db_transaction.atomic():
+                    # Deletar transações antigas
+                    transactions.delete()
+                    
+                    # Criar novas transações
+                    created_transactions = []
+                    for item in valid_items:
+                        # Ratear taxas proporcionalmente
+                        if total_geral > 0:
+                            fees_item = (item['total_value'] / total_geral) * fees_total
+                        else:
+                            fees_item = Decimal('0')
+                        
+                        # Criar AssetTransaction
+                        asset_transaction = AssetTransaction(
+                            asset=item['asset'],
+                            account=account,
+                            operation_type=operation_type,
+                            date=date,
+                            quantity=item['quantity'],
+                            price=item['price'],
+                            fees=fees_item,
+                            total_value=item['total_value'],
+                            income_value=Decimal('0'),
+                            notes=notes,
+                            assessoria=assessoria,
+                            invoice=invoice,
+                            multiple_group_id=group_id
+                        )
+                        
+                        # Definir cash_account temporariamente para uso no save
+                        if cash_account:
+                            asset_transaction._cash_account = cash_account
+                        
+                        # Salvar para criar Transactions relacionadas
+                        asset_transaction.save()
+                        created_transactions.append(asset_transaction)
+                    
+                    messages.success(
+                        request, 
+                        f'Transação múltipla atualizada com sucesso! {len(created_transactions)} transação(ões) de ativo atualizada(s).'
+                    )
+                    return redirect('finance:asset_transaction_list')
+                    
+            except Exception as e:
+                messages.error(request, f'Erro ao atualizar transação múltipla: {str(e)}')
+                return render(request, 'finance/multiple_asset_transaction_form.html', {
+                    'form': form,
+                    'formset': formset,
+                    'group_id': group_id
+                })
+        else:
+            return render(request, 'finance/multiple_asset_transaction_form.html', {
+                'form': form,
+                'formset': formset,
+                'group_id': group_id
+            })
+    else:
+        # Tentar obter cash_account das Transactions relacionadas
+        cash_account = None
+        for trans in transactions:
+            related_transactions = Transaction.objects.filter(
+                asset_transaction=trans,
+                is_transfer=True
+            )
+            if related_transactions.exists():
+                # Pegar a primeira transaction de débito que não seja da conta de investimento
+                for rel_trans in related_transactions.filter(transaction_type='DB'):
+                    if rel_trans.account != trans.account:
+                        cash_account = rel_trans.account
+                        break
+                if cash_account:
+                    break
+        
+        # Preencher form com dados da primeira transação
+        form = MultipleAssetTransactionForm(initial={
+            'account': first_transaction.account,
+            'operation_type': first_transaction.operation_type,
+            'date': first_transaction.date,
+            'fees': sum(t.fees for t in transactions),
+            'cash_account': cash_account,
+            'notes': first_transaction.notes,
+            'assessoria': first_transaction.assessoria,
+            'invoice': first_transaction.invoice
+        })
+        
+        # Preencher formset com dados das transações
+        formset_data = []
+        for trans in transactions:
+            formset_data.append({
+                'asset': trans.asset,
+                'quantity': trans.quantity,
+                'price': trans.price,
+                'total_value': trans.total_value
+            })
+        
+        # Criar formset com dados iniciais
+        formset = MultipleAssetTransactionItemFormSet(initial=formset_data)
+    
+    return render(request, 'finance/multiple_asset_transaction_form.html', {
+        'form': form,
+        'formset': formset,
+        'group_id': group_id
+    })
+
+
+def multiple_asset_transaction_delete(request, group_id):
+    """Deletar transação múltipla de ativos"""
+    transactions = AssetTransaction.objects.filter(multiple_group_id=group_id)
+    
+    if not transactions.exists():
+        messages.error(request, 'Transação múltipla não encontrada.')
+        return redirect('finance:asset_transaction_list')
+    
+    if request.method == 'POST':
+        count = transactions.count()
+        transactions.delete()
+        messages.success(request, f'Transação múltipla deletada com sucesso! {count} transação(ões) removida(s).')
+        return redirect('finance:asset_transaction_list')
+    
+    return render(request, 'finance/multiple_asset_transaction_confirm_delete.html', {
+        'transactions': transactions,
+        'group_id': group_id
+    })
 
 
 # AssetTransactionCategoryConfig Views
