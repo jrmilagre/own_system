@@ -43,30 +43,30 @@ class Account(BaseModel):
         """
         Calcula o saldo da conta até uma data específica.
         Se date=None, calcula o saldo atual (todas as movimentações).
-        Nota: As transações de ativos agora geram Transactions normais automaticamente.
+        Usa agregação no banco (1 query) em vez de iterar transações em Python.
         """
-        from django.db.models import Q
+        from django.db.models import Q, Sum, Case, When, F, Value, DecimalField
         from decimal import Decimal
-        
-        balance = self.opening_balance
-        
-        # Filtro de data para transações
-        date_filter = Q()
+
+        qs = Transaction.objects.filter(account=self)
         if date:
-            date_filter = Q(transaction_date__lte=date) | Q(transaction_date__isnull=True, due_date__lte=date)
-        
-        # Transações (inclui as geradas automaticamente de AssetTransactions)
-        transactions = Transaction.objects.filter(account=self)
-        if date:
-            transactions = transactions.filter(date_filter)
-        
-        for trans in transactions:
-            if trans.transaction_type == 'CR':
-                balance += trans.value
-            elif trans.transaction_type == 'DB':
-                balance -= trans.value
-        
-        return balance
+            date_filter = Q(transaction_date__lte=date) | Q(
+                transaction_date__isnull=True, due_date__lte=date
+            )
+            qs = qs.filter(date_filter)
+
+        result = qs.aggregate(
+            total=Sum(
+                Case(
+                    When(transaction_type='CR', then=F('value')),
+                    When(transaction_type='DB', then=-F('value')),
+                    default=Value(0),
+                    output_field=DecimalField(),
+                )
+            )
+        )
+        delta = result['total'] or Decimal('0')
+        return self.opening_balance + delta
     
     def get_previous_balance(self, date):
         """
@@ -79,36 +79,91 @@ class Account(BaseModel):
         # Calcular saldo até o dia anterior
         previous_date = date - timedelta(days=1)
         return self.get_balance(previous_date)
-    
+
+    @classmethod
+    def get_balance_delta_annotation(cls):
+        """
+        Retorna a expressão de anotação para saldo (CR - DB) em queries de Account.
+        Uso: Account.objects.annotate(balance_delta=Account.get_balance_delta_annotation())
+        Saldo final = opening_balance + (balance_delta or 0).
+        """
+        from django.db.models import Sum, Case, When, F, Value, DecimalField
+        return Sum(
+            Case(
+                When(transaction__transaction_type='CR', then=F('transaction__value')),
+                When(transaction__transaction_type='DB', then=-F('transaction__value')),
+                default=Value(0),
+                output_field=DecimalField(),
+            )
+        )
+
+    def get_balance_from_annotation(self):
+        """
+        Retorna o saldo quando a instância veio de um queryset anotado com balance_delta.
+        Evita nova query; usa opening_balance + balance_delta.
+        """
+        from decimal import Decimal
+        delta = getattr(self, 'balance_delta', None)
+        if delta is None:
+            return self.get_balance()
+        return self.opening_balance + (delta or Decimal('0'))
+
     def get_statement(self, start_date=None, end_date=None):
         """
-        Retorna o extrato da conta no período especificado.
-        Retorna uma lista ordenada de movimentações com saldo acumulado.
+        Retorna (movements, previous_balance): extrato da conta no período com saldo acumulado.
+        Usa select_related (evita N+1), ordena no banco e saldo acumulado via Window (evita loop em Python).
         """
-        from django.db.models import Q
-        from datetime import datetime, timedelta
+        from django.db.models import Q, F, Window, Sum, Case, When, Value, DecimalField
+        from django.db.models.functions import Coalesce
         from decimal import Decimal
-        
+
+        previous_balance = (
+            self.get_previous_balance(start_date) if start_date else self.opening_balance
+        )
         movements = []
-        
-        # Transações normais
-        transactions = Transaction.objects.filter(account=self)
+
+        # Transações: select_related, ordenação e saldo acumulado (running_delta) no banco
+        transactions = (
+            Transaction.objects.filter(account=self)
+            .select_related(
+                'asset_transaction',
+                'asset_transaction__asset',
+                'subcategory',
+                'beneficiary',
+            )
+            .annotate(movement_date=Coalesce(F('transaction_date'), F('due_date')))
+            .annotate(
+                delta=Case(
+                    When(transaction_type='CR', then=F('value')),
+                    When(transaction_type='DB', then=-F('value')),
+                    default=Value(0),
+                    output_field=DecimalField(),
+                )
+            )
+            .annotate(
+                running_delta=Window(
+                    expression=Sum('delta'),
+                    order_by=F('movement_date').asc(),
+                )
+            )
+        )
         if start_date:
             transactions = transactions.filter(
-                Q(transaction_date__gte=start_date) | 
-                Q(transaction_date__isnull=True, due_date__gte=start_date)
+                Q(transaction_date__gte=start_date)
+                | Q(transaction_date__isnull=True, due_date__gte=start_date)
             )
         if end_date:
             transactions = transactions.filter(
-                Q(transaction_date__lte=end_date) | 
-                Q(transaction_date__isnull=True, due_date__lte=end_date)
+                Q(transaction_date__lte=end_date)
+                | Q(transaction_date__isnull=True, due_date__lte=end_date)
             )
-        
+        transactions = transactions.order_by('movement_date')
+
         for trans in transactions:
-            movement_date = trans.transaction_date or trans.due_date
+            movement_date = trans.movement_date
             if movement_date:  # Só adicionar se tiver data
                 description = ""
-                
+
                 # Se a transação foi gerada de uma AssetTransaction, incluir informação do ativo
                 if trans.asset_transaction:
                     asset_trans = trans.asset_transaction
@@ -132,7 +187,11 @@ class Account(BaseModel):
                             description = "Transação entre contas"
                         else:
                             description = "Transação"
-                
+
+                # Saldo acumulado já calculado no banco (previous_balance + running_delta)
+                running_delta = getattr(trans, 'running_delta', None)
+                balance = previous_balance + (running_delta or Decimal('0'))
+
                 movements.append({
                     'date': movement_date,
                     'type': 'TRANSACTION',
@@ -140,25 +199,11 @@ class Account(BaseModel):
                     'debit': trans.value if trans.transaction_type == 'DB' else None,
                     'credit': trans.value if trans.transaction_type == 'CR' else None,
                     'transaction': trans,
-                    'asset_transaction': trans.asset_transaction,  # Referência ao AssetTransaction se houver
+                    'asset_transaction': trans.asset_transaction,
+                    'balance': balance,
                 })
-        
-        # Ordenar por data
-        movements.sort(key=lambda x: x['date'] if x['date'] else datetime.min.date())
-        
-        # Calcular saldo acumulado
-        # Começar com saldo anterior ao período
-        previous_balance = self.get_previous_balance(start_date) if start_date else self.opening_balance
-        balance = previous_balance
-        
-        for movement in movements:
-            if movement['debit']:
-                balance -= movement['debit']
-            if movement['credit']:
-                balance += movement['credit']
-            movement['balance'] = balance
-        
-        return movements
+
+        return movements, previous_balance
 
 
 class Beneficiary(BaseModel):

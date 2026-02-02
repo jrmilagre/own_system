@@ -148,8 +148,8 @@
                             <span style="font-weight: 500;">{{ account.name }}</span>
                         </td>
                         <td class="text-end pe-3 py-1" style="cursor: pointer;" onclick="window.location.href='{% url 'finance:account_statement_report' %}?account={{ account.pk }}'">
-                            <span class="fw-bold {% if account.get_balance < 0 %}text-danger{% else %}text-dark{% endif %}" style="font-size: 0.95rem;">
-                                R$ {{ account.get_balance|floatformat:2 }}
+                            <span class="fw-bold {% if account.get_balance_from_annotation < 0 %}text-danger{% else %}text-dark{% endif %}" style="font-size: 0.95rem;">
+                                R$ {{ account.get_balance_from_annotation|floatformat:2 }}
                             </span>
                         </td>
                         <td class="pe-3 py-1">

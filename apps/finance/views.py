@@ -247,6 +247,11 @@ def account_list(request):
         if name_search:
             accounts = accounts.filter(name__icontains=name_search)
     
+    # Anotar saldo (1 query agregada) para ordenação e totais sem N queries
+    accounts = accounts.annotate(
+        balance_delta=Account.get_balance_delta_annotation()
+    )
+    
     # Ordenar - suporte para múltiplas colunas
     sort_fields_str = request.GET.get('sort', '')
     sort_orders_str = request.GET.get('order', 'desc')
@@ -292,8 +297,10 @@ def account_list(request):
         reverse_order = (sort_order == 'desc')
         
         if sort_field == 'balance':
-            # Ordenar por saldo (calculado)
-            accounts_list.sort(key=lambda a: a.get_balance(), reverse=reverse_order)
+            # Ordenar por saldo (usa balance_delta anotado, sem nova query)
+            accounts_list.sort(
+                key=lambda a: a.get_balance_from_annotation(), reverse=reverse_order
+            )
         elif sort_field == 'account_type':
             # Ordenar por tipo de conta
             accounts_list.sort(key=lambda a: a.account_type, reverse=reverse_order)
@@ -306,8 +313,10 @@ def account_list(request):
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
     
-    # Calcular total de saldos apenas para a página atual
-    total_balance = sum(account.get_balance() for account in page_obj)
+    # Calcular total de saldos apenas para a página atual (usa anotação)
+    total_balance = sum(
+        account.get_balance_from_annotation() for account in page_obj
+    )
     
     # Calcular datas padrão para o botão de extrato
     today = date.today()
@@ -4059,8 +4068,7 @@ def account_statement_report(request):
                 total_payments = Decimal('0')
                 total_deposits = Decimal('0')
             else:
-                movements = account.get_statement(start_date, end_date)
-                previous_balance = account.get_previous_balance(start_date)
+                movements, previous_balance = account.get_statement(start_date, end_date)
                 if movements:
                     final_balance = movements[-1]['balance']
                 else:
@@ -4176,8 +4184,7 @@ def account_statement(request, account_id=None):
                 total_payments = Decimal('0')
                 total_deposits = Decimal('0')
             else:
-                movements = account.get_statement(start_date, end_date)
-                previous_balance = account.get_previous_balance(start_date)
+                movements, previous_balance = account.get_statement(start_date, end_date)
                 if movements:
                     final_balance = movements[-1]['balance']
                 else:
