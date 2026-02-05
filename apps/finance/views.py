@@ -3178,6 +3178,7 @@ def multiple_scheduler_register(request, group_id):
                                 })
                             
                             value = item_data.get('value', scheduler.value)
+                            transfer_notes = item_data.get('notes', scheduler.notes) or ''
                             # Criar débito na conta de origem
                             transfer_group_id = uuid.uuid4()
                             debit_transaction = Transaction.objects.create(
@@ -3189,7 +3190,7 @@ def multiple_scheduler_register(request, group_id):
                                 due_date=scheduler.due_date,
                                 transaction_date=scheduler.due_date,
                                 purchase_date=scheduler.purchase_date,
-                                notes=scheduler.notes,
+                                notes=transfer_notes,
                                 is_transfer=True,
                                 transfer_group_id=transfer_group_id,
                                 is_multiple=True,
@@ -3205,7 +3206,7 @@ def multiple_scheduler_register(request, group_id):
                                 due_date=scheduler.due_date,
                                 transaction_date=scheduler.due_date,
                                 purchase_date=scheduler.purchase_date,
-                                notes=scheduler.notes,
+                                notes=transfer_notes,
                                 is_transfer=True,
                                 transfer_group_id=transfer_group_id,
                                 is_multiple=True,
@@ -3233,6 +3234,7 @@ def multiple_scheduler_register(request, group_id):
                                 'subcategory': item_data.get('subcategory', scheduler.subcategory),
                                 'transaction_type': item_data.get('transaction_type', scheduler.transaction_type),
                                 'value': item_data.get('value', scheduler.value),
+                                'notes': item_data.get('notes', ''),
                                 'is_multiple': True,
                                 'multiple_transaction_group_id': multiple_transaction_group_id,
                                 'is_transfer': False,
@@ -3297,6 +3299,15 @@ def multiple_scheduler_register(request, group_id):
         # Agrupar schedulers na mesma ordem: normais primeiro, depois transferências (apenas débito)
         initial_data = []
         
+        def _notes_initial(scheduler):
+            """Pré-preenche anotações com 'Parcelas restantes: XXX/XXX' quando for recorrente."""
+            notes_initial = scheduler.notes or ''
+            inst_info = scheduler.get_installment_info()
+            if inst_info:
+                parcelas_text = f"Parcelas restantes: {inst_info['current']:03d}/{inst_info['total']:03d}"
+                notes_initial = f"{notes_initial.strip()}\n{parcelas_text}".strip() if notes_initial.strip() else parcelas_text
+            return notes_initial
+
         # Primeiro, adicionar schedulers normais
         for scheduler in schedulers:
             if not scheduler.is_transfer:
@@ -3306,6 +3317,7 @@ def multiple_scheduler_register(request, group_id):
                     'value': scheduler.value,
                     'is_transfer': False,
                     'destination_account': None,
+                    'notes': _notes_initial(scheduler),
                 })
         
         # Depois, adicionar schedulers de transferência (apenas débito)
@@ -3318,6 +3330,7 @@ def multiple_scheduler_register(request, group_id):
                     'value': scheduler.value,
                     'is_transfer': True,
                     'destination_account': scheduler.destination_account,
+                    'notes': _notes_initial(scheduler),
                 })
                 # Scheduler de crédito não precisa ser adicionado (já representado pelo par)
         

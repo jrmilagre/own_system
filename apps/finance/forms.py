@@ -611,6 +611,11 @@ class MultipleSchedulerRegisterItemForm(forms.Form):
         label='Conta de destino',
         required=False
     )
+    notes = forms.CharField(
+        label='Anotações',
+        required=False,
+        widget=forms.Textarea(attrs={'rows': 2, 'class': 'form-control'})
+    )
 
     def clean(self):
         cleaned_data = super().clean()
