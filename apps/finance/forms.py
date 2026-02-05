@@ -1365,36 +1365,36 @@ class AssetFilterForm(forms.Form):
 
 
 class SchedulerFilterForm(forms.Form):
-    """Formulário de filtros para a lista de agendamentos"""
-    account = forms.ModelChoiceField(
+    """Formulário de filtros para a lista de agendamentos (múltipla escolha com checkbox)"""
+    account = forms.ModelMultipleChoiceField(
         queryset=Account.objects.all().order_by('name'),
         required=False,
         label='Conta',
-        widget=forms.Select(attrs={'class': 'form-control'})
+        widget=forms.CheckboxSelectMultiple(attrs={'class': 'form-check-input'})
     )
-    beneficiary = forms.ModelChoiceField(
+    beneficiary = forms.ModelMultipleChoiceField(
         queryset=Beneficiary.objects.all().order_by('full_name'),
         required=False,
         label='Beneficiário',
-        widget=forms.Select(attrs={'class': 'form-control'})
+        widget=forms.CheckboxSelectMultiple(attrs={'class': 'form-check-input'})
     )
-    category = forms.ModelChoiceField(
+    category = forms.ModelMultipleChoiceField(
         queryset=Category.objects.all().order_by('category'),
         required=False,
         label='Categoria',
-        widget=forms.Select(attrs={'class': 'form-control'})
+        widget=forms.CheckboxSelectMultiple(attrs={'class': 'form-check-input'})
     )
-    subcategory = forms.ModelChoiceField(
+    subcategory = forms.ModelMultipleChoiceField(
         queryset=Subcategory.objects.all().order_by('category__category', 'subcategory'),
         required=False,
         label='Subcategoria',
-        widget=forms.Select(attrs={'class': 'form-control'})
+        widget=forms.CheckboxSelectMultiple(attrs={'class': 'form-check-input'})
     )
-    status = forms.ChoiceField(
-        choices=[('', 'Todos')] + Scheduler.STATUS_CHOICES,
+    status = forms.MultipleChoiceField(
+        choices=Scheduler.STATUS_CHOICES,
         required=False,
         label='Status',
-        widget=forms.Select(attrs={'class': 'form-control'})
+        widget=forms.CheckboxSelectMultiple(attrs={'class': 'form-check-input'})
     )
     date_start = forms.DateField(
         required=False,
@@ -1410,7 +1410,6 @@ class SchedulerFilterForm(forms.Form):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # Forçar avaliação dos querysets para evitar problemas com cursor do banco
-        # durante a renderização do template
         if self.fields['account'].queryset:
             list(self.fields['account'].queryset)
         if self.fields['beneficiary'].queryset:

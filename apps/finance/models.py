@@ -855,6 +855,13 @@ class Scheduler(BaseModel):
         transaction_date = transaction_data.get('transaction_date', self.due_date)
         purchase_date = transaction_data.get('purchase_date', self.purchase_date)
         notes = transaction_data.get('notes', self.notes)
+        # Se as anotações já contiverem "Parcelas restantes:", não duplicar; senão, acrescentar quando for recorrente
+        if not (notes and 'Parcelas restantes:' in notes):
+            installment_info = self.get_installment_info()
+            if installment_info:
+                parcelas_text = f"Parcelas restantes: {installment_info['current']:03d}/{installment_info['total']:03d}"
+                notes = (notes or '').strip()
+                notes = f"{notes}\n{parcelas_text}".strip() if notes else parcelas_text
         
         # Campos para transações múltiplas
         is_multiple = transaction_data.get('is_multiple', False)

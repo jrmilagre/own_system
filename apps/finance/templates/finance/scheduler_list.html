@@ -5,6 +5,29 @@
 {% block title %}Agendamentos{% endblock %}
 
 {% block content %}
+<style>
+    .scheduler-filters .dropdown-menu {
+        padding: 0.5rem 0 !important;
+    }
+    .scheduler-filters .dropdown-menu .form-check {
+        padding-left: 2rem !important;
+        padding-right: 1rem !important;
+        margin-bottom: 0;
+    }
+    .scheduler-filters .dropdown-menu .form-check-input {
+        position: absolute;
+        left: 0.75rem;
+        margin-top: 0.25rem;
+        margin-left: 0;
+    }
+    .scheduler-filters .dropdown-menu li {
+        overflow: visible !important;
+        position: relative;
+    }
+    .scheduler-filters .dropdown-menu .form-check-label {
+        padding-left: 0.5rem;
+    }
+</style>
 <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
     <h1 class="h4 mb-0">Agendamentos</h1>
     <div class="d-flex gap-2">
@@ -17,32 +40,137 @@
     </div>
 </div>
 
-<!-- Formulário de Filtros -->
-<div class="card shadow-sm border-0 mb-3">
+<!-- Formulário de Filtros (múltipla escolha com checkbox) -->
+<div class="card shadow-sm border-0 mb-3 scheduler-filters">
     <div class="card-header bg-light">
         <h5 class="mb-0"><i class="fas fa-filter me-2"></i>Filtros</h5>
     </div>
     <div class="card-body">
         <form method="get" action="{% url 'finance:scheduler_list' %}" class="row g-3">
             <div class="col-md-6 col-lg-2">
-                <label for="{{ filter_form.account.id_for_label }}" class="form-label">{{ filter_form.account.label }}</label>
-                {{ filter_form.account }}
+                <label class="form-label">{{ filter_form.account.label }}</label>
+                <div class="dropdown">
+                    <button class="btn btn-outline-secondary form-control dropdown-toggle text-start" type="button" id="accountDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                        <span class="selected-count" data-field="account">Selecione...</span>
+                    </button>
+                    <ul class="dropdown-menu" aria-labelledby="accountDropdown" style="max-height: 300px; overflow-y: auto; min-width: 100%;">
+                        <li>
+                            <div class="px-3 py-2 border-bottom">
+                                <button type="button" class="btn btn-sm btn-link p-0 select-all-btn" data-field="account">
+                                    <i class="fas fa-check-double me-1"></i>Selecionar todas
+                                </button>
+                            </div>
+                        </li>
+                        {% for checkbox in filter_form.account %}
+                        <li>
+                            <div class="form-check py-1">
+                                {{ checkbox.tag }}
+                                <label class="form-check-label w-100" for="{{ checkbox.id_for_label }}">{{ checkbox.choice_label }}</label>
+                            </div>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
             </div>
             <div class="col-md-6 col-lg-2">
-                <label for="{{ filter_form.beneficiary.id_for_label }}" class="form-label">{{ filter_form.beneficiary.label }}</label>
-                {{ filter_form.beneficiary }}
+                <label class="form-label">{{ filter_form.beneficiary.label }}</label>
+                <div class="dropdown">
+                    <button class="btn btn-outline-secondary form-control dropdown-toggle text-start" type="button" id="beneficiaryDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                        <span class="selected-count" data-field="beneficiary">Selecione...</span>
+                    </button>
+                    <ul class="dropdown-menu" aria-labelledby="beneficiaryDropdown" style="max-height: 300px; overflow-y: auto; min-width: 100%;">
+                        <li>
+                            <div class="px-3 py-2 border-bottom">
+                                <button type="button" class="btn btn-sm btn-link p-0 select-all-btn" data-field="beneficiary">
+                                    <i class="fas fa-check-double me-1"></i>Selecionar todas
+                                </button>
+                            </div>
+                        </li>
+                        {% for checkbox in filter_form.beneficiary %}
+                        <li>
+                            <div class="form-check py-1">
+                                {{ checkbox.tag }}
+                                <label class="form-check-label w-100" for="{{ checkbox.id_for_label }}">{{ checkbox.choice_label }}</label>
+                            </div>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
             </div>
             <div class="col-md-6 col-lg-2">
-                <label for="{{ filter_form.category.id_for_label }}" class="form-label">{{ filter_form.category.label }}</label>
-                {{ filter_form.category }}
+                <label class="form-label">{{ filter_form.category.label }}</label>
+                <div class="dropdown">
+                    <button class="btn btn-outline-secondary form-control dropdown-toggle text-start" type="button" id="categoryDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                        <span class="selected-count" data-field="category">Selecione...</span>
+                    </button>
+                    <ul class="dropdown-menu" aria-labelledby="categoryDropdown" style="max-height: 300px; overflow-y: auto; min-width: 100%;">
+                        <li>
+                            <div class="px-3 py-2 border-bottom">
+                                <button type="button" class="btn btn-sm btn-link p-0 select-all-btn" data-field="category">
+                                    <i class="fas fa-check-double me-1"></i>Selecionar todas
+                                </button>
+                            </div>
+                        </li>
+                        {% for checkbox in filter_form.category %}
+                        <li>
+                            <div class="form-check py-1">
+                                {{ checkbox.tag }}
+                                <label class="form-check-label w-100" for="{{ checkbox.id_for_label }}">{{ checkbox.choice_label }}</label>
+                            </div>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
             </div>
             <div class="col-md-6 col-lg-2">
-                <label for="{{ filter_form.subcategory.id_for_label }}" class="form-label">{{ filter_form.subcategory.label }}</label>
-                {{ filter_form.subcategory }}
+                <label class="form-label">{{ filter_form.subcategory.label }}</label>
+                <div class="dropdown">
+                    <button class="btn btn-outline-secondary form-control dropdown-toggle text-start" type="button" id="subcategoryDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                        <span class="selected-count" data-field="subcategory">Selecione...</span>
+                    </button>
+                    <ul class="dropdown-menu" aria-labelledby="subcategoryDropdown" style="max-height: 300px; overflow-y: auto; min-width: 100%;">
+                        <li>
+                            <div class="px-3 py-2 border-bottom">
+                                <button type="button" class="btn btn-sm btn-link p-0 select-all-btn" data-field="subcategory">
+                                    <i class="fas fa-check-double me-1"></i>Selecionar todas
+                                </button>
+                            </div>
+                        </li>
+                        {% for checkbox in filter_form.subcategory %}
+                        <li>
+                            <div class="form-check py-1">
+                                {{ checkbox.tag }}
+                                <label class="form-check-label w-100" for="{{ checkbox.id_for_label }}">{{ checkbox.choice_label }}</label>
+                            </div>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
             </div>
             <div class="col-md-6 col-lg-2">
-                <label for="{{ filter_form.status.id_for_label }}" class="form-label">{{ filter_form.status.label }}</label>
-                {{ filter_form.status }}
+                <label class="form-label">{{ filter_form.status.label }}</label>
+                <div class="dropdown">
+                    <button class="btn btn-outline-secondary form-control dropdown-toggle text-start" type="button" id="statusDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                        <span class="selected-count" data-field="status">Selecione...</span>
+                    </button>
+                    <ul class="dropdown-menu" aria-labelledby="statusDropdown" style="max-height: 280px; overflow-y: auto; min-width: 100%;">
+                        <li>
+                            <div class="px-3 py-2 border-bottom">
+                                <button type="button" class="btn btn-sm btn-link p-0 select-all-btn" data-field="status">
+                                    <i class="fas fa-check-double me-1"></i>Selecionar todas
+                                </button>
+                            </div>
+                        </li>
+                        {% for checkbox in filter_form.status %}
+                        <li>
+                            <div class="form-check py-1">
+                                {{ checkbox.tag }}
+                                <label class="form-check-label w-100" for="{{ checkbox.id_for_label }}">{{ checkbox.choice_label }}</label>
+                            </div>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
             </div>
             <div class="col-md-6 col-lg-2">
                 <label for="{{ filter_form.date_start.id_for_label }}" class="form-label">{{ filter_form.date_start.label }}</label>
@@ -64,7 +192,7 @@
     </div>
 </div>
 
-{% if multiple_groups or schedulers %}
+{% if scheduler_rows %}
 <div class="card shadow-sm border-0">
     <div class="card-body p-0">
         <div class="table-responsive">
@@ -72,156 +200,222 @@
                 <thead class="table-light">
                     <tr>
                         <th class="text-center" style="width: 50px;" title="Tipo de Agendamento"></th>
-                        <th class="ps-3">Agendamento</th>
-                        <th>Conta</th>
-                        <th>Tipo</th>
-                        <th class="text-end">Valor</th>
-                        <th>Próxima Data</th>
-                        <th>Recorrência</th>
-                        <th>Status</th>
-                        <th>Parcelas Restantes</th>
+                        <th class="ps-3 sortable-header" data-sort="beneficiary" style="cursor: pointer;">
+                            Agendamento
+                            {% if 'beneficiary' in sort_info %}
+                                <span class="badge bg-primary ms-1">{{ sort_info.beneficiary.priority }}</span>
+                                <i class="fas fa-sort-{% if sort_info.beneficiary.order == 'asc' %}up{% else %}down{% endif %} ms-1"></i>
+                            {% else %}
+                                <i class="fas fa-sort ms-1" style="opacity: 0.3;"></i>
+                            {% endif %}
+                        </th>
+                        <th class="sortable-header" data-sort="account" style="cursor: pointer;">
+                            Conta
+                            {% if 'account' in sort_info %}
+                                <span class="badge bg-primary ms-1">{{ sort_info.account.priority }}</span>
+                                <i class="fas fa-sort-{% if sort_info.account.order == 'asc' %}up{% else %}down{% endif %} ms-1"></i>
+                            {% else %}
+                                <i class="fas fa-sort ms-1" style="opacity: 0.3;"></i>
+                            {% endif %}
+                        </th>
+                        <th class="sortable-header" data-sort="transaction_type" style="cursor: pointer;">
+                            Tipo
+                            {% if 'transaction_type' in sort_info %}
+                                <span class="badge bg-primary ms-1">{{ sort_info.transaction_type.priority }}</span>
+                                <i class="fas fa-sort-{% if sort_info.transaction_type.order == 'asc' %}up{% else %}down{% endif %} ms-1"></i>
+                            {% else %}
+                                <i class="fas fa-sort ms-1" style="opacity: 0.3;"></i>
+                            {% endif %}
+                        </th>
+                        <th class="text-end sortable-header" data-sort="value" style="cursor: pointer;">
+                            Valor
+                            {% if 'value' in sort_info %}
+                                <span class="badge bg-primary ms-1">{{ sort_info.value.priority }}</span>
+                                <i class="fas fa-sort-{% if sort_info.value.order == 'asc' %}up{% else %}down{% endif %} ms-1"></i>
+                            {% else %}
+                                <i class="fas fa-sort ms-1" style="opacity: 0.3;"></i>
+                            {% endif %}
+                        </th>
+                        <th class="sortable-header" data-sort="due_date" style="cursor: pointer;">
+                            Próxima Data
+                            {% if 'due_date' in sort_info %}
+                                <span class="badge bg-primary ms-1">{{ sort_info.due_date.priority }}</span>
+                                <i class="fas fa-sort-{% if sort_info.due_date.order == 'asc' %}up{% else %}down{% endif %} ms-1"></i>
+                            {% else %}
+                                <i class="fas fa-sort ms-1" style="opacity: 0.3;"></i>
+                            {% endif %}
+                        </th>
+                        <th class="sortable-header" data-sort="recurrence_type" style="cursor: pointer;">
+                            Recorrência
+                            {% if 'recurrence_type' in sort_info %}
+                                <span class="badge bg-primary ms-1">{{ sort_info.recurrence_type.priority }}</span>
+                                <i class="fas fa-sort-{% if sort_info.recurrence_type.order == 'asc' %}up{% else %}down{% endif %} ms-1"></i>
+                            {% else %}
+                                <i class="fas fa-sort ms-1" style="opacity: 0.3;"></i>
+                            {% endif %}
+                        </th>
+                        <th class="sortable-header" data-sort="status" style="cursor: pointer;">
+                            Status
+                            {% if 'status' in sort_info %}
+                                <span class="badge bg-primary ms-1">{{ sort_info.status.priority }}</span>
+                                <i class="fas fa-sort-{% if sort_info.status.order == 'asc' %}up{% else %}down{% endif %} ms-1"></i>
+                            {% else %}
+                                <i class="fas fa-sort ms-1" style="opacity: 0.3;"></i>
+                            {% endif %}
+                        </th>
+                        <th class="sortable-header" data-sort="remaining_installments" style="cursor: pointer;">
+                            Parcelas Restantes
+                            {% if 'remaining_installments' in sort_info %}
+                                <span class="badge bg-primary ms-1">{{ sort_info.remaining_installments.priority }}</span>
+                                <i class="fas fa-sort-{% if sort_info.remaining_installments.order == 'asc' %}up{% else %}down{% endif %} ms-1"></i>
+                            {% else %}
+                                <i class="fas fa-sort ms-1" style="opacity: 0.3;"></i>
+                            {% endif %}
+                        </th>
                         <th class="pe-3">Ações</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {% for group in multiple_groups %}
-                        {% for scheduler in group.schedulers %}
-                        <tr class="table-row-compact">
-                            <td class="text-center py-1">
-                                <span style="font-size: 1.2rem;" title="Agendamento Múltiplo">📦</span>
-                            </td>
-                            <td class="ps-3 py-1">
-                                <div class="d-flex align-items-center gap-2">
-                                    <span style="font-weight: 500;">
-                                        {% if scheduler.beneficiary %}
-                                            {{ scheduler.beneficiary }}
-                                        {% elif scheduler.subcategory %}
-                                            {{ scheduler.subcategory }}
-                                        {% else %}
-                                            Agendamento
-                                        {% endif %}
+                    {% for row in scheduler_rows %}
+                        {% if row.type == 'group' %}
+                            {% for scheduler in row.group.schedulers %}
+                            <tr class="table-row-compact">
+                                <td class="text-center py-1">
+                                    <span style="font-size: 1.2rem;" title="Agendamento Múltiplo">📦</span>
+                                </td>
+                                <td class="ps-3 py-1">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <span style="font-weight: 500;">
+                                            {% if scheduler.beneficiary %}
+                                                {{ scheduler.beneficiary }}
+                                            {% elif scheduler.subcategory %}
+                                                {{ scheduler.subcategory }}
+                                            {% else %}
+                                                Agendamento
+                                            {% endif %}
+                                        </span>
+                                    </div>
+                                </td>
+                                <td class="py-1">{{ scheduler.account }}</td>
+                                <td class="py-1">
+                                    <span class="badge {% if scheduler.transaction_type == 'CR' %}bg-success{% else %}bg-danger{% endif %}">
+                                        {{ scheduler.get_transaction_type_display }}
                                     </span>
-                                </div>
-                            </td>
-                            <td class="py-1">{{ scheduler.account }}</td>
-                            <td class="py-1">
-                                <span class="badge {% if scheduler.transaction_type == 'CR' %}bg-success{% else %}bg-danger{% endif %}">
-                                    {{ scheduler.get_transaction_type_display }}
-                                </span>
-                            </td>
-                            <td class="text-end py-1">
-                                <span class="fw-bold {% if scheduler.transaction_type == 'DB' %}text-danger{% else %}text-success{% endif %}" style="font-size: 0.95rem;">
-                                    R$ {{ scheduler.value|floatformat:2 }}
-                                </span>
-                            </td>
-                            <td class="py-1">{{ scheduler.due_date|default:"-"|date:"d-m-Y" }}</td>
-                            <td class="py-1">
-                                <small>{{ scheduler.get_recurrence_type_display }} ({{ scheduler.recurrence_interval }})</small>
-                            </td>
-                            <td class="py-1">
-                                <span class="badge {% if scheduler.status == 'ACTIVE' %}bg-success{% elif scheduler.status == 'PAUSED' %}bg-warning{% else %}bg-secondary{% endif %}">
-                                    {{ scheduler.get_status_display }}
-                                </span>
-                            </td>
-                            <td class="py-1">
-                                {% if scheduler.recurrence_type == 'NONE' %}
-                                    <span class="text-muted">-</span>
-                                {% else %}
-                                    {% with installment_info=scheduler.get_installment_info %}
-                                        {% if installment_info %}
-                                            <span class="badge bg-primary">{{ installment_info.current|stringformat:"03d" }}/{{ installment_info.total|stringformat:"03d" }}</span>
-                                        {% else %}
-                                            <span class="badge bg-info">Infinito</span>
-                                        {% endif %}
-                                    {% endwith %}
-                                {% endif %}
-                            </td>
-                            <td class="pe-3 py-1">
-                                <div class="btn-group btn-group-sm compact-buttons" role="group">
-                                    <a href="{% url 'finance:multiple_scheduler_update' group.group_id %}" class="btn btn-sm btn-outline-primary compact-btn" title="Editar Agendamento Múltiplo">
-                                        <i class="fas fa-edit"></i>
-                                    </a>
-                                    <a href="{% url 'finance:multiple_scheduler_delete' group.group_id %}" class="btn btn-sm btn-outline-danger compact-btn" title="Deletar Agendamento Múltiplo">
-                                        <i class="fas fa-trash"></i>
-                                    </a>
-                                    {% if scheduler.status == 'ACTIVE' %}
-                                        <a href="{% url 'finance:multiple_scheduler_register' group.group_id %}" class="btn btn-sm btn-outline-success compact-btn" title="Registrar Agendamento Múltiplo">
-                                            <i class="fas fa-check"></i>
+                                </td>
+                                <td class="text-end py-1">
+                                    <span class="fw-bold {% if scheduler.transaction_type == 'DB' %}text-danger{% else %}text-success{% endif %}" style="font-size: 0.95rem;">
+                                        R$ {{ scheduler.value|floatformat:2 }}
+                                    </span>
+                                </td>
+                                <td class="py-1">{{ scheduler.due_date|default:"-"|date:"d-m-Y" }}</td>
+                                <td class="py-1">
+                                    <small>{{ scheduler.get_recurrence_type_display }} ({{ scheduler.recurrence_interval }})</small>
+                                </td>
+                                <td class="py-1">
+                                    <span class="badge {% if scheduler.status == 'ACTIVE' %}bg-success{% elif scheduler.status == 'PAUSED' %}bg-warning{% else %}bg-secondary{% endif %}">
+                                        {{ scheduler.get_status_display }}
+                                    </span>
+                                </td>
+                                <td class="py-1">
+                                    {% if scheduler.recurrence_type == 'NONE' %}
+                                        <span class="text-muted">-</span>
+                                    {% else %}
+                                        {% with installment_info=scheduler.get_installment_info %}
+                                            {% if installment_info %}
+                                                <span class="badge bg-primary">{{ installment_info.current|stringformat:"03d" }}/{{ installment_info.total|stringformat:"03d" }}</span>
+                                            {% else %}
+                                                <span class="badge bg-info">Infinito</span>
+                                            {% endif %}
+                                        {% endwith %}
+                                    {% endif %}
+                                </td>
+                                <td class="pe-3 py-1">
+                                    <div class="btn-group btn-group-sm compact-buttons" role="group">
+                                        <a href="{% url 'finance:multiple_scheduler_update' row.group.group_id %}" class="btn btn-sm btn-outline-primary compact-btn" title="Editar Agendamento Múltiplo">
+                                            <i class="fas fa-edit"></i>
                                         </a>
-                                    {% endif %}
-                                </div>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    {% endfor %}
-                    
-                    {% for scheduler in schedulers %}
-                    <tr class="table-row-compact">
-                        <td class="text-center py-1">
-                            <span style="font-size: 1.2rem;" title="Agendamento Simples">📅</span>
-                        </td>
-                        <td class="ps-3 py-1">
-                            <div class="d-flex align-items-center gap-2">
-                                <span style="font-weight: 500;">
-                                    {% if scheduler.beneficiary %}
-                                        {{ scheduler.beneficiary }}
-                                    {% elif scheduler.subcategory %}
-                                        {{ scheduler.subcategory }}
+                                        <a href="{% url 'finance:multiple_scheduler_delete' row.group.group_id %}" class="btn btn-sm btn-outline-danger compact-btn" title="Deletar Agendamento Múltiplo">
+                                            <i class="fas fa-trash"></i>
+                                        </a>
+                                        {% if scheduler.status == 'ACTIVE' %}
+                                            <a href="{% url 'finance:multiple_scheduler_register' row.group.group_id %}" class="btn btn-sm btn-outline-success compact-btn" title="Registrar Agendamento Múltiplo">
+                                                <i class="fas fa-check"></i>
+                                            </a>
+                                        {% endif %}
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        {% else %}
+                            {% with scheduler=row.scheduler %}
+                            <tr class="table-row-compact">
+                                <td class="text-center py-1">
+                                    <span style="font-size: 1.2rem;" title="Agendamento Simples">📅</span>
+                                </td>
+                                <td class="ps-3 py-1">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <span style="font-weight: 500;">
+                                            {% if scheduler.beneficiary %}
+                                                {{ scheduler.beneficiary }}
+                                            {% elif scheduler.subcategory %}
+                                                {{ scheduler.subcategory }}
+                                            {% else %}
+                                                Agendamento
+                                            {% endif %}
+                                        </span>
+                                    </div>
+                                </td>
+                                <td class="py-1">{{ scheduler.account }}</td>
+                                <td class="py-1">
+                                    <span class="badge {% if scheduler.transaction_type == 'CR' %}bg-success{% else %}bg-danger{% endif %}">
+                                        {{ scheduler.get_transaction_type_display }}
+                                    </span>
+                                </td>
+                                <td class="text-end py-1">
+                                    <span class="fw-bold {% if scheduler.transaction_type == 'DB' %}text-danger{% else %}text-success{% endif %}" style="font-size: 0.95rem;">
+                                        R$ {{ scheduler.value|floatformat:2 }}
+                                    </span>
+                                </td>
+                                <td class="py-1">{{ scheduler.due_date|default:"-"|date:"d-m-Y" }}</td>
+                                <td class="py-1">
+                                    <small>{{ scheduler.get_recurrence_type_display }} ({{ scheduler.recurrence_interval }})</small>
+                                </td>
+                                <td class="py-1">
+                                    <span class="badge {% if scheduler.status == 'ACTIVE' %}bg-success{% elif scheduler.status == 'PAUSED' %}bg-warning{% else %}bg-secondary{% endif %}">
+                                        {{ scheduler.get_status_display }}
+                                    </span>
+                                </td>
+                                <td class="py-1">
+                                    {% if scheduler.recurrence_type == 'NONE' %}
+                                        <span class="text-muted">-</span>
                                     {% else %}
-                                        Agendamento
+                                        {% with installment_info=scheduler.get_installment_info %}
+                                            {% if installment_info %}
+                                                <span class="badge bg-primary">{{ installment_info.current|stringformat:"03d" }}/{{ installment_info.total|stringformat:"03d" }}</span>
+                                            {% else %}
+                                                <span class="badge bg-info">Infinito</span>
+                                            {% endif %}
+                                        {% endwith %}
                                     {% endif %}
-                                </span>
-                            </div>
-                        </td>
-                        <td class="py-1">{{ scheduler.account }}</td>
-                        <td class="py-1">
-                            <span class="badge {% if scheduler.transaction_type == 'CR' %}bg-success{% else %}bg-danger{% endif %}">
-                                {{ scheduler.get_transaction_type_display }}
-                            </span>
-                        </td>
-                        <td class="text-end py-1">
-                            <span class="fw-bold {% if scheduler.transaction_type == 'DB' %}text-danger{% else %}text-success{% endif %}" style="font-size: 0.95rem;">
-                                R$ {{ scheduler.value|floatformat:2 }}
-                            </span>
-                        </td>
-                        <td class="py-1">{{ scheduler.due_date|default:"-"|date:"d-m-Y" }}</td>
-                        <td class="py-1">
-                            <small>{{ scheduler.get_recurrence_type_display }} ({{ scheduler.recurrence_interval }})</small>
-                        </td>
-                        <td class="py-1">
-                            <span class="badge {% if scheduler.status == 'ACTIVE' %}bg-success{% elif scheduler.status == 'PAUSED' %}bg-warning{% else %}bg-secondary{% endif %}">
-                                {{ scheduler.get_status_display }}
-                            </span>
-                        </td>
-                        <td class="py-1">
-                            {% if scheduler.recurrence_type == 'NONE' %}
-                                <span class="text-muted">-</span>
-                            {% else %}
-                                {% with installment_info=scheduler.get_installment_info %}
-                                    {% if installment_info %}
-                                        <span class="badge bg-primary">{{ installment_info.current|stringformat:"03d" }}/{{ installment_info.total|stringformat:"03d" }}</span>
-                                    {% else %}
-                                        <span class="badge bg-info">Infinito</span>
-                                    {% endif %}
-                                {% endwith %}
-                            {% endif %}
-                        </td>
-                        <td class="pe-3 py-1">
-                            <div class="btn-group btn-group-sm compact-buttons" role="group">
-                                <a href="{% url 'finance:scheduler_update' scheduler.pk %}" class="btn btn-sm btn-outline-primary compact-btn" title="Editar">
-                                    <i class="fas fa-edit"></i>
-                                </a>
-                                <a href="{% url 'finance:scheduler_delete' scheduler.pk %}" class="btn btn-sm btn-outline-danger compact-btn" title="Deletar">
-                                    <i class="fas fa-trash"></i>
-                                </a>
-                                {% if scheduler.status == 'ACTIVE' %}
-                                    <a href="{% url 'finance:scheduler_register' scheduler.pk %}" class="btn btn-sm btn-outline-success compact-btn" title="Registrar">
-                                        <i class="fas fa-check"></i>
-                                    </a>
-                                {% endif %}
-                            </div>
-                        </td>
-                    </tr>
+                                </td>
+                                <td class="pe-3 py-1">
+                                    <div class="btn-group btn-group-sm compact-buttons" role="group">
+                                        <a href="{% url 'finance:scheduler_update' scheduler.pk %}" class="btn btn-sm btn-outline-primary compact-btn" title="Editar">
+                                            <i class="fas fa-edit"></i>
+                                        </a>
+                                        <a href="{% url 'finance:scheduler_delete' scheduler.pk %}" class="btn btn-sm btn-outline-danger compact-btn" title="Deletar">
+                                            <i class="fas fa-trash"></i>
+                                        </a>
+                                        {% if scheduler.status == 'ACTIVE' %}
+                                            <a href="{% url 'finance:scheduler_register' scheduler.pk %}" class="btn btn-sm btn-outline-success compact-btn" title="Registrar">
+                                                <i class="fas fa-check"></i>
+                                            </a>
+                                        {% endif %}
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endwith %}
+                        {% endif %}
                     {% endfor %}
                 </tbody>
                 <tfoot class="table-light">
@@ -247,12 +441,12 @@
     <ul class="pagination justify-content-center">
         {% if page_obj.has_previous %}
             <li class="page-item">
-                <a class="page-link" href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page=1">
+                <a class="page-link" href="?{{ pagination_query }}{% if pagination_query %}&{% endif %}page=1">
                     <i class="fas fa-angle-double-left"></i> Primeira
                 </a>
             </li>
             <li class="page-item">
-                <a class="page-link" href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ page_obj.previous_page_number }}">
+                <a class="page-link" href="?{{ pagination_query }}{% if pagination_query %}&{% endif %}page={{ page_obj.previous_page_number }}">
                     <i class="fas fa-angle-left"></i> Anterior
                 </a>
             </li>
@@ -266,12 +460,12 @@
         
         {% if page_obj.has_next %}
             <li class="page-item">
-                <a class="page-link" href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ page_obj.next_page_number }}">
+                <a class="page-link" href="?{{ pagination_query }}{% if pagination_query %}&{% endif %}page={{ page_obj.next_page_number }}">
                     Próxima <i class="fas fa-angle-right"></i>
                 </a>
             </li>
             <li class="page-item">
-                <a class="page-link" href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ page_obj.paginator.num_pages }}">
+                <a class="page-link" href="?{{ pagination_query }}{% if pagination_query %}&{% endif %}page={{ page_obj.paginator.num_pages }}">
                     Última <i class="fas fa-angle-double-right"></i>
                 </a>
             </li>
@@ -302,6 +496,92 @@
 .compact-buttons .compact-btn i {
     font-size: 0.75rem;
 }
+
+.sortable-header {
+    user-select: none;
+    transition: background-color 0.2s;
+}
+.sortable-header:hover {
+    background-color: rgba(0, 0, 0, 0.05) !important;
+}
 </style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Ordenação múltipla: clique na coluna = principal; Shift+clique = adicionar secundária
+    document.querySelectorAll('.sortable-header').forEach(header => {
+        header.addEventListener('click', function() {
+            const sortField = this.getAttribute('data-sort');
+            const urlParams = new URLSearchParams(window.location.search);
+            const currentSorts = urlParams.get('sort') ? urlParams.get('sort').split(',') : [];
+            const currentOrders = urlParams.get('order') ? urlParams.get('order').split(',') : [];
+            let newSorts = [], newOrders = [];
+            if (event.shiftKey && currentSorts.length > 0) {
+                newSorts = [...currentSorts];
+                newOrders = [...currentOrders];
+                const existingIndex = newSorts.indexOf(sortField);
+                if (existingIndex >= 0) {
+                    newOrders[existingIndex] = newOrders[existingIndex] === 'asc' ? 'desc' : 'asc';
+                } else {
+                    newSorts.push(sortField);
+                    newOrders.push('asc');
+                }
+            } else {
+                const existingIndex = currentSorts.indexOf(sortField);
+                if (existingIndex === 0 && currentSorts.length > 0) {
+                    newSorts = [sortField];
+                    newOrders = [currentOrders[0] === 'asc' ? 'desc' : 'asc'];
+                } else {
+                    newSorts = [sortField];
+                    newOrders = ['asc'];
+                }
+            }
+            urlParams.set('sort', newSorts.join(','));
+            urlParams.set('order', newOrders.join(','));
+            urlParams.set('page', '1');
+            window.location.href = '?' + urlParams.toString();
+        });
+    });
+
+    function updateSelectedCount(fieldName) {
+        const checkboxes = document.querySelectorAll(`input[name="${fieldName}"]`);
+        const checked = Array.from(checkboxes).filter(cb => cb.checked);
+        const countSpan = document.querySelector(`.selected-count[data-field="${fieldName}"]`);
+        if (!countSpan) return;
+        if (checked.length === 0) countSpan.textContent = 'Selecione...';
+        else if (checked.length === checkboxes.length) countSpan.textContent = `Todos (${checked.length})`;
+        else countSpan.textContent = `${checked.length} selecionado(s)`;
+    }
+    ['account', 'beneficiary', 'category', 'subcategory', 'status'].forEach(fieldName => {
+        updateSelectedCount(fieldName);
+        document.querySelectorAll(`input[name="${fieldName}"]`).forEach(checkbox => {
+            checkbox.addEventListener('change', function() { updateSelectedCount(fieldName); });
+        });
+    });
+
+    document.querySelectorAll('.select-all-btn').forEach(button => {
+        button.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            const fieldName = this.getAttribute('data-field');
+            const checkboxes = document.querySelectorAll(`input[name="${fieldName}"]`);
+            const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+            checkboxes.forEach(cb => { cb.checked = !allChecked; });
+            this.innerHTML = !allChecked
+                ? '<i class="fas fa-times me-1"></i>Desmarcar todas'
+                : '<i class="fas fa-check-double me-1"></i>Selecionar todas';
+            updateSelectedCount(fieldName);
+        });
+    });
+
+    document.querySelectorAll('.scheduler-filters .dropdown-menu').forEach(menu => {
+        menu.addEventListener('click', function(e) {
+            if (e.target.type === 'checkbox' || e.target.closest('.form-check')) e.stopPropagation();
+        });
+    });
+});
+</script>
 {% endblock %}
 

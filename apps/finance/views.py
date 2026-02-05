@@ -25,6 +25,7 @@ from .forms import (
 from .transactions_parser import TransactionsParser
 from .asset_transactions_parser import AssetTransactionsParser
 from decimal import Decimal, InvalidOperation
+from urllib.parse import urlencode
 import json
 import os
 
@@ -1284,46 +1285,77 @@ def scheduler_list(request):
     # Query base
     schedulers = Scheduler.objects.all().select_related('account', 'beneficiary', 'subcategory', 'destination_account')
     
-    # Aplicar filtros
+    # Aplicar filtros (múltipla escolha)
     if filter_form.is_valid():
-        account = filter_form.cleaned_data.get('account')
-        beneficiary = filter_form.cleaned_data.get('beneficiary')
-        category = filter_form.cleaned_data.get('category')
-        subcategory = filter_form.cleaned_data.get('subcategory')
-        status = filter_form.cleaned_data.get('status')
+        accounts = filter_form.cleaned_data.get('account')
+        beneficiaries = filter_form.cleaned_data.get('beneficiary')
+        categories = filter_form.cleaned_data.get('category')
+        subcategories = filter_form.cleaned_data.get('subcategory')
+        statuses = filter_form.cleaned_data.get('status')
         date_start = filter_form.cleaned_data.get('date_start')
         date_end = filter_form.cleaned_data.get('date_end')
         
-        if account:
-            schedulers = schedulers.filter(account=account)
-        
-        if beneficiary:
-            schedulers = schedulers.filter(beneficiary=beneficiary)
-        
-        if category:
-            schedulers = schedulers.filter(subcategory__category=category)
-        
-        if subcategory:
-            schedulers = schedulers.filter(subcategory=subcategory)
-        
-        if status:
-            schedulers = schedulers.filter(status=status)
-        
+        if accounts:
+            schedulers = schedulers.filter(account__in=accounts)
+        if beneficiaries:
+            schedulers = schedulers.filter(beneficiary__in=beneficiaries)
+        if categories:
+            schedulers = schedulers.filter(subcategory__category__in=categories)
+        if subcategories:
+            schedulers = schedulers.filter(subcategory__in=subcategories)
+        if statuses:
+            schedulers = schedulers.filter(status__in=statuses)
         if date_start or date_end:
             date_filter = Q()
             if date_start and date_end:
-                # Ambos definidos: due_date deve estar no intervalo
                 date_filter = Q(due_date__gte=date_start) & Q(due_date__lte=date_end)
             elif date_start:
-                # Apenas date_start: due_date >= date_start
                 date_filter = Q(due_date__gte=date_start)
             elif date_end:
-                # Apenas date_end: due_date <= date_end
                 date_filter = Q(due_date__lte=date_end)
             schedulers = schedulers.filter(date_filter)
     
-    # Ordenar
-    schedulers = schedulers.order_by('-due_date', '-created_at')
+    # Ordenação múltipla (sort e order na query string)
+    sort_fields_str = request.GET.get('sort', '')
+    sort_orders_str = request.GET.get('order', 'asc')
+    sort_mapping = {
+        'beneficiary': 'beneficiary__full_name',
+        'account': 'account__name',
+        'transaction_type': 'transaction_type',
+        'value': 'value',
+        'due_date': 'due_date',
+        'recurrence_type': 'recurrence_type',
+        'status': 'status',
+        'remaining_installments': 'remaining_installments',
+    }
+    sort_fields = [f.strip() for f in sort_fields_str.split(',') if f.strip()] if sort_fields_str else []
+    sort_orders = [o.strip() for o in sort_orders_str.split(',')] if sort_orders_str else []
+    order_fields = []
+    valid_sorts = []
+    valid_orders = []
+    for i, sort_field in enumerate(sort_fields):
+        if sort_field in sort_mapping:
+            sort_order = sort_orders[i] if i < len(sort_orders) else 'asc'
+            if sort_order not in ('asc', 'desc'):
+                sort_order = 'asc'
+            prefix = '' if sort_order == 'asc' else '-'
+            order_fields.append(f"{prefix}{sort_mapping[sort_field]}")
+            valid_sorts.append(sort_field)
+            valid_orders.append(sort_order)
+    if order_fields:
+        if 'due_date' not in valid_sorts:
+            order_fields.extend(['due_date', 'created_at'])
+        schedulers = schedulers.order_by(*order_fields)
+    else:
+        schedulers = schedulers.order_by('due_date', 'created_at')
+    
+    # sort_info para o template (cabeçalhos ordenáveis)
+    sort_info = {}
+    for idx, sort_field in enumerate(valid_sorts):
+        sort_info[sort_field] = {
+            'priority': idx + 1,
+            'order': valid_orders[idx] if idx < len(valid_orders) else 'asc',
+        }
     
     # Paginação
     paginator = Paginator(schedulers, 50)  # 50 agendamentos por página
@@ -1361,7 +1393,7 @@ def scheduler_list(request):
         # Ordenar por ID para manter ordem
         group_data['schedulers'].sort(key=lambda x: x.id)
     
-    # Ordenar grupos múltiplos por data de vencimento decrescente
+    # Ordenar grupos múltiplos por próxima data crescente
     multiple_groups_list = list(multiple_groups.values())
     multiple_groups_list.sort(
         key=lambda x: (
@@ -1369,29 +1401,43 @@ def scheduler_list(request):
             x['representative'].created_at or 
             date.min
         ),
-        reverse=True
+        reverse=False
     )
+    
+    # Lista única ordenada por próxima data (crescente): intercala grupos e agendamentos simples
+    def _due_sort_key(obj):
+        if obj['type'] == 'group':
+            rep = obj['group']['representative']
+            return (rep.due_date or rep.created_at or date.min, 0)
+        return (obj['scheduler'].due_date or obj['scheduler'].created_at or date.min, 1)
+    scheduler_rows = []
+    for g in multiple_groups_list:
+        scheduler_rows.append({'type': 'group', 'group': g})
+    for s in single_schedulers:
+        scheduler_rows.append({'type': 'single', 'scheduler': s})
+    scheduler_rows.sort(key=_due_sort_key)
     
     # Calcular subtotal da página
     subtotal = Decimal('0')
-    
-    # Somar agendamentos simples
     for scheduler in single_schedulers:
         if scheduler.transaction_type == 'CR':
             subtotal += scheduler.value
         elif scheduler.transaction_type == 'DB':
             subtotal -= scheduler.value
-    
-    # Somar grupos múltiplos
     for group_data in multiple_groups_list:
         subtotal += Decimal(str(group_data['total_value']))
     
+    # Query string para paginação preservando múltiplos valores (filtros multi-select)
+    pagination_query = urlencode(
+        [(k, v) for k in request.GET for v in request.GET.getlist(k) if k != 'page']
+    )
     return render(request, 'finance/scheduler_list.html', {
-        'schedulers': single_schedulers,
-        'multiple_groups': multiple_groups_list,
+        'scheduler_rows': scheduler_rows,
         'filter_form': filter_form,
         'page_obj': page_obj,
-        'subtotal': subtotal
+        'subtotal': subtotal,
+        'sort_info': sort_info,
+        'pagination_query': pagination_query,
     })
 
 
@@ -1763,6 +1809,12 @@ def scheduler_register(request, pk):
         })
     else:
         # Criar formulário com valores iniciais do agendamento
+        notes_initial = scheduler.notes or ''
+        # Pré-preencher anotações com "Parcelas restantes: XXX/XXX" quando for recorrente
+        installment_info = scheduler.get_installment_info()
+        if installment_info:
+            parcelas_text = f"Parcelas restantes: {installment_info['current']:03d}/{installment_info['total']:03d}"
+            notes_initial = f"{notes_initial.strip()}\n{parcelas_text}".strip() if notes_initial.strip() else parcelas_text
         initial_data = {
             'account': scheduler.account,
             'beneficiary': scheduler.beneficiary,
@@ -1772,7 +1824,7 @@ def scheduler_register(request, pk):
             'due_date': scheduler.due_date,
             'transaction_date': scheduler.due_date,  # Padrão é due_date
             'purchase_date': scheduler.purchase_date,
-            'notes': scheduler.notes,
+            'notes': notes_initial,
         }
         form = TransactionForm(initial=initial_data)
         next_due_date = scheduler.get_next_due_date_after_registration()
@@ -3126,7 +3178,6 @@ def multiple_scheduler_register(request, group_id):
                                 })
                             
                             value = item_data.get('value', scheduler.value)
-                            
                             # Criar débito na conta de origem
                             transfer_group_id = uuid.uuid4()
                             debit_transaction = Transaction.objects.create(
@@ -3144,7 +3195,6 @@ def multiple_scheduler_register(request, group_id):
                                 is_multiple=True,
                                 multiple_transaction_group_id=multiple_transaction_group_id,
                             )
-                            
                             # Criar crédito na conta de destino
                             credit_transaction = Transaction.objects.create(
                                 account=destination_account,
