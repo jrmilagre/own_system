@@ -106,7 +106,6 @@
                     <tr>
                         <th class="ps-2">Núm.</th>
                         <th>Data</th>
-                        <th>Favorecido</th>
                         <th>Beneficiário/Transferência</th>
                         <th>Subcategoria</th>
                         <th class="text-end">Pagamento</th>
@@ -140,7 +139,6 @@
                             {% endif %}
                         </td>
                         <td>{{ trans.date|date:"d-m-Y" }}</td>
-                        <td>{{ trans.description }}</td>
                         <td>
                             {% if trans.transaction %}
                                 {% if trans.transaction.is_transfer %}
@@ -191,13 +189,13 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="8" class="text-center text-muted py-3">Nenhuma movimentação encontrada no período.</td>
+                        <td colspan="7" class="text-center text-muted py-3">Nenhuma movimentação encontrada no período.</td>
                     </tr>
                     {% endfor %}
                 </tbody>
                 <tfoot class="table-light sticky-bottom">
                     <tr>
-                        <td colspan="5" class="ps-2 fw-bold">Subtotal:</td>
+                        <td colspan="4" class="ps-2 fw-bold">Subtotal:</td>
                         <td class="text-end fw-bold text-danger">R$ {{ total_payments|floatformat:2 }}</td>
                         <td class="text-end fw-bold text-success">R$ {{ total_deposits|floatformat:2 }}</td>
                         <td class="pe-2 text-end fw-bold {% if final_balance and final_balance < 0 %}text-danger{% else %}text-dark{% endif %}">R$ {% if final_balance %}{{ final_balance|floatformat:2 }}{% else %}0.00{% endif %}</td>
