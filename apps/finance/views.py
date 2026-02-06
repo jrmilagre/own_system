@@ -17,7 +17,7 @@ from .forms import (
     MultipleTransactionForm, MultipleTransactionItemForm, MultipleTransactionItemFormSet,
     MultipleSchedulerForm, MultipleSchedulerItemForm, MultipleSchedulerItemFormSet,
     MultipleSchedulerRegisterItemFormSet, AssetForm, AssetTransactionForm, AssetPositionForm, InventoryForm, AssetTransactionCategoryConfigForm,
-    CashFlowItemForm, CashFlowCalculationRuleFormSet, TransactionFilterForm, SchedulerFilterForm, BudgetForm,
+    CashFlowItemForm, CashFlowCalculationRuleFormSet, TransactionFilterForm, SchedulerFilterForm, AccountStatementFilterForm, BudgetForm,
     TransactionsImportForm, TransactionsStagingFilterForm, SubcategoryMoveForm,
     AssetTransactionsImportForm, AssetTransactionsStagingFilterForm, AccountFilterForm, AssetFilterForm, AssetTransactionFilterForm,
     MultipleAssetTransactionForm, MultipleAssetTransactionItemForm, MultipleAssetTransactionItemFormSet
@@ -4074,111 +4074,135 @@ def reports_index(request):
 def account_statement_report(request):
     """Página de extrato de contas"""
     from decimal import Decimal
-    from datetime import date, datetime
-    from django.shortcuts import get_object_or_404
+    from datetime import date
     from django.contrib import messages
     from apps.finance.models import Account, Subcategory
     
     accounts = Account.objects.all()
-    
-    # Valores padrão: início do mês atual e data de hoje
     today = date.today()
     first_day_of_month = date(today.year, today.month, 1)
     
-    # Obter account_id do GET
-    account_id = request.GET.get('account')
+    filter_form = AccountStatementFilterForm(
+        request.GET,
+        initial={'start_date': first_day_of_month, 'end_date': today}
+    )
     
-    start_date_str = request.GET.get('start_date')
-    end_date_str = request.GET.get('end_date')
-    
-    account = None
-    # Usar valores padrão se não fornecidos
+    selected_accounts = []
     start_date = first_day_of_month
     end_date = today
+    include_future = False
+    
+    if filter_form.is_valid():
+        accounts_qs = filter_form.cleaned_data.get('account')
+        selected_accounts = list(accounts_qs) if accounts_qs else []
+        start_date = filter_form.cleaned_data.get('start_date') or first_day_of_month
+        end_date = filter_form.cleaned_data.get('end_date') or today
+        include_future = filter_form.cleaned_data.get('include_future') or False
+    
+    selected_account_ids = [a.pk for a in selected_accounts]
+    account = selected_accounts[0] if len(selected_accounts) == 1 else None
+    
     movements = []
     transactions = []
     previous_balance = None
     final_balance = None
+    has_scheduled = False
     
-    # Processar data inicial
-    if start_date_str:
-        try:
-            start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
-        except ValueError:
-            messages.error(request, 'Data inicial inválida.')
-            start_date = first_day_of_month
-    else:
-        # Se não foi fornecida, usar padrão
-        start_date = first_day_of_month
-    
-    # Processar data final
-    if end_date_str:
-        try:
-            end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
-        except ValueError:
-            messages.error(request, 'Data final inválida.')
-            end_date = today
-    else:
-        # Se não foi fornecida, usar padrão
-        end_date = today
-    
-    if account_id:
-        account = get_object_or_404(Account, pk=account_id)
-        
-        if account and start_date and end_date:
-            if start_date > end_date:
-                messages.error(request, 'Data inicial deve ser anterior à data final.')
-                total_payments = Decimal('0')
-                total_deposits = Decimal('0')
-            else:
-                movements, previous_balance = account.get_statement(start_date, end_date)
-                if movements:
-                    final_balance = movements[-1]['balance']
-                else:
-                    final_balance = previous_balance
+    if selected_accounts and start_date and end_date:
+        if start_date > end_date:
+            messages.error(request, 'Data inicial deve ser anterior à data final.')
+            total_payments = Decimal('0')
+            total_deposits = Decimal('0')
+        else:
+            # Saldo inicial agregado (soma dos saldos anteriores à data inicial de cada conta)
+            previous_balance = sum(
+                (acc.get_previous_balance(start_date) or Decimal('0')) for acc in selected_accounts
+            )
+            # Coletar movimentos de todas as contas e marcar cada um com a conta
+            all_movements = []
+            for acc in selected_accounts:
+                movs, _ = acc.get_statement(start_date, end_date)
+                for m in movs:
+                    m = dict(m)
+                    m['account'] = acc
+                    all_movements.append(m)
+                if include_future:
+                    sched = acc.get_scheduled_movements(start_date, end_date)
+                    has_scheduled = has_scheduled or len(sched) > 0
+                    for m in sched:
+                        m = dict(m)
+                        m['account'] = acc
+                        all_movements.append(m)
+            
+            def _statement_sort_key(m):
+                is_sched = 1 if m.get('type') == 'SCHEDULED' else 0
+                return (m['date'], is_sched, m['account'].pk)
+            merged = sorted(all_movements, key=_statement_sort_key)
+            
+            # Saldo linha a linha (agregado)
+            running = previous_balance
+            for m in merged:
+                running += (m.get('credit') or Decimal('0')) - (m.get('debit') or Decimal('0'))
+                m['balance'] = running
+            final_balance = merged[-1]['balance'] if merged else previous_balance
+            movements = merged
+            
+            total_payments = Decimal('0')
+            total_deposits = Decimal('0')
+            for movement in movements:
+                amount = 0
+                if movement.get('debit'):
+                    amount = -float(movement['debit'])
+                    total_payments += Decimal(str(abs(amount)))
+                elif movement.get('credit'):
+                    amount = float(movement['credit'])
+                    total_deposits += Decimal(str(amount))
                 
-                # Formatar transações para o template (com saldo acumulado)
-                # O saldo já vem calculado no movement['balance'], então podemos usar diretamente
-                total_payments = Decimal('0')
-                total_deposits = Decimal('0')
+                is_scheduled = movement.get('type') == 'SCHEDULED'
+                trans_id = None
+                if movement.get('transaction'):
+                    trans_id = movement['transaction'].id
+                elif movement.get('asset_transaction'):
+                    trans_id = movement['asset_transaction'].id
+                elif is_scheduled and movement.get('scheduler'):
+                    trans_id = f"s-{movement['scheduler'].id}"
                 
-                for movement in movements:
-                    amount = 0
-                    if movement.get('debit'):
-                        amount = -float(movement['debit'])
-                        total_payments += Decimal(str(abs(amount)))
-                    elif movement.get('credit'):
-                        amount = float(movement['credit'])
-                        total_deposits += Decimal(str(amount))
-                    
-                    # ID da transação (pode ser Transaction ou AssetTransaction relacionado)
-                    trans_id = None
-                    if movement.get('transaction'):
-                        trans_id = movement['transaction'].id
-                    elif movement.get('asset_transaction'):
-                        # Se houver asset_transaction, usar o ID dele (para compatibilidade)
-                        trans_id = movement['asset_transaction'].id
-                    
-                    transactions.append({
-                        'id': trans_id,
-                        'date': movement['date'],
-                        'description': movement['description'],
-                        'amount': amount,
-                        'running_balance': float(movement.get('balance', 0)),
-                        'transaction': movement.get('transaction'),  # Incluir objeto transaction para acesso a is_transfer e get_transfer_pair
-                    })
+                transactions.append({
+                    'id': trans_id,
+                    'date': movement['date'],
+                    'description': movement['description'],
+                    'amount': amount,
+                    'running_balance': float(movement.get('balance', 0)),
+                    'transaction': movement.get('transaction'),
+                    'is_scheduled': is_scheduled,
+                    'scheduler': movement.get('scheduler'),
+                    'account': movement['account'],
+                })
     else:
-        # Se não há account_id, inicializar totais como zero
         total_payments = Decimal('0')
         total_deposits = Decimal('0')
     
-    # Buscar categorias para o formulário
     categories = Subcategory.objects.all().select_related('category').order_by('category__category', 'subcategory')
+    
+    # Query string para o "next" dos links de edição (preserva contas, datas e include_future)
+    from django.urls import reverse
+    from urllib.parse import urlencode
+    base_path = reverse('finance:account_statement_report')
+    next_parts = []
+    for aid in selected_account_ids:
+        next_parts.append(('account', str(aid)))
+    next_parts.append(('start_date', str(start_date)))
+    next_parts.append(('end_date', str(end_date)))
+    if include_future:
+        next_parts.append(('include_future', '1'))
+    statement_next_url = base_path + '?' + urlencode(next_parts)
     
     return render(request, 'finance/account_statement_report.html', {
         'accounts': accounts,
         'account': account,
-        'selected_account': account,  # Para compatibilidade
+        'selected_account': account,
+        'selected_accounts': selected_accounts,
+        'selected_account_ids': selected_account_ids,
         'start_date': start_date,
         'end_date': end_date,
         'movements': movements,
@@ -4189,6 +4213,10 @@ def account_statement_report(request):
         'total_deposits': total_deposits,
         'categories': categories,
         'today': today,
+        'include_future': include_future,
+        'has_scheduled': has_scheduled,
+        'statement_next_url': statement_next_url,
+        'filter_form': filter_form,
     })
 
 

@@ -1425,6 +1425,43 @@ class SchedulerFilterForm(forms.Form):
             list(self.fields['subcategory'].queryset)
 
 
+class AccountStatementFilterForm(forms.Form):
+    """Formulário de filtros do relatório de extrato (múltipla escolha de contas com checkbox)"""
+    account = forms.ModelMultipleChoiceField(
+        queryset=Account.objects.all().order_by('name'),
+        required=False,
+        label='Conta(s)',
+        widget=forms.CheckboxSelectMultiple(attrs={'class': 'form-check-input'})
+    )
+    start_date = forms.DateField(
+        required=False,
+        label='Data inicial',
+        widget=forms.DateInput(attrs={'type': 'date', 'class': 'form-control'})
+    )
+    end_date = forms.DateField(
+        required=False,
+        label='Data final',
+        widget=forms.DateInput(attrs={'type': 'date', 'class': 'form-control'})
+    )
+    include_future = forms.BooleanField(
+        required=False,
+        label='Incluir lançamentos futuros (agendamentos)',
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'})
+    )
+
+    def __init__(self, *args, **kwargs):
+        from datetime import date
+        super().__init__(*args, **kwargs)
+        if self.fields['account'].queryset:
+            list(self.fields['account'].queryset)
+        # Valores padrão para datas quando o formulário não tem dados
+        if not self.data and not self.initial:
+            today = date.today()
+            first_day = date(today.year, today.month, 1)
+            self.initial.setdefault('start_date', first_day)
+            self.initial.setdefault('end_date', today)
+
+
 class BudgetForm(forms.ModelForm):
     class Meta:
         model = Budget

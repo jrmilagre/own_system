@@ -205,6 +205,39 @@ class Account(BaseModel):
 
         return movements, previous_balance
 
+    def get_scheduled_movements(self, start_date, end_date):
+        """
+        Retorna lista de movimentos futuros (agendamentos) da conta no período [start_date, end_date].
+        Cada item tem o mesmo formato de movimento do extrato (date, type='SCHEDULED', description,
+        debit/credit, scheduler), sem balance (será calculado na view após merge).
+        """
+        movements = []
+        schedulers = Scheduler.objects.filter(
+            account=self,
+            status='ACTIVE',
+        ).select_related('beneficiary', 'subcategory', 'destination_account')
+        for scheduler in schedulers:
+            for occ_date in scheduler.get_occurrence_dates_in_range(start_date, end_date):
+                if scheduler.is_transfer and scheduler.destination_account:
+                    description = f"Transferência para {scheduler.destination_account}"
+                elif scheduler.beneficiary:
+                    description = str(scheduler.beneficiary)
+                    if scheduler.subcategory:
+                        description += f" - {scheduler.subcategory.subcategory}"
+                else:
+                    description = scheduler.subcategory.subcategory if scheduler.subcategory else "Agendamento"
+                movements.append({
+                    'date': occ_date,
+                    'type': 'SCHEDULED',
+                    'description': description,
+                    'debit': scheduler.value if scheduler.transaction_type == 'DB' else None,
+                    'credit': scheduler.value if scheduler.transaction_type == 'CR' else None,
+                    'scheduler': scheduler,
+                    'transaction': None,
+                    'asset_transaction': None,
+                })
+        return movements
+
 
 class Beneficiary(BaseModel):
     full_name = models.CharField('Nome completo', max_length=200)
@@ -830,6 +863,45 @@ class Scheduler(BaseModel):
         elif self.recurrence_type == 'YEARLY':
             return base_date + relativedelta(years=self.recurrence_interval)
         return None
+
+    def get_occurrence_dates_in_range(self, start_date, end_date, max_occurrences=500):
+        """
+        Retorna lista de datas em que o agendamento deve ocorrer dentro de [start_date, end_date].
+        Respeita recurrence_type, recurrence_interval e termination_type (INSTALLMENTS, FINAL_DATE, INFINITE).
+        """
+        if not self.due_date or not self.is_valid():
+            return []
+        due = self.due_date
+        if due > end_date:
+            return []
+        if self.recurrence_type == 'NONE':
+            if start_date <= due <= end_date:
+                return [due]
+            return []
+        dates = []
+        current = due
+        interval = max(1, self.recurrence_interval or 1)
+        count = 0
+        while current <= end_date and count < max_occurrences:
+            if current >= start_date:
+                if self.termination_type == 'FINAL_DATE' and self.final_date and current > self.final_date:
+                    break
+                dates.append(current)
+                count += 1
+                if self.termination_type == 'INSTALLMENTS' and self.remaining_installments is not None:
+                    if len(dates) >= self.remaining_installments:
+                        break
+            if self.recurrence_type == 'DAILY':
+                current = current + relativedelta(days=interval)
+            elif self.recurrence_type == 'WEEKLY':
+                current = current + relativedelta(weeks=interval)
+            elif self.recurrence_type == 'MONTHLY':
+                current = current + relativedelta(months=interval)
+            elif self.recurrence_type == 'YEARLY':
+                current = current + relativedelta(years=interval)
+            else:
+                break
+        return dates
 
     def register(self, transaction_data=None):
         """Registra uma transação do agendamento

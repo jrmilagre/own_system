@@ -1,6 +1,6 @@
 {% extends 'finance/base.html' %}
 
-{% block section_name %}{% if account %}{{ account.name }} ({{ account.get_account_type_display }}){% else %}Extrato de Contas{% endif %}{% endblock %}
+{% block section_name %}{% if selected_accounts|length == 1 %}{{ selected_accounts.0.name }} ({{ selected_accounts.0.get_account_type_display }}){% elif selected_accounts|length > 1 %}Extrato – Múltiplas contas{% else %}Extrato de Contas{% endif %}{% endblock %}
 
 {% block sidebar %}
 <h6 class="px-3 text-uppercase text-muted" style="font-size: 0.7rem; color: #888 !important;">Relatórios</h6>
@@ -58,46 +58,89 @@
     #account-statement-table tbody tr:nth-of-type(even).selected td {
         background-color: #ffb74d !important;
     }
+    .statement-filters .dropdown-menu {
+        padding: 0.5rem 0 !important;
+    }
+    .statement-filters .dropdown-menu .form-check {
+        padding-left: 2rem !important;
+        padding-right: 1rem !important;
+        margin-bottom: 0;
+    }
+    .statement-filters .dropdown-menu .form-check-input {
+        position: absolute;
+        left: 0.75rem;
+        margin-top: 0.25rem;
+        margin-left: 0;
+    }
+    .statement-filters .dropdown-menu li {
+        overflow: visible !important;
+        position: relative;
+    }
+    .statement-filters .dropdown-menu .form-check-label {
+        padding-left: 0.5rem;
+    }
 </style>
 {% endblock %}
 
 {% block content %}
 <!-- Filtros e Tabela de Extrato -->
-<div class="card shadow-sm border-0 mb-3">
+<div class="card shadow-sm border-0 mb-3 statement-filters">
     <div class="card-header bg-light">
         <h5 class="mb-0">
-            <i class="fas fa-file-alt me-2"></i>Extrato de Contas
+            <i class="fas fa-filter me-2"></i>Filtros
         </h5>
     </div>
     <div class="card-body">
-        <form method="get" action="{% url 'finance:account_statement_report' %}">
-            <div class="row g-3 mb-3">
-                <div class="col-md-4">
-                    <label for="account" class="form-label">Conta:</label>
-                    <select name="account" id="account" class="form-select">
-                        <option value="">Selecione uma conta</option>
-                        {% for acc in accounts %}
-                        <option value="{{ acc.pk }}" {% if account and account.pk == acc.pk %}selected{% endif %}>{{ acc.name }}</option>
+        <form method="get" action="{% url 'finance:account_statement_report' %}" class="row g-3 align-items-end">
+            <div class="col-md-6 col-lg-2">
+                <label class="form-label">{{ filter_form.account.label }}</label>
+                <div class="dropdown">
+                    <button class="btn btn-outline-secondary form-control dropdown-toggle text-start" type="button" id="accountDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                        <span class="selected-count" data-field="account">Selecione...</span>
+                    </button>
+                    <ul class="dropdown-menu" aria-labelledby="accountDropdown" style="max-height: 300px; overflow-y: auto; min-width: 100%;">
+                        <li>
+                            <div class="px-3 py-2 border-bottom">
+                                <button type="button" class="btn btn-sm btn-link p-0 select-all-btn" data-field="account">
+                                    <i class="fas fa-check-double me-1"></i>Selecionar todas
+                                </button>
+                            </div>
+                        </li>
+                        {% for checkbox in filter_form.account %}
+                        <li>
+                            <div class="form-check py-1">
+                                {{ checkbox.tag }}
+                                <label class="form-check-label w-100" for="{{ checkbox.id_for_label }}">{{ checkbox.choice_label }}</label>
+                            </div>
+                        </li>
                         {% endfor %}
-                    </select>
+                    </ul>
                 </div>
-                <div class="col-md-3">
-                    <label for="start_date" class="form-label">Data Inicial:</label>
-                    <input type="date" name="start_date" id="start_date" class="form-control" value="{{ start_date|date:'Y-m-d' }}" required>
+            </div>
+            <div class="col-md-6 col-lg-2">
+                <label for="{{ filter_form.start_date.id_for_label }}" class="form-label">{{ filter_form.start_date.label }}</label>
+                {{ filter_form.start_date }}
+            </div>
+            <div class="col-md-6 col-lg-2">
+                <label for="{{ filter_form.end_date.id_for_label }}" class="form-label">{{ filter_form.end_date.label }}</label>
+                {{ filter_form.end_date }}
+            </div>
+            <div class="col-md-6 col-lg-2 d-flex align-items-end">
+                <div class="form-check mb-0">
+                    {{ filter_form.include_future }}
+                    <label for="{{ filter_form.include_future.id_for_label }}" class="form-check-label">{{ filter_form.include_future.label }}</label>
                 </div>
-                <div class="col-md-3">
-                    <label for="end_date" class="form-label">Data Final:</label>
-                    <input type="date" name="end_date" id="end_date" class="form-control" value="{{ end_date|date:'Y-m-d' }}" required>
-                </div>
-                <div class="col-md-2 d-flex align-items-end">
-                    <button type="submit" class="btn btn-primary w-100">Gerar Extrato</button>
-                </div>
+            </div>
+            <div class="col-md-6 col-lg-2">
+                <button type="submit" class="btn btn-primary w-100">
+                    <i class="fas fa-search me-1"></i>Gerar Extrato
+                </button>
             </div>
         </form>
     </div>
 </div>
 
-{% if account %}
+{% if selected_accounts %}
 <div class="card shadow-sm border-0 mb-3">
     <div class="card-body p-0">
         <div class="table-responsive" style="max-height: 800px; overflow-y: auto;">
@@ -105,6 +148,8 @@
                 <thead class="bg-dark text-white sticky-top">
                     <tr>
                         <th class="ps-2">Núm.</th>
+                        <th>Tipo</th>
+                        <th>Conta</th>
                         <th>Data</th>
                         <th>Beneficiário/Transferência</th>
                         <th>Subcategoria</th>
@@ -115,22 +160,27 @@
                 </thead>
                 <tbody>
                     {% for trans in transactions %}
-                    <tr>
+                    <tr class="{% if trans.is_scheduled %}table-warning{% endif %}">
                         <td class="ps-2">
-                            {% if trans.transaction %}
-                                {% url 'finance:account_statement_report' as statement_base_url %}
+                            {% if trans.is_scheduled and trans.scheduler %}
+                                {% if trans.scheduler.is_multiple and trans.scheduler.multiple_scheduler_group_id %}
+                                    <a href="{% url 'finance:multiple_scheduler_update' trans.scheduler.multiple_scheduler_group_id %}" class="text-decoration-none" title="Editar agendamento">---</a>
+                                {% else %}
+                                    <a href="{% url 'finance:scheduler_update' trans.scheduler.pk %}" class="text-decoration-none" title="Editar agendamento">---</a>
+                                {% endif %}
+                            {% elif trans.transaction %}
                                 {% if trans.transaction.asset_transaction %}
                                     {% if trans.transaction.asset_transaction.multiple_group_id %}
-                                        <a href="{% url 'finance:multiple_asset_transaction_update' trans.transaction.asset_transaction.multiple_group_id %}?next={{ statement_base_url }}%3Faccount%3D{{ account.pk }}%26start_date%3D{{ start_date|date:'Y-m-d' }}%26end_date%3D{{ end_date|date:'Y-m-d' }}" class="text-decoration-none" title="Editar transação múltipla de ativo">
+                                        <a href="{% url 'finance:multiple_asset_transaction_update' trans.transaction.asset_transaction.multiple_group_id %}?next={{ statement_next_url|urlencode }}" class="text-decoration-none" title="Editar transação múltipla de ativo">
                                             {{ trans.id|default:"---" }}
                                         </a>
                                     {% else %}
-                                        <a href="{% url 'finance:asset_transaction_update' trans.transaction.asset_transaction.pk %}?next={{ statement_base_url }}%3Faccount%3D{{ account.pk }}%26start_date%3D{{ start_date|date:'Y-m-d' }}%26end_date%3D{{ end_date|date:'Y-m-d' }}" class="text-decoration-none" title="Editar transação de ativo">
+                                        <a href="{% url 'finance:asset_transaction_update' trans.transaction.asset_transaction.pk %}?next={{ statement_next_url|urlencode }}" class="text-decoration-none" title="Editar transação de ativo">
                                             {{ trans.id|default:"---" }}
                                         </a>
                                     {% endif %}
                                 {% else %}
-                                    <a href="{% url 'finance:transaction_update' trans.transaction.pk %}?next={{ statement_base_url }}%3Faccount%3D{{ account.pk }}%26start_date%3D{{ start_date|date:'Y-m-d' }}%26end_date%3D{{ end_date|date:'Y-m-d' }}" class="text-decoration-none" title="Editar transação">
+                                    <a href="{% url 'finance:transaction_update' trans.transaction.pk %}?next={{ statement_next_url|urlencode }}" class="text-decoration-none" title="Editar transação">
                                         {{ trans.id|default:"---" }}
                                     </a>
                                 {% endif %}
@@ -138,9 +188,19 @@
                                 <span class="text-muted">{{ trans.id|default:"---" }}</span>
                             {% endif %}
                         </td>
+                        <td>
+                            {% if trans.is_scheduled %}
+                                <span class="badge bg-info">Agendado</span>
+                            {% else %}
+                                <span class="badge bg-secondary">Realizado</span>
+                            {% endif %}
+                        </td>
+                        <td>{% if trans.account %}{{ trans.account.name }}{% else %}—{% endif %}</td>
                         <td>{{ trans.date|date:"d-m-Y" }}</td>
                         <td>
-                            {% if trans.transaction %}
+                            {% if trans.scheduler %}
+                                {{ trans.description|default:"-" }}
+                            {% elif trans.transaction %}
                                 {% if trans.transaction.is_transfer %}
                                     {% with transfer_pair=trans.transaction.get_transfer_pair %}
                                         {% if transfer_pair %}
@@ -165,7 +225,9 @@
                             {% endif %}
                         </td>
                         <td>
-                            {% if trans.transaction %}
+                            {% if trans.scheduler %}
+                                {% if trans.scheduler.subcategory %}{{ trans.scheduler.subcategory }}{% else %}<span class="text-muted">-</span>{% endif %}
+                            {% elif trans.transaction %}
                                 {% if trans.transaction.subcategory %}
                                     {{ trans.transaction.subcategory }}
                                 {% else %}
@@ -189,17 +251,22 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="7" class="text-center text-muted py-3">Nenhuma movimentação encontrada no período.</td>
+                        <td colspan="9" class="text-center text-muted py-3">Nenhuma movimentação encontrada no período.</td>
                     </tr>
                     {% endfor %}
                 </tbody>
                 <tfoot class="table-light sticky-bottom">
                     <tr>
-                        <td colspan="4" class="ps-2 fw-bold">Subtotal:</td>
+                        <td colspan="6" class="ps-2 fw-bold">Subtotal:</td>
                         <td class="text-end fw-bold text-danger">R$ {{ total_payments|floatformat:2 }}</td>
                         <td class="text-end fw-bold text-success">R$ {{ total_deposits|floatformat:2 }}</td>
                         <td class="pe-2 text-end fw-bold {% if final_balance and final_balance < 0 %}text-danger{% else %}text-dark{% endif %}">R$ {% if final_balance %}{{ final_balance|floatformat:2 }}{% else %}0.00{% endif %}</td>
                     </tr>
+                    {% if has_scheduled %}
+                    <tr>
+                        <td colspan="9" class="ps-2 text-muted small"><i class="fas fa-info-circle me-1"></i>Saldo e totais incluem lançamentos futuros (agendamentos) no período.</td>
+                    </tr>
+                    {% endif %}
                 </tfoot>
             </table>
         </div>
@@ -216,15 +283,47 @@
             const rows = table.querySelectorAll('tbody tr');
             rows.forEach(function(row) {
                 row.addEventListener('click', function() {
-                    // Remove a seleção de todas as linhas
-                    rows.forEach(function(r) {
-                        r.classList.remove('selected');
-                    });
-                    // Adiciona a seleção na linha clicada
+                    rows.forEach(function(r) { r.classList.remove('selected'); });
                     this.classList.add('selected');
                 });
             });
         }
+
+        function updateSelectedCount(fieldName) {
+            const checkboxes = document.querySelectorAll('input[name="' + fieldName + '"]');
+            const checked = Array.from(checkboxes).filter(function(cb) { return cb.checked; });
+            const countSpan = document.querySelector('.selected-count[data-field="' + fieldName + '"]');
+            if (!countSpan) return;
+            if (checked.length === 0) countSpan.textContent = 'Selecione...';
+            else if (checked.length === checkboxes.length) countSpan.textContent = 'Todos (' + checked.length + ')';
+            else countSpan.textContent = checked.length + ' selecionado(s)';
+        }
+        var accountField = 'account';
+        updateSelectedCount(accountField);
+        document.querySelectorAll('input[name="' + accountField + '"]').forEach(function(checkbox) {
+            checkbox.addEventListener('change', function() { updateSelectedCount(accountField); });
+        });
+
+        document.querySelectorAll('.statement-filters .select-all-btn').forEach(function(button) {
+            button.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                var fieldName = this.getAttribute('data-field');
+                var checkboxes = document.querySelectorAll('input[name="' + fieldName + '"]');
+                var allChecked = Array.from(checkboxes).every(function(cb) { return cb.checked; });
+                checkboxes.forEach(function(cb) { cb.checked = !allChecked; });
+                this.innerHTML = !allChecked
+                    ? '<i class="fas fa-times me-1"></i>Desmarcar todas'
+                    : '<i class="fas fa-check-double me-1"></i>Selecionar todas';
+                updateSelectedCount(fieldName);
+            });
+        });
+
+        document.querySelectorAll('.statement-filters .dropdown-menu').forEach(function(menu) {
+            menu.addEventListener('click', function(e) {
+                if (e.target.type === 'checkbox' || e.target.closest('.form-check')) e.stopPropagation();
+            });
+        });
     });
 </script>
 {% endblock %}
