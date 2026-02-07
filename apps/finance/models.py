@@ -2491,7 +2491,108 @@ class CashFlowItem(BaseModel):
             total += trans.get_net_value()  # Já tem sinal correto
         
         return total
-    
+
+    def calculate_scheduled_value(self, start_date, end_date, account=None):
+        """Calcula o valor agendado (lançamentos futuros) deste item no período."""
+        from decimal import Decimal
+
+        if self.calculation_type == 'SUBTOTAL':
+            total = Decimal('0')
+            children = self.get_children()
+            children_codes = set()
+            if children.exists():
+                for child in children:
+                    if not child.accumulates_in or child.accumulates_in == self:
+                        children_codes.add(child.code)
+                        total += child.calculate_scheduled_value(start_date, end_date, account)
+            accumulated_items = CashFlowItem.objects.filter(
+                accumulates_in=self
+            ).exclude(code__in=children_codes)
+            for item in accumulated_items:
+                total += item.calculate_scheduled_value(start_date, end_date, account)
+            return total
+
+        if self.calculation_type == 'RULES':
+            total = Decimal('0')
+            for rule in self.calculation_rules:
+                rule_type = rule.get('type')
+                if rule_type == 'subcategory':
+                    subcategory_id = rule.get('subcategory_id')
+                    if subcategory_id:
+                        total += self._calculate_scheduled_by_subcategory(
+                            subcategory_id, start_date, end_date, account
+                        )
+                elif rule_type == 'transfer':
+                    destination_account_id = rule.get('destination_account_id')
+                    value_type = rule.get('value_type')
+                    if not value_type and rule.get('direction'):
+                        value_type = 'credit' if rule.get('direction') == 'to' else 'debit'
+                    if destination_account_id and value_type:
+                        total += self._calculate_scheduled_by_transfer(
+                            destination_account_id, value_type, start_date, end_date, account
+                        )
+                # asset_transaction: sem equivalente em agendamentos
+            return total
+
+        return Decimal('0')
+
+    def _calculate_scheduled_by_subcategory(self, subcategory_id, start_date, end_date, account):
+        """Calcula valor agendado por subcategoria (Scheduler no período)."""
+        from decimal import Decimal
+
+        filters = {'subcategory_id': subcategory_id, 'status': 'ACTIVE'}
+        if account:
+            filters['account'] = account
+        schedulers = Scheduler.objects.filter(**filters)
+
+        total = Decimal('0')
+        for scheduler in schedulers:
+            if not scheduler.is_valid():
+                continue
+            for _ in scheduler.get_occurrence_dates_in_range(start_date, end_date):
+                if scheduler.transaction_type == 'CR':
+                    total += scheduler.value
+                elif scheduler.transaction_type == 'DB':
+                    total -= scheduler.value
+        return total
+
+    def _calculate_scheduled_by_transfer(self, destination_account_id, value_type, start_date, end_date, account):
+        """Calcula valor agendado por transferência (Scheduler is_transfer no período)."""
+        from decimal import Decimal
+
+        total = Decimal('0')
+        if value_type == 'credit':
+            filters = {
+                'is_transfer': True,
+                'account_id': destination_account_id,
+                'transaction_type': 'CR',
+                'status': 'ACTIVE',
+            }
+            if account and account.id != destination_account_id:
+                return total
+            schedulers = Scheduler.objects.filter(**filters)
+            for scheduler in schedulers:
+                if not scheduler.is_valid():
+                    continue
+                for _ in scheduler.get_occurrence_dates_in_range(start_date, end_date):
+                    total += scheduler.value
+        elif value_type == 'debit':
+            filters = {
+                'is_transfer': True,
+                'destination_account_id': destination_account_id,
+                'transaction_type': 'DB',
+                'status': 'ACTIVE',
+            }
+            if account:
+                filters['account'] = account
+            schedulers = Scheduler.objects.filter(**filters)
+            for scheduler in schedulers:
+                if not scheduler.is_valid():
+                    continue
+                for _ in scheduler.get_occurrence_dates_in_range(start_date, end_date):
+                    total -= scheduler.value
+        return total
+
     def calculate_budget_value(self, start_date, end_date, account=None):
         """Calcula o valor orçado deste item baseado nas regras"""
         from decimal import Decimal

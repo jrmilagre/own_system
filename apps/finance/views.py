@@ -5106,56 +5106,43 @@ def cash_flow_item_delete(request, pk):
 def cash_flow_report(request):
     """Relatório de fluxo de caixa"""
     from decimal import Decimal
-    
-    # Filtros
+
     start_date = request.GET.get('start_date')
     end_date = request.GET.get('end_date')
     account_id = request.GET.get('account')
-    
-    # Valores padrão
+    include_future = request.GET.get('include_future') in ('1', 'on', 'true')
+
     if not start_date:
         today = date.today()
         start_date = date(today.year, today.month, 1).isoformat()
     if not end_date:
         end_date = date.today().isoformat()
-    
-    # Converter para date objects
+
     try:
         start_date = datetime.strptime(start_date, '%Y-%m-%d').date()
         end_date = datetime.strptime(end_date, '%Y-%m-%d').date()
     except (ValueError, TypeError):
         start_date = date.today().replace(day=1)
         end_date = date.today()
-    
+
     account = None
     if account_id and account_id != 'all':
         try:
             account = Account.objects.get(pk=account_id)
         except Account.DoesNotExist:
             account = None
-    
-    # Buscar todos os itens ordenados por código
+
     all_items = CashFlowItem.objects.all().order_by('order', 'code')
-    
-    # Construir estrutura hierárquica com valores calculados
     report_data = []
     for item in all_items:
         value = item.calculate_value(start_date, end_date, account)
         budget_value = item.calculate_budget_value(start_date, end_date, account)
-        
-        # Se acumula em outro item, marcar
-        accumulates_in_code = None
-        if item.accumulates_in:
-            accumulates_in_code = item.accumulates_in.code
-        
-        # Determinar nível hierárquico
+        accumulates_in_code = item.accumulates_in.code if item.accumulates_in else None
         level = item.code.count('.')
-        
-        # Verificar se tem filhos para mostrar botão expandir/recolher
         has_children = item.get_children().exists()
         parent_code = item.get_parent_code()
-        
-        report_data.append({
+
+        row = {
             'item': item,
             'code': item.code,
             'description': item.description,
@@ -5165,32 +5152,42 @@ def cash_flow_report(request):
             'level': level,
             'has_children': has_children,
             'parent_code': parent_code,
-        })
-    
-    # Adicionar valores acumulados aos dados
-    # Para itens SUBTOTAL que acumulam valores de outros itens, o valor já foi calculado
-    # Para itens que acumulam em outros, precisamos adicionar ao item de destino
+        }
+        if include_future:
+            scheduled_value = item.calculate_scheduled_value(start_date, end_date, account)
+            row['scheduled_value'] = scheduled_value
+            row['scheduled_accumulated_value'] = scheduled_value
+        report_data.append(row)
+
     for data in report_data:
-        # O valor calculado já inclui a lógica de SUBTOTAL (soma filhos ou itens que acumulam)
         data['accumulated_value'] = data['value']
         data['budget_accumulated_value'] = data['budget_value']
-    
-    # Total geral (último item de nível raiz, geralmente o "Caixa Líquido")
+
     total_general = Decimal('0')
     total_budget_general = Decimal('0')
+    total_scheduled_general = Decimal('0')
     root_items = [d for d in report_data if d['level'] == 0]
     if root_items:
-        # Pegar o último item de nível raiz (geralmente o "Caixa Líquido")
         total_general = root_items[-1]['accumulated_value']
         total_budget_general = root_items[-1]['budget_accumulated_value']
+        if include_future:
+            total_scheduled_general = root_items[-1].get('scheduled_accumulated_value', Decimal('0'))
     else:
-        # Fallback: somar todos os valores
         for data in report_data:
             total_general += data['value']
             total_budget_general += data['budget_value']
-    
+            if include_future:
+                total_scheduled_general += data.get('scheduled_value', Decimal('0'))
+
+    if include_future:
+        for data in report_data:
+            data['projected_value'] = data['accumulated_value'] + data.get('scheduled_accumulated_value', Decimal('0'))
+        total_projected_general = total_general + total_scheduled_general
+    else:
+        total_projected_general = total_general
+
     accounts = Account.objects.all()
-    
+
     return render(request, 'finance/cash_flow_report.html', {
         'report_data': report_data,
         'start_date': start_date,
@@ -5199,6 +5196,9 @@ def cash_flow_report(request):
         'accounts': accounts,
         'total_general': total_general,
         'total_budget_general': total_budget_general,
+        'include_future': include_future,
+        'total_scheduled_general': total_scheduled_general,
+        'total_projected_general': total_projected_general,
     })
 
 
