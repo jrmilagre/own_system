@@ -114,13 +114,13 @@ urlpatterns = [
     path('conectividade/transactions/select-all/', views.transactions_import_select_all, name='transactions_import_select_all'),
     path('conectividade/transactions/deselect-all/', views.transactions_import_deselect_all, name='transactions_import_deselect_all'),
     path('conectividade/transactions/execute/', views.transactions_import_execute, name='transactions_import_execute'),
-            # Asset Transactions Import URLs
-            path('conectividade/asset-transactions/upload/', views.asset_transactions_import_upload, name='asset_transactions_import_upload'),
-            path('conectividade/asset-transactions/staging/', views.asset_transactions_import_staging, name='asset_transactions_import_staging'),
-            path('conectividade/asset-transactions/edit-item/', views.asset_transactions_import_edit_item, name='asset_transactions_import_edit_item'),
-            path('conectividade/asset-transactions/remove-item/', views.asset_transactions_import_remove_item, name='asset_transactions_import_remove_item'),
-            path('conectividade/asset-transactions/select-all/', views.asset_transactions_import_select_all, name='asset_transactions_import_select_all'),
-            path('conectividade/asset-transactions/deselect-all/', views.asset_transactions_import_deselect_all, name='asset_transactions_import_deselect_all'),
-            path('conectividade/asset-transactions/execute/', views.asset_transactions_import_execute, name='asset_transactions_import_execute'),
+    # Asset Transactions Import URLs
+    path('conectividade/asset-transactions/upload/', views.asset_transactions_import_upload, name='asset_transactions_import_upload'),
+    path('conectividade/asset-transactions/staging/', views.asset_transactions_import_staging, name='asset_transactions_import_staging'),
+    path('conectividade/asset-transactions/edit-item/', views.asset_transactions_import_edit_item, name='asset_transactions_import_edit_item'),
+    path('conectividade/asset-transactions/remove-item/', views.asset_transactions_import_remove_item, name='asset_transactions_import_remove_item'),
+    path('conectividade/asset-transactions/select-all/', views.asset_transactions_import_select_all, name='asset_transactions_import_select_all'),
+    path('conectividade/asset-transactions/deselect-all/', views.asset_transactions_import_deselect_all, name='asset_transactions_import_deselect_all'),
+    path('conectividade/asset-transactions/execute/', views.asset_transactions_import_execute, name='asset_transactions_import_execute'),
 ]
 

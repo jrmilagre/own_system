@@ -1,12 +1,16 @@
 from django.shortcuts import render, redirect, get_object_or_404
-from django.urls import reverse
+from django.urls import reverse, reverse_lazy
 from django.contrib import messages
 from django.http import JsonResponse
 from django.db import transaction as db_transaction
 from django.core.paginator import Paginator
-from django.db.models import Q
+from django.db.models import Q, Avg
 from django.db import close_old_connections
+from django.forms import formset_factory
+from django.views.generic import CreateView, UpdateView, DeleteView
 from datetime import datetime, date, timedelta
+from collections import defaultdict
+import traceback
 import uuid
 import json as json_module
 import time
@@ -24,112 +28,162 @@ from .forms import (
 )
 from .transactions_parser import TransactionsParser
 from .asset_transactions_parser import AssetTransactionsParser
+from .chatbot_service import get_chatbot_response
+from .services.budget_service import (
+    calculate_spent_by_subcategory,
+    calculate_spent_by_category,
+    calculate_budget_by_subcategory,
+    calculate_budget_by_category,
+    calculate_budget_by_subcategory_year,
+    calculate_budget_by_category_year,
+    calculate_budget_accumulated_by_subcategory,
+    calculate_budget_accumulated_by_category,
+)
+from .constants import (
+    TRANSACTIONS_PER_PAGE,
+    ACCOUNTS_PER_PAGE,
+    SCHEDULERS_PER_PAGE,
+    ASSETS_PER_PAGE,
+    ASSET_TRANSACTIONS_PER_PAGE,
+    BUDGETS_PER_PAGE,
+    IMPORT_STAGING_TRANSACTIONS_PER_PAGE,
+    IMPORT_STAGING_ASSET_TRANSACTIONS_PER_PAGE,
+    CHAT_HISTORY_MAX_MESSAGES,
+    TRANSACTION_TYPE_CR,
+    TRANSACTION_TYPE_DB,
+    TRANSACTIONS_IMPORT_BATCH_SIZE,
+    TRANSACTIONS_IMPORT_PROGRESS_LOG_INTERVAL,
+)
 from decimal import Decimal, InvalidOperation
 from urllib.parse import urlencode
 import json
+import logging
 import os
 
+from apps.finance.views.common import prepare_transactions_for_session
 
-def safe_debug_log(log_data):
-    """
-    Função auxiliar para fazer logging de forma segura em produção.
-    Ignora erros de escrita de arquivo que podem ocorrer em ambientes como Render.
-    """
-    try:
-        os.makedirs('.cursor', exist_ok=True)
-        with open('.cursor/debug.log', 'a', encoding='utf-8') as f:
-            f.write(json_module.dumps(log_data) + '\n')
-    except (OSError, IOError, PermissionError):
-        pass  # Ignora erros de escrita em produção
+logger = logging.getLogger(__name__)
+
+# Autenticação: quando LOGIN_URL e autenticação estiverem configurados, adicionar
+# LoginRequiredMixin como primeiro mixin nas CBVs e @login_required nas FBVs
+# (incluindo APIs: get_budget_info, quick_create_*, chatbot_api).
 
 
-def prepare_transactions_for_session(transactions_data):
-    """
-    Converte objetos date e Decimal para strings antes de salvar na sessão.
-    A sessão Django não serializa objetos date e Decimal diretamente.
-    IMPORTANTE: Preserva todos os campos, incluindo import_hash.
-    """
-    from decimal import Decimal as DecimalType
-    transactions_data_for_session = []
-    missing_hash_count = 0
-    for trans in transactions_data:
-        trans_copy = {}
-        # Converter todos os campos, garantindo que date e Decimal sejam strings
-        for key, value in trans.items():
-            if value is None:
-                trans_copy[key] = None
-            elif isinstance(value, date):
-                # Converter date para string ISO
-                trans_copy[key] = value.isoformat()
-            elif isinstance(value, DecimalType):
-                # Converter Decimal para string
-                trans_copy[key] = str(value)
-            elif isinstance(value, (int, float, str, bool)):
-                # Tipos primitivos podem ser salvos diretamente
-                trans_copy[key] = value
-            elif isinstance(value, (list, tuple)):
-                # Converter listas/tuplas recursivamente
-                trans_copy[key] = [str(v) if isinstance(v, (date, DecimalType)) else v for v in value]
-            elif isinstance(value, dict):
-                # Converter dicionários recursivamente
-                trans_copy[key] = {k: (v.isoformat() if isinstance(v, date) else str(v) if isinstance(v, DecimalType) else v) 
-                                   for k, v in value.items()}
-            else:
-                # Para outros tipos, tentar converter para string
-                trans_copy[key] = str(value)
-        
-        # Verificar se import_hash foi preservado
-        if 'import_hash' in trans and 'import_hash' not in trans_copy:
-            missing_hash_count += 1
-            # #region agent log
-            if missing_hash_count <= 3:  # Log apenas primeiras 3
-                try:
-                    log_data = {
-                        'sessionId': 'debug-session',
-                        'runId': 'run1',
-                        'hypothesisId': 'HASH_LOST',
-                        'location': 'views.py:77',
-                        'message': 'import_hash lost in prepare_transactions_for_session',
-                        'data': {
-                            'original_index': trans.get('original_index'),
-                            'original_hash': trans.get('import_hash')[:30] if trans.get('import_hash') else None,
-                            'original_hash_type': type(trans.get('import_hash')).__name__ if trans.get('import_hash') else None,
-                            'all_keys_original': list(trans.keys())[:20],
-                            'all_keys_copy': list(trans_copy.keys())[:20]
-                        },
-                        'timestamp': int(time.time() * 1000)
-                    }
-                    safe_debug_log(log_data)
-                except:
-                    pass
-            # #endregion
-            # Garantir que import_hash seja preservado
-            if trans.get('import_hash'):
-                trans_copy['import_hash'] = trans['import_hash']
-        
-        transactions_data_for_session.append(trans_copy)
-    
-    # #region agent log
-    if missing_hash_count > 0:
-        try:
-            log_data = {
-                'sessionId': 'debug-session',
-                'runId': 'run1',
-                'hypothesisId': 'HASH_LOST',
-                'location': 'views.py:100',
-                'message': 'Summary: import_hash lost count',
-                'data': {
-                    'total_transactions': len(transactions_data),
-                    'missing_hash_count': missing_hash_count
-                },
-                'timestamp': int(time.time() * 1000)
-            }
-            safe_debug_log(log_data)
-        except:
-            pass
-    # #endregion
-    
-    return transactions_data_for_session
+# Class-based views for simple CRUD (optional: add LoginRequiredMixin when auth is enabled)
+class AccountCreateView(CreateView):
+    model = Account
+    form_class = AccountForm
+    template_name = 'finance/account_form.html'
+    success_url = reverse_lazy('finance:account_list')
+
+
+class AccountUpdateView(UpdateView):
+    model = Account
+    form_class = AccountForm
+    template_name = 'finance/account_form.html'
+    success_url = reverse_lazy('finance:account_list')
+    context_object_name = 'account'
+
+
+class AccountDeleteView(DeleteView):
+    model = Account
+    template_name = 'finance/account_confirm_delete.html'
+    success_url = reverse_lazy('finance:account_list')
+    context_object_name = 'account'
+
+
+class BeneficiaryCreateView(CreateView):
+    model = Beneficiary
+    form_class = BeneficiaryForm
+    template_name = 'finance/beneficiary_form.html'
+    success_url = reverse_lazy('finance:beneficiary_list')
+
+
+class BeneficiaryUpdateView(UpdateView):
+    model = Beneficiary
+    form_class = BeneficiaryForm
+    template_name = 'finance/beneficiary_form.html'
+    success_url = reverse_lazy('finance:beneficiary_list')
+    context_object_name = 'beneficiary'
+
+
+class BeneficiaryDeleteView(DeleteView):
+    model = Beneficiary
+    template_name = 'finance/beneficiary_confirm_delete.html'
+    success_url = reverse_lazy('finance:beneficiary_list')
+    context_object_name = 'beneficiary'
+
+
+class CategoryCreateView(CreateView):
+    model = Category
+    form_class = CategoryForm
+    template_name = 'finance/category_form.html'
+    success_url = reverse_lazy('finance:category_list')
+
+
+class CategoryUpdateView(UpdateView):
+    model = Category
+    form_class = CategoryForm
+    template_name = 'finance/category_form.html'
+    success_url = reverse_lazy('finance:category_list')
+    context_object_name = 'category'
+
+
+class CategoryDeleteView(DeleteView):
+    model = Category
+    template_name = 'finance/category_confirm_delete.html'
+    success_url = reverse_lazy('finance:category_list')
+    context_object_name = 'category'
+
+
+class SubcategoryCreateView(CreateView):
+    model = Subcategory
+    form_class = SubcategoryForm
+    template_name = 'finance/subcategory_form.html'
+
+    def get_success_url(self):
+        return reverse('finance:subcategory_list', kwargs={'category_pk': self.object.category_id})
+
+    def form_valid(self, form):
+        form.instance.category = get_object_or_404(Category, pk=self.kwargs['category_pk'])
+        return super().form_valid(form)
+
+    def get_context_data(self, **kwargs):
+        kwargs.setdefault('category', get_object_or_404(Category, pk=self.kwargs['category_pk']))
+        return super().get_context_data(**kwargs)
+
+
+class SubcategoryUpdateView(UpdateView):
+    model = Subcategory
+    form_class = SubcategoryForm
+    template_name = 'finance/subcategory_form.html'
+    context_object_name = 'subcategory'
+
+    def get_queryset(self):
+        return super().get_queryset().filter(category_id=self.kwargs['category_pk'])
+
+    def get_success_url(self):
+        return reverse('finance:subcategory_list', kwargs={'category_pk': self.object.category_id})
+
+    def get_context_data(self, **kwargs):
+        kwargs.setdefault('category', self.object.category)
+        return super().get_context_data(**kwargs)
+
+
+class SubcategoryDeleteView(DeleteView):
+    model = Subcategory
+    template_name = 'finance/subcategory_confirm_delete.html'
+    context_object_name = 'subcategory'
+
+    def get_queryset(self):
+        return super().get_queryset().filter(category_id=self.kwargs['category_pk'])
+
+    def get_success_url(self):
+        return reverse('finance:subcategory_list', kwargs={'category_pk': self.object.category_id})
+
+    def get_context_data(self, **kwargs):
+        kwargs.setdefault('category', self.object.category)
+        return super().get_context_data(**kwargs)
 
 
 def index(request):
@@ -151,81 +205,41 @@ def get_subcategory_default_transaction_type(request, subcategory_id):
 
 
 # AJAX Views para criação rápida
+def _quick_create_json(request, form_class, build_response):
+    """Helper: cria um objeto via POST e retorna JSON. build_response(obj) retorna dict com success=True, id, name e opcionais."""
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Method not allowed'}, status=405)
+    form = form_class(request.POST)
+    if form.is_valid():
+        obj = form.save()
+        return JsonResponse({**build_response(obj), 'success': True})
+    return JsonResponse({'success': False, 'errors': form.errors}, status=400)
+
+
 def quick_create_account(request):
     """Cria uma conta rapidamente via AJAX"""
-    if request.method == 'POST':
-        form = AccountForm(request.POST)
-        if form.is_valid():
-            account = form.save()
-            return JsonResponse({
-                'success': True,
-                'id': account.id,
-                'name': account.name
-            })
-        else:
-            return JsonResponse({
-                'success': False,
-                'errors': form.errors
-            }, status=400)
-    return JsonResponse({'success': False, 'error': 'Method not allowed'}, status=405)
+    return _quick_create_json(request, AccountForm, lambda o: {'id': o.id, 'name': o.name})
 
 
 def quick_create_beneficiary(request):
     """Cria um beneficiário rapidamente via AJAX"""
-    if request.method == 'POST':
-        form = BeneficiaryForm(request.POST)
-        if form.is_valid():
-            beneficiary = form.save()
-            return JsonResponse({
-                'success': True,
-                'id': beneficiary.id,
-                'name': beneficiary.full_name
-            })
-        else:
-            return JsonResponse({
-                'success': False,
-                'errors': form.errors
-            }, status=400)
-    return JsonResponse({'success': False, 'error': 'Method not allowed'}, status=405)
+    return _quick_create_json(request, BeneficiaryForm, lambda o: {'id': o.id, 'name': o.full_name})
 
 
 def quick_create_subcategory(request):
     """Cria uma subcategoria rapidamente via AJAX"""
-    if request.method == 'POST':
-        form = SubcategoryForm(request.POST)
-        if form.is_valid():
-            subcategory = form.save()
-            return JsonResponse({
-                'success': True,
-                'id': subcategory.id,
-                'name': str(subcategory),
-                'category_id': subcategory.category.id
-            })
-        else:
-            return JsonResponse({
-                'success': False,
-                'errors': form.errors
-            }, status=400)
-    return JsonResponse({'success': False, 'error': 'Method not allowed'}, status=405)
+    return _quick_create_json(
+        request, SubcategoryForm,
+        lambda o: {'id': o.id, 'name': str(o), 'category_id': o.category.id}
+    )
 
 
 def quick_create_asset(request):
     """Cria um ativo rapidamente via AJAX"""
-    if request.method == 'POST':
-        form = AssetForm(request.POST)
-        if form.is_valid():
-            asset = form.save()
-            return JsonResponse({
-                'success': True,
-                'id': asset.id,
-                'name': f"{asset.code} - {asset.name}"
-            })
-        else:
-            return JsonResponse({
-                'success': False,
-                'errors': form.errors
-            }, status=400)
-    return JsonResponse({'success': False, 'error': 'Method not allowed'}, status=405)
+    return _quick_create_json(
+        request, AssetForm,
+        lambda o: {'id': o.id, 'name': f"{o.code} - {o.name}"}
+    )
 
 
 # Account Views
@@ -310,7 +324,7 @@ def account_list(request):
             accounts_list.sort(key=lambda a: a.name.lower(), reverse=reverse_order)
     
     # Paginação
-    paginator = Paginator(accounts_list, 25)
+    paginator = Paginator(accounts_list, ACCOUNTS_PER_PAGE)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
     
@@ -342,38 +356,9 @@ def account_list(request):
     })
 
 
-def account_create(request):
-    """Criar nova conta"""
-    if request.method == 'POST':
-        form = AccountForm(request.POST)
-        if form.is_valid():
-            form.save()
-            return redirect('finance:account_list')
-    else:
-        form = AccountForm()
-    return render(request, 'finance/account_form.html', {'form': form})
-
-
-def account_update(request, pk):
-    """Editar conta existente"""
-    account = get_object_or_404(Account, pk=pk)
-    if request.method == 'POST':
-        form = AccountForm(request.POST, instance=account)
-        if form.is_valid():
-            form.save()
-            return redirect('finance:account_list')
-    else:
-        form = AccountForm(instance=account)
-    return render(request, 'finance/account_form.html', {'form': form, 'account': account})
-
-
-def account_delete(request, pk):
-    """Deletar conta"""
-    account = get_object_or_404(Account, pk=pk)
-    if request.method == 'POST':
-        account.delete()
-        return redirect('finance:account_list')
-    return render(request, 'finance/account_confirm_delete.html', {'account': account})
+account_create = AccountCreateView.as_view()
+account_update = AccountUpdateView.as_view()
+account_delete = AccountDeleteView.as_view()
 
 
 # Beneficiary Views
@@ -383,59 +368,24 @@ def beneficiary_list(request):
     return render(request, 'finance/beneficiary_list.html', {'beneficiaries': beneficiaries})
 
 
-def beneficiary_create(request):
-    """Criar novo beneficiário"""
-    if request.method == 'POST':
-        form = BeneficiaryForm(request.POST)
-        if form.is_valid():
-            form.save()
-            return redirect('finance:beneficiary_list')
-    else:
-        form = BeneficiaryForm()
-    return render(request, 'finance/beneficiary_form.html', {'form': form})
-
-
-def beneficiary_update(request, pk):
-    """Editar beneficiário existente"""
-    beneficiary = get_object_or_404(Beneficiary, pk=pk)
-    if request.method == 'POST':
-        form = BeneficiaryForm(request.POST, instance=beneficiary)
-        if form.is_valid():
-            form.save()
-            return redirect('finance:beneficiary_list')
-    else:
-        form = BeneficiaryForm(instance=beneficiary)
-    return render(request, 'finance/beneficiary_form.html', {'form': form, 'beneficiary': beneficiary})
-
-
-def beneficiary_delete(request, pk):
-    """Deletar beneficiário"""
-    beneficiary = get_object_or_404(Beneficiary, pk=pk)
-    if request.method == 'POST':
-        beneficiary.delete()
-        return redirect('finance:beneficiary_list')
-    return render(request, 'finance/beneficiary_confirm_delete.html', {'beneficiary': beneficiary})
+beneficiary_create = BeneficiaryCreateView.as_view()
+beneficiary_update = BeneficiaryUpdateView.as_view()
+beneficiary_delete = BeneficiaryDeleteView.as_view()
 
 
 # Category Views
 def category_list(request):
     """Lista de categorias"""
-    from .models import CashFlowItem
-    
-    categories = Category.objects.all()
-    # Obter contagem de mapeamentos de uma vez para otimização
+    # Uma query para categorias + prefetch de subcategorias; uma para contagem de mapeamentos
+    categories = Category.objects.prefetch_related('subcategory_set').all()
     mapping_count = CashFlowItem.get_subcategory_mapping_count()
     
-    # Adicionar contagem de subcategorias e status de mapeamento para cada categoria
     for category in categories:
-        subcategories = Subcategory.objects.filter(category=category)
-        category.subcategory_count = subcategories.count()
-        
-        # Contar subcategorias por status
+        subcategories = list(category.subcategory_set.all())
+        category.subcategory_count = len(subcategories)
         category.mapped_count = 0
         category.not_mapped_count = 0
         category.duplicate_count = 0
-        
         for subcategory in subcategories:
             count = mapping_count.get(subcategory.id, 0)
             if count == 0:
@@ -448,38 +398,9 @@ def category_list(request):
     return render(request, 'finance/category_list.html', {'categories': categories})
 
 
-def category_create(request):
-    """Criar nova categoria"""
-    if request.method == 'POST':
-        form = CategoryForm(request.POST)
-        if form.is_valid():
-            form.save()
-            return redirect('finance:category_list')
-    else:
-        form = CategoryForm()
-    return render(request, 'finance/category_form.html', {'form': form})
-
-
-def category_update(request, pk):
-    """Editar categoria existente"""
-    category = get_object_or_404(Category, pk=pk)
-    if request.method == 'POST':
-        form = CategoryForm(request.POST, instance=category)
-        if form.is_valid():
-            form.save()
-            return redirect('finance:category_list')
-    else:
-        form = CategoryForm(instance=category)
-    return render(request, 'finance/category_form.html', {'form': form, 'category': category})
-
-
-def category_delete(request, pk):
-    """Deletar categoria"""
-    category = get_object_or_404(Category, pk=pk)
-    if request.method == 'POST':
-        category.delete()
-        return redirect('finance:category_list')
-    return render(request, 'finance/category_confirm_delete.html', {'category': category})
+category_create = CategoryCreateView.as_view()
+category_update = CategoryUpdateView.as_view()
+category_delete = CategoryDeleteView.as_view()
 
 
 # Subcategory Views
@@ -487,66 +408,22 @@ def subcategory_list(request, category_pk):
     """Lista de subcategorias de uma categoria"""
     category = get_object_or_404(Category, pk=category_pk)
     subcategories = Subcategory.objects.filter(category=category)
-    
-    # Adicionar informações de mapeamento para cada subcategoria
+    # Uma única chamada para contagem de mapeamentos (evita N+1)
+    mapping_count_dict = CashFlowItem.get_subcategory_mapping_count()
     for subcategory in subcategories:
-        subcategory.mapping_count = subcategory.get_cash_flow_mapping_count()
-        subcategory.is_mapped = subcategory.is_mapped_to_cash_flow()
-        subcategory.has_duplicate = subcategory.has_duplicate_mapping()
-    
+        count = mapping_count_dict.get(subcategory.id, 0)
+        subcategory.mapping_count = count
+        subcategory.is_mapped = count > 0
+        subcategory.has_duplicate = count > 1
     return render(request, 'finance/subcategory_list.html', {
         'category': category,
         'subcategories': subcategories
     })
 
 
-def subcategory_create(request, category_pk):
-    """Criar nova subcategoria"""
-    category = get_object_or_404(Category, pk=category_pk)
-    if request.method == 'POST':
-        form = SubcategoryForm(request.POST)
-        if form.is_valid():
-            subcategory = form.save(commit=False)
-            subcategory.category = category
-            subcategory.save()
-            return redirect('finance:subcategory_list', category_pk=category_pk)
-    else:
-        form = SubcategoryForm(initial={'category': category})
-    return render(request, 'finance/subcategory_form.html', {
-        'form': form,
-        'category': category
-    })
-
-
-def subcategory_update(request, category_pk, pk):
-    """Editar subcategoria existente"""
-    category = get_object_or_404(Category, pk=category_pk)
-    subcategory = get_object_or_404(Subcategory, pk=pk, category=category)
-    if request.method == 'POST':
-        form = SubcategoryForm(request.POST, instance=subcategory)
-        if form.is_valid():
-            form.save()
-            return redirect('finance:subcategory_list', category_pk=category_pk)
-    else:
-        form = SubcategoryForm(instance=subcategory)
-    return render(request, 'finance/subcategory_form.html', {
-        'form': form,
-        'category': category,
-        'subcategory': subcategory
-    })
-
-
-def subcategory_delete(request, category_pk, pk):
-    """Deletar subcategoria"""
-    category = get_object_or_404(Category, pk=category_pk)
-    subcategory = get_object_or_404(Subcategory, pk=pk, category=category)
-    if request.method == 'POST':
-        subcategory.delete()
-        return redirect('finance:subcategory_list', category_pk=category_pk)
-    return render(request, 'finance/subcategory_confirm_delete.html', {
-        'category': category,
-        'subcategory': subcategory
-    })
+subcategory_create = SubcategoryCreateView.as_view()
+subcategory_update = SubcategoryUpdateView.as_view()
+subcategory_delete = SubcategoryDeleteView.as_view()
 
 
 def subcategory_move(request, category_pk, pk):
@@ -756,10 +633,10 @@ def transaction_list(request):
         transactions = transactions.order_by('-transaction_date', '-due_date', '-created_at')
     
     # Paginação
-    paginator = Paginator(transactions, 50)  # 50 transações por página
+    paginator = Paginator(transactions, TRANSACTIONS_PER_PAGE)
     page_number = request.GET.get('page', 1)
     page_obj = paginator.get_page(page_number)
-    
+
     # Agrupar transações múltiplas
     multiple_groups = {}
     single_transactions = []
@@ -782,7 +659,7 @@ def transaction_list(request):
         if transaction.is_transfer:
             transfer_pair = transaction.get_transfer_pair()
             if transfer_pair:
-                if transaction.transaction_type == 'DB':
+                if transaction.transaction_type == TRANSACTION_TYPE_DB:
                     transaction.transfer_info = f"De: {transaction.account} → Para: {transfer_pair.account}"
                 else:
                     transaction.transfer_info = f"De: {transfer_pair.account} → Para: {transaction.account}"
@@ -794,9 +671,9 @@ def transaction_list(request):
         # Calcular total: somar créditos e subtrair débitos
         total_value = 0
         for transaction in group_data['transactions']:
-            if transaction.transaction_type == 'CR':
+            if transaction.transaction_type == TRANSACTION_TYPE_CR:
                 total_value += transaction.value
-            elif transaction.transaction_type == 'DB':
+            elif transaction.transaction_type == TRANSACTION_TYPE_DB:
                 total_value -= transaction.value
         group_data['total_value'] = total_value
         group_data['count'] = len(group_data['transactions'])
@@ -814,14 +691,13 @@ def transaction_list(request):
     )
     
     # Calcular subtotal da página
-    from decimal import Decimal
     subtotal = Decimal('0')
     
     # Somar transações simples
     for transaction in single_transactions:
-        if transaction.transaction_type == 'CR':
+        if transaction.transaction_type == TRANSACTION_TYPE_CR:
             subtotal += transaction.value
-        elif transaction.transaction_type == 'DB':
+        elif transaction.transaction_type == TRANSACTION_TYPE_DB:
             subtotal -= transaction.value
     
     # Somar grupos múltiplos
@@ -885,23 +761,23 @@ def transaction_create(request):
         year_end = date(trans_date.year, 12, 31)
         
         # Calcular gastos acumulados antes do registro (desde início do ano até o mês da transação)
-        subcategory_spent_accumulated_before = _calculate_spent_by_subcategory(subcategory, year_start, accumulated_end)
-        subcategory_spent_year_before = _calculate_spent_by_subcategory(subcategory, year_start, year_end)
-        category_spent_accumulated_before = _calculate_spent_by_category(category, year_start, accumulated_end)
-        category_spent_year_before = _calculate_spent_by_category(category, year_start, year_end)
+        subcategory_spent_accumulated_before = calculate_spent_by_subcategory(subcategory, year_start, accumulated_end)
+        subcategory_spent_year_before = calculate_spent_by_subcategory(subcategory, year_start, year_end)
+        category_spent_accumulated_before = calculate_spent_by_category(category, year_start, accumulated_end)
+        category_spent_year_before = calculate_spent_by_category(category, year_start, year_end)
         
         # Calcular gastos depois do registro (adicionar valor da transação)
-        transaction_impact = transaction_value if transaction_type == 'CR' else -transaction_value
+        transaction_impact = transaction_value if transaction_type == TRANSACTION_TYPE_CR else -transaction_value
         subcategory_spent_accumulated_after = subcategory_spent_accumulated_before + transaction_impact
         subcategory_spent_year_after = subcategory_spent_year_before + transaction_impact
         category_spent_accumulated_after = category_spent_accumulated_before + transaction_impact
         category_spent_year_after = category_spent_year_before + transaction_impact
         
         # Calcular orçamentos acumulados (desde início do ano até o mês da transação)
-        subcategory_budget_accumulated = _calculate_budget_accumulated_by_subcategory(subcategory, trans_date.year, trans_date.month)
-        subcategory_budget_year = _calculate_budget_by_subcategory_year(subcategory, trans_date.year)
-        category_budget_accumulated = _calculate_budget_accumulated_by_category(category, trans_date.year, trans_date.month)
-        category_budget_year = _calculate_budget_by_category_year(category, trans_date.year)
+        subcategory_budget_accumulated = calculate_budget_accumulated_by_subcategory(subcategory, trans_date.year, trans_date.month)
+        subcategory_budget_year = calculate_budget_by_subcategory_year(subcategory, trans_date.year)
+        category_budget_accumulated = calculate_budget_accumulated_by_category(category, trans_date.year, trans_date.month)
+        category_budget_year = calculate_budget_by_category_year(category, trans_date.year)
         
         # Calcular projeção anual (média mensal × 12)
         current_month = trans_date.month
@@ -966,7 +842,7 @@ def transaction_create(request):
                         account=source_account,
                         beneficiary=None,
                         subcategory=None,
-                        transaction_type='DB',
+                        transaction_type=TRANSACTION_TYPE_DB,
                         value=value,
                         due_date=due_date,
                         transaction_date=transaction_date,
@@ -981,7 +857,7 @@ def transaction_create(request):
                         account=destination_account,
                         beneficiary=None,
                         subcategory=None,
-                        transaction_type='CR',
+                        transaction_type=TRANSACTION_TYPE_CR,
                         value=value,
                         due_date=due_date,
                         transaction_date=transaction_date,
@@ -1072,7 +948,7 @@ def transaction_update(request, pk):
                     transaction.account = source_account
                     transaction.beneficiary = None
                     transaction.subcategory = None
-                    transaction.transaction_type = 'DB'
+                    transaction.transaction_type = TRANSACTION_TYPE_DB
                     transaction.value = value
                     transaction.due_date = due_date
                     transaction.transaction_date = transaction_date
@@ -1087,7 +963,7 @@ def transaction_update(request, pk):
                         account=destination_account,
                         beneficiary=None,
                         subcategory=None,
-                        transaction_type='CR',
+                        transaction_type=TRANSACTION_TYPE_CR,
                         value=value,
                         due_date=due_date,
                         transaction_date=transaction_date,
@@ -1160,7 +1036,7 @@ def transaction_update(request, pk):
                     
                     with db_transaction.atomic():
                         # Determinar qual transação é débito e qual é crédito
-                        if transaction.transaction_type == 'DB':
+                        if transaction.transaction_type == TRANSACTION_TYPE_DB:
                             # Esta é a transação de débito (origem)
                             debit_transaction = transaction
                             credit_transaction = transfer_pair
@@ -1218,7 +1094,7 @@ def transaction_update(request, pk):
         if transaction.is_transfer:
             transfer_pair = transaction.get_transfer_pair()
             if transfer_pair:
-                if transaction.transaction_type == 'DB':
+                if transaction.transaction_type == TRANSACTION_TYPE_DB:
                     # Esta é a transação de débito (origem)
                     source_account = transaction.account
                     destination_account = transfer_pair.account
@@ -1358,7 +1234,7 @@ def scheduler_list(request):
         }
     
     # Paginação
-    paginator = Paginator(schedulers, 50)  # 50 agendamentos por página
+    paginator = Paginator(schedulers, SCHEDULERS_PER_PAGE)
     page_number = request.GET.get('page', 1)
     page_obj = paginator.get_page(page_number)
     
@@ -1384,9 +1260,9 @@ def scheduler_list(request):
         # Calcular total: somar créditos e subtrair débitos
         total_value = 0
         for scheduler in group_data['schedulers']:
-            if scheduler.transaction_type == 'CR':
+            if scheduler.transaction_type == TRANSACTION_TYPE_CR:
                 total_value += scheduler.value
-            elif scheduler.transaction_type == 'DB':
+            elif scheduler.transaction_type == TRANSACTION_TYPE_DB:
                 total_value -= scheduler.value
         group_data['total_value'] = total_value
         group_data['count'] = len(group_data['schedulers'])
@@ -1420,9 +1296,9 @@ def scheduler_list(request):
     # Calcular subtotal da página
     subtotal = Decimal('0')
     for scheduler in single_schedulers:
-        if scheduler.transaction_type == 'CR':
+        if scheduler.transaction_type == TRANSACTION_TYPE_CR:
             subtotal += scheduler.value
-        elif scheduler.transaction_type == 'DB':
+        elif scheduler.transaction_type == TRANSACTION_TYPE_DB:
             subtotal -= scheduler.value
     for group_data in multiple_groups_list:
         subtotal += Decimal(str(group_data['total_value']))
@@ -1505,169 +1381,6 @@ def scheduler_delete(request, pk):
     return render(request, 'finance/scheduler_confirm_delete.html', {'scheduler': scheduler})
 
 
-# Funções auxiliares para cálculo de gastos e orçamentos
-def _calculate_spent_by_subcategory(subcategory, start_date, end_date):
-    """Calcula gastos por subcategoria em um período"""
-    if not subcategory:
-        return Decimal('0')
-    
-    date_filter = Q(
-        Q(transaction_date__gte=start_date, transaction_date__lte=end_date) |
-        Q(transaction_date__isnull=True, due_date__gte=start_date, due_date__lte=end_date)
-    )
-    
-    transactions = Transaction.objects.filter(
-        subcategory=subcategory
-    ).filter(date_filter)
-    
-    total = Decimal('0')
-    for trans in transactions:
-        if trans.transaction_type == 'CR':
-            total += trans.value
-        elif trans.transaction_type == 'DB':
-            total -= trans.value
-    
-    return total
-
-
-def _calculate_spent_by_category(category, start_date, end_date):
-    """Calcula gastos por categoria (agregando todas as subcategorias) em um período"""
-    if not category:
-        return Decimal('0')
-    
-    date_filter = Q(
-        Q(transaction_date__gte=start_date, transaction_date__lte=end_date) |
-        Q(transaction_date__isnull=True, due_date__gte=start_date, due_date__lte=end_date)
-    )
-    
-    transactions = Transaction.objects.filter(
-        subcategory__category=category
-    ).filter(date_filter)
-    
-    total = Decimal('0')
-    for trans in transactions:
-        if trans.transaction_type == 'CR':
-            total += trans.value
-        elif trans.transaction_type == 'DB':
-            total -= trans.value
-    
-    return total
-
-
-def _calculate_budget_by_subcategory(subcategory, year, month):
-    """Calcula orçamento por subcategoria em um mês/ano"""
-    if not subcategory:
-        return Decimal('0')
-    
-    budget_date = date(year, month, 1)
-    budgets = Budget.objects.filter(
-        subcategory=subcategory,
-        budget_date=budget_date
-    )
-    
-    total = Decimal('0')
-    for budget in budgets:
-        total += budget.amount
-    
-    return total
-
-
-def _calculate_budget_by_category(category, year, month):
-    """Calcula orçamento por categoria (agregando todas as subcategorias) em um mês/ano"""
-    if not category:
-        return Decimal('0')
-    
-    budget_date = date(year, month, 1)
-    budgets = Budget.objects.filter(
-        subcategory__category=category,
-        budget_date=budget_date
-    )
-    
-    total = Decimal('0')
-    for budget in budgets:
-        total += budget.amount
-    
-    return total
-
-
-def _calculate_budget_by_subcategory_year(subcategory, year):
-    """Calcula orçamento total por subcategoria em um ano"""
-    if not subcategory:
-        return Decimal('0')
-    
-    budgets = Budget.objects.filter(
-        subcategory=subcategory,
-        budget_date__year=year
-    )
-    
-    total = Decimal('0')
-    for budget in budgets:
-        total += budget.amount
-    
-    return total
-
-
-def _calculate_budget_by_category_year(category, year):
-    """Calcula orçamento total por categoria (agregando todas as subcategorias) em um ano"""
-    if not category:
-        return Decimal('0')
-    
-    budgets = Budget.objects.filter(
-        subcategory__category=category,
-        budget_date__year=year
-    )
-    
-    total = Decimal('0')
-    for budget in budgets:
-        total += budget.amount
-    
-    return total
-
-
-def _calculate_budget_accumulated_by_subcategory(subcategory, year, month):
-    """Calcula orçamento acumulado por subcategoria desde o início do ano até o mês especificado"""
-    if not subcategory:
-        return Decimal('0')
-    
-    # Buscar todos os budgets desde janeiro até o mês especificado
-    year_start = date(year, 1, 1)
-    month_end = date(year, month, 1)
-    
-    budgets = Budget.objects.filter(
-        subcategory=subcategory,
-        budget_date__gte=year_start,
-        budget_date__lte=month_end
-    )
-    
-    total = Decimal('0')
-    for budget in budgets:
-        total += budget.amount
-    
-    return total
-
-
-def _calculate_budget_accumulated_by_category(category, year, month):
-    """Calcula orçamento acumulado por categoria desde o início do ano até o mês especificado"""
-    if not category:
-        return Decimal('0')
-    
-    # Buscar todos os budgets desde janeiro até o mês especificado
-    year_start = date(year, 1, 1)
-    month_end = date(year, month, 1)
-    
-    budgets = Budget.objects.filter(
-        subcategory__category=category,
-        budget_date__gte=year_start,
-        budget_date__lte=month_end
-    )
-    
-    total = Decimal('0')
-    for budget in budgets:
-        total += budget.amount
-    
-    return total
-
-
 def scheduler_register(request, pk):
     """Registrar uma transação do agendamento"""
     scheduler = get_object_or_404(Scheduler, pk=pk)
@@ -1710,23 +1423,23 @@ def scheduler_register(request, pk):
         year_end = date(trans_date.year, 12, 31)
         
         # Calcular gastos acumulados antes do registro (desde início do ano até o mês da transação)
-        subcategory_spent_accumulated_before = _calculate_spent_by_subcategory(subcategory, year_start, accumulated_end)
-        subcategory_spent_year_before = _calculate_spent_by_subcategory(subcategory, year_start, year_end)
-        category_spent_accumulated_before = _calculate_spent_by_category(category, year_start, accumulated_end)
-        category_spent_year_before = _calculate_spent_by_category(category, year_start, year_end)
+        subcategory_spent_accumulated_before = calculate_spent_by_subcategory(subcategory, year_start, accumulated_end)
+        subcategory_spent_year_before = calculate_spent_by_subcategory(subcategory, year_start, year_end)
+        category_spent_accumulated_before = calculate_spent_by_category(category, year_start, accumulated_end)
+        category_spent_year_before = calculate_spent_by_category(category, year_start, year_end)
         
         # Calcular gastos depois do registro (adicionar valor da transação)
-        transaction_impact = transaction_value if transaction_type == 'CR' else -transaction_value
+        transaction_impact = transaction_value if transaction_type == TRANSACTION_TYPE_CR else -transaction_value
         subcategory_spent_accumulated_after = subcategory_spent_accumulated_before + transaction_impact
         subcategory_spent_year_after = subcategory_spent_year_before + transaction_impact
         category_spent_accumulated_after = category_spent_accumulated_before + transaction_impact
         category_spent_year_after = category_spent_year_before + transaction_impact
         
         # Calcular orçamentos acumulados (desde início do ano até o mês da transação)
-        subcategory_budget_accumulated = _calculate_budget_accumulated_by_subcategory(subcategory, trans_date.year, trans_date.month)
-        subcategory_budget_year = _calculate_budget_by_subcategory_year(subcategory, trans_date.year)
-        category_budget_accumulated = _calculate_budget_accumulated_by_category(category, trans_date.year, trans_date.month)
-        category_budget_year = _calculate_budget_by_category_year(category, trans_date.year)
+        subcategory_budget_accumulated = calculate_budget_accumulated_by_subcategory(subcategory, trans_date.year, trans_date.month)
+        subcategory_budget_year = calculate_budget_by_subcategory_year(subcategory, trans_date.year)
+        category_budget_accumulated = calculate_budget_accumulated_by_category(category, trans_date.year, trans_date.month)
+        category_budget_year = calculate_budget_by_category_year(category, trans_date.year)
         
         # Calcular projeção anual (média mensal × 12)
         current_month = trans_date.month
@@ -1858,8 +1571,6 @@ def _calculate_multiple_budget_info(items_data, transaction_date):
     - by_category: agregado por categoria
     - by_subcategory: detalhado por subcategoria
     """
-    from collections import defaultdict
-    
     if not items_data:
         return {
             'by_category': {},
@@ -1901,12 +1612,12 @@ def _calculate_multiple_budget_info(items_data, transaction_date):
         category = subcategory.category
         
         # Calcular gastos antes do registro (uma vez por subcategoria)
-        subcategory_spent_accumulated_before = _calculate_spent_by_subcategory(subcategory, year_start, accumulated_end)
-        subcategory_spent_year_before = _calculate_spent_by_subcategory(subcategory, year_start, year_end)
+        subcategory_spent_accumulated_before = calculate_spent_by_subcategory(subcategory, year_start, accumulated_end)
+        subcategory_spent_year_before = calculate_spent_by_subcategory(subcategory, year_start, year_end)
         
         # Calcular orçamentos (uma vez por subcategoria)
-        subcategory_budget_accumulated = _calculate_budget_accumulated_by_subcategory(subcategory, transaction_date.year, transaction_date.month)
-        subcategory_budget_year = _calculate_budget_by_subcategory_year(subcategory, transaction_date.year)
+        subcategory_budget_accumulated = calculate_budget_accumulated_by_subcategory(subcategory, transaction_date.year, transaction_date.month)
+        subcategory_budget_year = calculate_budget_by_subcategory_year(subcategory, transaction_date.year)
         
         # Somar impactos de todos os itens desta subcategoria
         total_transaction_impact = Decimal('0')
@@ -1914,8 +1625,8 @@ def _calculate_multiple_budget_info(items_data, transaction_date):
         
         for item in items_list:
             value = Decimal(str(item.get('value', 0)))
-            transaction_type = item.get('transaction_type', 'DB')
-            transaction_impact = value if transaction_type == 'CR' else -value
+            transaction_type = item.get('transaction_type', TRANSACTION_TYPE_DB)
+            transaction_impact = value if transaction_type == TRANSACTION_TYPE_CR else -value
             total_transaction_impact += transaction_impact
             total_value += value
         
@@ -1990,7 +1701,7 @@ def get_budget_info(request):
     
     subcategory_id = request.GET.get('subcategory_id')
     value = request.GET.get('value', '0')
-    transaction_type = request.GET.get('transaction_type', 'DB')
+    transaction_type = request.GET.get('transaction_type', TRANSACTION_TYPE_DB)
     transaction_date_str = request.GET.get('transaction_date')
     
     try:
@@ -2036,13 +1747,13 @@ def get_budget_info(request):
     year_end = date(transaction_date.year, 12, 31)
     
     # Calcular gastos acumulados antes do registro (desde início do ano até o mês da transação)
-    subcategory_spent_accumulated_before = _calculate_spent_by_subcategory(subcategory, year_start, accumulated_end)
-    subcategory_spent_year_before = _calculate_spent_by_subcategory(subcategory, year_start, year_end)
-    category_spent_accumulated_before = _calculate_spent_by_category(category, year_start, accumulated_end)
-    category_spent_year_before = _calculate_spent_by_category(category, year_start, year_end)
+    subcategory_spent_accumulated_before = calculate_spent_by_subcategory(subcategory, year_start, accumulated_end)
+    subcategory_spent_year_before = calculate_spent_by_subcategory(subcategory, year_start, year_end)
+    category_spent_accumulated_before = calculate_spent_by_category(category, year_start, accumulated_end)
+    category_spent_year_before = calculate_spent_by_category(category, year_start, year_end)
     
     # Calcular gastos depois do registro
-    transaction_impact = value if transaction_type == 'CR' else -value
+    transaction_impact = value if transaction_type == TRANSACTION_TYPE_CR else -value
     subcategory_spent_accumulated_after = subcategory_spent_accumulated_before + transaction_impact
     subcategory_spent_year_after = subcategory_spent_year_before + transaction_impact
     category_spent_accumulated_after = category_spent_accumulated_before + transaction_impact
@@ -2058,10 +1769,10 @@ def get_budget_info(request):
         category_projection = Decimal('0')
     
     # Calcular orçamentos acumulados (desde início do ano até o mês da transação)
-    subcategory_budget_accumulated = _calculate_budget_accumulated_by_subcategory(subcategory, transaction_date.year, transaction_date.month)
-    subcategory_budget_year = _calculate_budget_by_subcategory_year(subcategory, transaction_date.year)
-    category_budget_accumulated = _calculate_budget_accumulated_by_category(category, transaction_date.year, transaction_date.month)
-    category_budget_year = _calculate_budget_by_category_year(category, transaction_date.year)
+    subcategory_budget_accumulated = calculate_budget_accumulated_by_subcategory(subcategory, transaction_date.year, transaction_date.month)
+    subcategory_budget_year = calculate_budget_by_subcategory_year(subcategory, transaction_date.year)
+    category_budget_accumulated = calculate_budget_accumulated_by_category(category, transaction_date.year, transaction_date.month)
+    category_budget_year = calculate_budget_by_category_year(category, transaction_date.year)
     
     return JsonResponse({
         'subcategory': {
@@ -2131,7 +1842,7 @@ def get_multiple_budget_info(request):
         items_data.append({
             'subcategory': subcategory,
             'value': Decimal(str(item.get('value', 0))),
-            'transaction_type': item.get('transaction_type', 'DB'),
+            'transaction_type': item.get('transaction_type', TRANSACTION_TYPE_DB),
             'is_transfer': False
         })
     
@@ -2246,7 +1957,7 @@ def multiple_transaction_create(request):
                             account=source_account,
                             beneficiary=None,
                             subcategory=None,
-                            transaction_type='DB',
+                            transaction_type=TRANSACTION_TYPE_DB,
                             value=value,
                             due_date=due_date,
                             transaction_date=transaction_date,
@@ -2263,7 +1974,7 @@ def multiple_transaction_create(request):
                             account=destination_account,
                             beneficiary=None,
                             subcategory=None,
-                            transaction_type='CR',
+                            transaction_type=TRANSACTION_TYPE_CR,
                             value=value,
                             due_date=due_date,
                             transaction_date=transaction_date,
@@ -2340,7 +2051,6 @@ def multiple_transaction_update(request, group_id):
     if request.method == 'POST':
         form = MultipleTransactionForm(request.POST)
         # Usar formset com extra=0 quando editando para evitar item vazio
-        from django.forms import formset_factory
         MultipleTransactionItemFormSetEdit = formset_factory(
             MultipleTransactionItemForm,
             extra=0,
@@ -2406,7 +2116,7 @@ def multiple_transaction_update(request, group_id):
                             account=source_account,
                             beneficiary=None,
                             subcategory=None,
-                            transaction_type='DB',
+                            transaction_type=TRANSACTION_TYPE_DB,
                             value=value,
                             due_date=due_date,
                             transaction_date=transaction_date,
@@ -2423,7 +2133,7 @@ def multiple_transaction_update(request, group_id):
                             account=destination_account,
                             beneficiary=None,
                             subcategory=None,
-                            transaction_type='CR',
+                            transaction_type=TRANSACTION_TYPE_CR,
                             value=value,
                             due_date=due_date,
                             transaction_date=transaction_date,
@@ -2466,7 +2176,7 @@ def multiple_transaction_update(request, group_id):
             # Se só tem transferências, usar a conta de origem da primeira
             first_pair = list(transfer_pairs.values())[0]
             if first_pair:
-                debit_t = next((t for t in first_pair if t.transaction_type == 'DB'), None)
+                debit_t = next((t for t in first_pair if t.transaction_type == TRANSACTION_TYPE_DB), None)
                 if debit_t:
                     header_account = debit_t.account
         
@@ -2493,18 +2203,17 @@ def multiple_transaction_update(request, group_id):
         # Adicionar transferências
         for transfer_group_id, pair in transfer_pairs.items():
             if len(pair) == 2:
-                debit_t = next((t for t in pair if t.transaction_type == 'DB'), None)
-                credit_t = next((t for t in pair if t.transaction_type == 'CR'), None)
+                debit_t = next((t for t in pair if t.transaction_type == TRANSACTION_TYPE_DB), None)
+                credit_t = next((t for t in pair if t.transaction_type == TRANSACTION_TYPE_CR), None)
                 if debit_t and credit_t:
                     formset_data.append({
-                        'transaction_type': 'DB',
+                        'transaction_type': TRANSACTION_TYPE_DB,
                         'destination_account': credit_t.account,
                         'value': debit_t.value,
                         'is_transfer': True,
                     })
         
         # Criar formset sem extra quando editando (já temos os dados)
-        from django.forms import formset_factory
         MultipleTransactionItemFormSetEdit = formset_factory(
             MultipleTransactionItemForm,
             extra=0,  # Sem formulários extras quando editando
@@ -2643,7 +2352,7 @@ def multiple_scheduler_create(request):
                                 account=account,
                                 beneficiary=beneficiary,
                                 subcategory=None,
-                                transaction_type='DB',
+                                transaction_type=TRANSACTION_TYPE_DB,
                                 value=value,
                                 due_date=due_date,
                                 purchase_date=purchase_date,
@@ -2665,7 +2374,7 @@ def multiple_scheduler_create(request):
                                 account=destination_account,
                                 beneficiary=beneficiary,
                                 subcategory=None,
-                                transaction_type='CR',
+                                transaction_type=TRANSACTION_TYPE_CR,
                                 value=value,
                                 due_date=due_date,
                                 purchase_date=purchase_date,
@@ -2852,7 +2561,7 @@ def multiple_scheduler_update(request, group_id):
                                 account=account,
                                 beneficiary=beneficiary,
                                 subcategory=None,
-                                transaction_type='DB',
+                                transaction_type=TRANSACTION_TYPE_DB,
                                 value=value,
                                 due_date=due_date,
                                 purchase_date=purchase_date,
@@ -2874,7 +2583,7 @@ def multiple_scheduler_update(request, group_id):
                                 account=destination_account,
                                 beneficiary=beneficiary,
                                 subcategory=None,
-                                transaction_type='CR',
+                                transaction_type=TRANSACTION_TYPE_CR,
                                 value=value,
                                 due_date=due_date,
                                 purchase_date=purchase_date,
@@ -2992,7 +2701,6 @@ def multiple_scheduler_update(request, group_id):
                 })
         
         # Criar formset com extra=0 quando editando para evitar item vazio
-        from django.forms import formset_factory
         MultipleSchedulerItemFormSetEdit = formset_factory(
             MultipleSchedulerItemForm,
             extra=0,
@@ -3062,7 +2770,7 @@ def multiple_scheduler_register(request, group_id):
                 items_data.append({
                     'subcategory': form.cleaned_data.get('subcategory'),
                     'value': form.cleaned_data.get('value', 0),
-                    'transaction_type': form.cleaned_data.get('transaction_type', 'DB'),
+                    'transaction_type': form.cleaned_data.get('transaction_type', TRANSACTION_TYPE_DB),
                     'is_transfer': form.cleaned_data.get('is_transfer', False)
                 })
         return _calculate_multiple_budget_info(items_data, transaction_date)
@@ -3185,7 +2893,7 @@ def multiple_scheduler_register(request, group_id):
                                 account=source_account,
                                 beneficiary=scheduler.beneficiary,
                                 subcategory=None,  # Transferências não têm subcategoria
-                                transaction_type='DB',
+                                transaction_type=TRANSACTION_TYPE_DB,
                                 value=value,
                                 due_date=scheduler.due_date,
                                 transaction_date=scheduler.due_date,
@@ -3201,7 +2909,7 @@ def multiple_scheduler_register(request, group_id):
                                 account=destination_account,
                                 beneficiary=scheduler.beneficiary,
                                 subcategory=None,
-                                transaction_type='CR',
+                                transaction_type=TRANSACTION_TYPE_CR,
                                 value=value,
                                 due_date=scheduler.due_date,
                                 transaction_date=scheduler.due_date,
@@ -3345,7 +3053,7 @@ def multiple_scheduler_register(request, group_id):
         items_data.append({
             'subcategory': item.get('subcategory'),
             'value': item.get('value', 0),
-            'transaction_type': item.get('transaction_type', 'DB'),
+            'transaction_type': item.get('transaction_type', TRANSACTION_TYPE_DB),
             'is_transfer': item.get('is_transfer', False)
         })
     budget_info = _calculate_multiple_budget_info(items_data, transaction_date)
@@ -3362,9 +3070,6 @@ def multiple_scheduler_register(request, group_id):
 # Asset Views
 def asset_list(request):
     """Lista de ativos com filtros e paginação"""
-    from django.core.paginator import Paginator
-    from django.db.models import Q
-    
     # Inicializar formulário de filtros
     filter_form = AssetFilterForm(request.GET)
     
@@ -3440,7 +3145,7 @@ def asset_list(request):
         assets = assets.order_by('code')
     
     # Paginação
-    paginator = Paginator(assets, 50)  # 50 ativos por página
+    paginator = Paginator(assets, ASSETS_PER_PAGE)
     page_number = request.GET.get('page', 1)
     page_obj = paginator.get_page(page_number)
     
@@ -3577,7 +3282,7 @@ def asset_transaction_list(request):
         transactions = transactions.order_by('-date')
     
     # Paginação
-    paginator = Paginator(transactions, 50)  # 50 transações por página
+    paginator = Paginator(transactions, ASSET_TRANSACTIONS_PER_PAGE)
     page_number = request.GET.get('page', 1)
     page_obj = paginator.get_page(page_number)
     
@@ -3921,7 +3626,7 @@ def multiple_asset_transaction_update(request, group_id):
             )
             if related_transactions.exists():
                 # Pegar a primeira transaction de débito que não seja da conta de investimento
-                for rel_trans in related_transactions.filter(transaction_type='DB'):
+                for rel_trans in related_transactions.filter(transaction_type=TRANSACTION_TYPE_DB):
                     if rel_trans.account != trans.account:
                         cash_account = rel_trans.account
                         break
@@ -4073,11 +3778,6 @@ def reports_index(request):
 
 def account_statement_report(request):
     """Página de extrato de contas"""
-    from decimal import Decimal
-    from datetime import date
-    from django.contrib import messages
-    from apps.finance.models import Account, Subcategory
-    
     accounts = Account.objects.all()
     today = date.today()
     first_day_of_month = date(today.year, today.month, 1)
@@ -4185,8 +3885,6 @@ def account_statement_report(request):
     categories = Subcategory.objects.all().select_related('category').order_by('category__category', 'subcategory')
     
     # Query string para o "next" dos links de edição (preserva contas, datas e include_future)
-    from django.urls import reverse
-    from urllib.parse import urlencode
     base_path = reverse('finance:account_statement_report')
     next_parts = []
     for aid in selected_account_ids:
@@ -4338,8 +4036,6 @@ def account_statement(request, account_id=None):
 
 def asset_stock_position_report(request):
     """Relatório de posição de estoque de ativos"""
-    from decimal import Decimal
-    
     # Buscar todos os ativos que têm transações
     assets = Asset.objects.filter(
         transactions__isnull=False
@@ -4403,8 +4099,6 @@ def asset_stock_position_report(request):
 
 def budget_manage(request):
     """View para gerenciar orçamento em formato de tabela dinâmica"""
-    from decimal import Decimal, InvalidOperation
-    
     # Obter ano selecionado (query param ou ano atual)
     selected_year = int(request.GET.get('year', date.today().year))
     
@@ -4426,30 +4120,6 @@ def budget_manage(request):
         except (ValueError, TypeError):
             selected_category_id = None  # Se category_id for inválido, mostrar todas
     
-    # #region agent log
-    import json
-    log_path = r'c:\Users\jafonseca\projects\django\own_system\.cursor\debug.log'
-    try:
-        subcategories_count = subcategories.count()
-        with open(log_path, 'a', encoding='utf-8') as f:
-            f.write(json.dumps({
-                'sessionId': 'debug-session',
-                'runId': 'run1',
-                'hypothesisId': 'A',
-                'location': 'views.py:2064',
-                'message': 'Subcategories loaded',
-                'data': {
-                    'subcategories_count': subcategories_count,
-                    'expected_budget_fields': subcategories_count * 12,
-                    'additional_fields': 2,  # csrf_token, year
-                    'total_expected_fields': subcategories_count * 12 + 2,
-                    'django_default_limit': 1000
-                },
-                'timestamp': int(datetime.now().timestamp() * 1000)
-            }) + '\n')
-    except Exception:
-        pass
-    # #endregion
     
     # Buscar orçamentos do ano selecionado
     budgets = Budget.objects.filter(
@@ -4476,7 +4146,6 @@ def budget_manage(request):
         budgets_by_row[row_key]['budgets'][budget.month] = budget
     
     # Otimizar: Calcular médias do ano anterior em uma única query
-    from django.db.models import Avg
     previous_year = selected_year - 1
     subcategory_ids = [s.id for s in subcategories]
     avg_previous_dict = {}
@@ -4547,48 +4216,9 @@ def budget_manage(request):
     
     # Processar POST (salvar orçamento)
     if request.method == 'POST':
-        # #region agent log
-        import json
-        log_path = r'c:\Users\jafonseca\projects\django\own_system\.cursor\debug.log'
-        try:
-            with open(log_path, 'a', encoding='utf-8') as f:
-                f.write(json.dumps({
-                    'sessionId': 'debug-session',
-                    'runId': 'post-fix',
-                    'hypothesisId': 'A',
-                    'location': 'views.py:2107',
-                    'message': 'POST request received - counting fields',
-                    'data': {
-                        'post_keys_count': len(request.POST.keys()),
-                        'post_keys_sample': list(request.POST.keys())[:10] if len(request.POST.keys()) > 0 else []
-                    },
-                    'timestamp': int(datetime.now().timestamp() * 1000)
-                }) + '\n')
-        except Exception:
-            pass
-        # #endregion
         
         year = int(request.POST.get('year', selected_year))
         
-        # #region agent log
-        try:
-            with open(log_path, 'a', encoding='utf-8') as f:
-                f.write(json.dumps({
-                    'sessionId': 'debug-session',
-                    'runId': 'post-fix',
-                    'hypothesisId': 'B',
-                    'location': 'views.py:2112',
-                    'message': 'Before processing - subcategories count',
-                    'data': {
-                        'subcategories_count': subcategories.count() if hasattr(subcategories, 'count') else len(list(subcategories)),
-                        'expected_fields': subcategories.count() * 12 if hasattr(subcategories, 'count') else len(list(subcategories)) * 12,
-                        'year': year
-                    },
-                    'timestamp': int(datetime.now().timestamp() * 1000)
-                }) + '\n')
-        except Exception:
-            pass
-        # #endregion
         
         with db_transaction.atomic():
             # Coletar todas as linhas (rows) por subcategoria
@@ -4696,24 +4326,6 @@ def budget_manage(request):
                     # Este orçamento não foi enviado no POST, então foi removido
                     budget.delete()
             
-            # #region agent log
-            try:
-                with open(log_path, 'a', encoding='utf-8') as f:
-                    f.write(json.dumps({
-                        'sessionId': 'debug-session',
-                        'runId': 'post-fix',
-                        'hypothesisId': 'C',
-                        'location': 'views.py:2142',
-                        'message': 'Budget saved successfully',
-                        'data': {
-                            'year': year,
-                            'status': 'success'
-                        },
-                        'timestamp': int(datetime.now().timestamp() * 1000)
-                    }) + '\n')
-            except Exception:
-                pass
-            # #endregion
             
             messages.success(request, f'Orçamento de {year} salvo com sucesso!')
             
@@ -4782,7 +4394,7 @@ def budget_list(request):
             pass
     
     # Paginação
-    paginator = Paginator(budgets, 50)
+    paginator = Paginator(budgets, BUDGETS_PER_PAGE)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
     
@@ -5105,8 +4717,6 @@ def cash_flow_item_delete(request, pk):
 
 def cash_flow_report(request):
     """Relatório de fluxo de caixa"""
-    from decimal import Decimal
-
     start_date = request.GET.get('start_date')
     end_date = request.GET.get('end_date')
     account_id = request.GET.get('account')
@@ -5233,7 +4843,6 @@ def transactions_import_upload(request):
                 messages.success(request, f'{len(transactions_data)} transações parseadas com sucesso!')
                 return redirect('finance:transactions_import_staging')
             except Exception as e:
-                import traceback
                 error_trace = traceback.format_exc()
                 messages.error(request, f'Erro ao processar arquivo: {str(e)}')
                 # Log do erro para debug
@@ -5293,29 +4902,6 @@ def transactions_import_staging(request):
         elif isinstance(trans.get('selected'), str):
             trans['selected'] = trans['selected'].lower() in ('true', '1', 'yes')
     
-    # #region agent log
-    sample_selected = []
-    for i, t in enumerate(transactions_data[:10]):
-        sample_selected.append({
-            'index': i,
-            'original_index': t.get('original_index'),
-            'selected': t.get('selected'),
-            'has_selected_key': 'selected' in t
-        })
-    log_data = {
-        'sessionId': 'debug-session',
-        'runId': 'run1',
-        'hypothesisId': 'D',
-        'location': 'views.py:3630',
-        'message': 'After initializing selected field',
-        'data': {
-            'total_count': len(transactions_data),
-            'sample_selected': sample_selected
-        },
-        'timestamp': int(time.time() * 1000)
-    }
-    safe_debug_log(log_data)
-    # #endregion
     
     # Aplicar filtros
     filter_form = TransactionsStagingFilterForm(request.GET)
@@ -5421,48 +5007,12 @@ def transactions_import_staging(request):
     request.session['transactions_staging_data'] = prepare_transactions_for_session(transactions_data)
     request.session.modified = True
     
-    # #region agent log
-    log_data = {
-        'sessionId': 'debug-session',
-        'runId': 'run1',
-        'hypothesisId': 'B',
-        'location': 'views.py:3750',
-        'message': 'Before pagination',
-        'data': {
-            'total_count': len(transactions_data),
-            'filtered_count': len(filtered_transactions),
-            'selected_count': selected_count,
-            'has_filters': has_filters
-        },
-        'timestamp': int(time.time() * 1000)
-    }
-    safe_debug_log(log_data)
-    # #endregion
     
     # Paginação
-    paginator = Paginator(filtered_transactions, 100)  # 100 transações por página
+    paginator = Paginator(filtered_transactions, IMPORT_STAGING_TRANSACTIONS_PER_PAGE)
     page_number = request.GET.get('page', 1)
     page_obj = paginator.get_page(page_number)
     
-    # #region agent log
-    log_data = {
-        'sessionId': 'debug-session',
-        'runId': 'run1',
-        'hypothesisId': 'B',
-        'location': 'views.py:3770',
-        'message': 'Pagination info',
-        'data': {
-            'page_number': page_number,
-            'total_pages': paginator.num_pages,
-            'items_per_page': paginator.per_page,
-            'total_items': paginator.count,
-            'has_previous': page_obj.has_previous(),
-            'has_next': page_obj.has_next()
-        },
-        'timestamp': int(time.time() * 1000)
-    }
-    safe_debug_log(log_data)
-    # #endregion
     
     # Extrair todas as contas únicas das transações
     unique_accounts = set()
@@ -5546,27 +5096,11 @@ def transactions_import_edit_item(request):
         elif field in ['account', 'beneficiary', 'memo', 'category', 'subcategory']:
             trans[field] = str(value)
         elif field == 'transaction_type':
-            if value not in ['CR', 'DB']:
+            if value not in [TRANSACTION_TYPE_CR, TRANSACTION_TYPE_DB]:
                 return JsonResponse({'success': False, 'error': 'Tipo inválido'}, status=400)
             trans['transaction_type'] = value
         elif field == 'selected':
             # Atualizar estado de seleção
-            # #region agent log
-            log_data = {
-                'sessionId': 'debug-session',
-                'runId': 'run1',
-                'hypothesisId': 'K',
-                'location': 'views.py:3125',
-                'message': 'Updating selected state',
-                'data': {
-                    'original_index': index,
-                    'old_selected': trans.get('selected', False),
-                    'new_selected': bool(value)
-                },
-                'timestamp': int(time.time() * 1000)
-            }
-            safe_debug_log(log_data)
-            # #endregion
             trans['selected'] = bool(value)
         else:
             return JsonResponse({'success': False, 'error': 'Campo inválido'}, status=400)
@@ -5584,34 +5118,6 @@ def transactions_import_edit_item(request):
         request.session['transactions_staging_data'] = prepare_transactions_for_session(transactions_data)
         request.session.modified = True
         
-        # #region agent log
-        # Verificar se foi salvo corretamente na sessão
-        saved_data = request.session.get('transactions_staging_data', [])
-        saved_trans = None
-        for t in saved_data:
-            if t.get('original_index') == index:
-                saved_trans = t
-                break
-        log_data = {
-            'sessionId': 'debug-session',
-            'runId': 'run1',
-            'hypothesisId': 'H',
-            'location': 'views.py:3970',
-            'message': 'After saving to session',
-            'data': {
-                'original_index': index,
-                'saved_selected': saved_trans.get('selected') if saved_trans else None,
-                'saved_selected_type': type(saved_trans.get('selected')).__name__ if saved_trans and 'selected' in saved_trans else None,
-                'original_hash_before': original_hash_before[:30] if original_hash_before else None,
-                'saved_hash': saved_trans.get('import_hash')[:30] if saved_trans and saved_trans.get('import_hash') else None,
-                'hash_preserved': bool(saved_trans and saved_trans.get('import_hash') == original_hash_before) if original_hash_before else None,
-                'session_modified': request.session.modified,
-                'total_in_session': len(saved_data)
-            },
-            'timestamp': int(time.time() * 1000)
-        }
-        safe_debug_log(log_data)
-        # #endregion
         
         return JsonResponse({'success': True, 'message': 'Item atualizado com sucesso'})
     except Exception as e:
@@ -5706,22 +5212,6 @@ def transactions_import_remove_item(request):
 
 def transactions_import_execute(request):
     """View para executar importação final das transações selecionadas"""
-    # #region agent log
-    log_data = {
-        'sessionId': 'debug-session',
-        'runId': 'run1',
-        'hypothesisId': 'ENTRY',
-        'location': 'views.py:3986',
-        'message': 'transactions_import_execute called',
-        'data': {
-            'method': request.method,
-            'content_type': request.content_type,
-            'has_body': bool(request.body)
-        },
-        'timestamp': int(time.time() * 1000)
-    }
-    safe_debug_log(log_data)
-    # #endregion
     
     if request.method != 'POST':
         messages.error(request, 'Método não permitido')
@@ -5732,23 +5222,6 @@ def transactions_import_execute(request):
         selected_indices = data.get('selected_indices', [])
         filters = data.get('filters')  # Filtros aplicados na página de staging
         
-        # #region agent log
-        log_data = {
-            'sessionId': 'debug-session',
-            'runId': 'run1',
-            'hypothesisId': 'ENTRY',
-            'location': 'views.py:4000',
-            'message': 'Parsed request data',
-            'data': {
-                'selected_indices_count': len(selected_indices) if selected_indices else 0,
-                'selected_indices_empty': not selected_indices,
-                'has_filters': bool(filters),
-                'filters': filters if filters else None
-            },
-            'timestamp': int(time.time() * 1000)
-        }
-        safe_debug_log(log_data)
-        # #endregion
         
         if 'transactions_staging_data' not in request.session:
             messages.error(request, 'Nenhum dado em staging')
@@ -5756,45 +5229,6 @@ def transactions_import_execute(request):
         
         transactions_data = request.session['transactions_staging_data']
         
-        # #region agent log
-        # Verificar estado inicial das transações na sessão
-        sample_initial = []
-        selected_count_initial = 0
-        missing_hash_count = 0
-        for i, t in enumerate(transactions_data[:10]):
-            selected_val = t.get('selected')
-            if selected_val:
-                selected_count_initial += 1
-            has_hash = 'import_hash' in t and t.get('import_hash')
-            if not has_hash:
-                missing_hash_count += 1
-            sample_initial.append({
-                'index': i,
-                'original_index': t.get('original_index'),
-                'selected': selected_val,
-                'selected_type': type(selected_val).__name__ if 'selected' in t else 'missing',
-                'has_selected_key': 'selected' in t,
-                'has_import_hash': has_hash,
-                'import_hash': t.get('import_hash')[:20] if t.get('import_hash') else None
-            })
-        total_missing_hash = sum(1 for t in transactions_data if not t.get('import_hash'))
-        log_data = {
-            'sessionId': 'debug-session',
-            'runId': 'run1',
-            'hypothesisId': 'G',
-            'location': 'views.py:4110',
-            'message': 'Initial state from session',
-            'data': {
-                'total_transactions': len(transactions_data),
-                'selected_count_initial': sum(1 for t in transactions_data if t.get('selected')),
-                'total_missing_hash': total_missing_hash,
-                'missing_hash_percentage': round((total_missing_hash / len(transactions_data) * 100) if transactions_data else 0, 2),
-                'sample_initial': sample_initial
-            },
-            'timestamp': int(time.time() * 1000)
-        }
-        safe_debug_log(log_data)
-        # #endregion
         
         # Converter strings de volta para objetos date e Decimal para aplicar filtros
         selected_count_before_conversion = 0
@@ -5821,50 +5255,9 @@ def transactions_import_execute(request):
             if trans.get('selected'):
                 selected_count_before_conversion += 1
         
-        # #region agent log
-        log_data = {
-            'sessionId': 'debug-session',
-            'runId': 'run1',
-            'hypothesisId': 'F',
-            'location': 'views.py:4098',
-            'message': 'After converting selected field',
-            'data': {
-                'total_transactions': len(transactions_data),
-                'selected_count_after_conversion': sum(1 for t in transactions_data if t.get('selected', False)),
-                'selected_count_before_conversion': selected_count_before_conversion,
-                'selected_as_string_count': selected_as_string_count,
-                'missing_selected_count': missing_selected_count,
-                'sample_selected': [
-                    {
-                        'original_index': t.get('original_index'),
-                        'selected': t.get('selected'),
-                        'selected_type': type(t.get('selected')).__name__
-                    }
-                    for t in transactions_data[:5]
-                ]
-            },
-            'timestamp': int(time.time() * 1000)
-        }
-        safe_debug_log(log_data)
-        # #endregion
         
         # Aplicar filtros se fornecidos (mesmos filtros da página de staging)
         if filters:
-            # #region agent log
-            log_data = {
-                'sessionId': 'debug-session',
-                'runId': 'run1',
-                'hypothesisId': 'L',
-                'location': 'views.py:3250',
-                'message': 'Applying filters before checking selected',
-                'data': {
-                    'filters': filters,
-                    'total_before_filter': len(transactions_data)
-                },
-                'timestamp': int(time.time() * 1000)
-            }
-            safe_debug_log(log_data)
-            # #endregion
             
             filtered_transactions = []
             filtered_count = 0
@@ -5873,24 +5266,6 @@ def transactions_import_execute(request):
                 if filters.get('date_start') and trans.get('transaction_date'):
                     try:
                         date_start = datetime.strptime(filters['date_start'], '%Y-%m-%d').date()
-                        # #region agent log
-                        if filters.get('date_start') == '2026-01-01':
-                            log_data = {
-                                'sessionId': 'debug-session',
-                                'runId': 'run1',
-                                'hypothesisId': 'N',
-                                'location': 'views.py:3262',
-                                'message': 'Checking date_start filter',
-                                'data': {
-                                    'original_index': trans.get('original_index'),
-                                    'date_start': str(date_start),
-                                    'trans_date': str(trans.get('transaction_date')),
-                                    'will_pass': trans['transaction_date'] >= date_start
-                                },
-                                'timestamp': int(time.time() * 1000)
-                            }
-                            safe_debug_log(log_data)
-                        # #endregion
                         if trans['transaction_date'] < date_start:
                             continue
                     except (ValueError, TypeError):
@@ -5898,24 +5273,6 @@ def transactions_import_execute(request):
                 if filters.get('date_end') and trans.get('transaction_date'):
                     try:
                         date_end = datetime.strptime(filters['date_end'], '%Y-%m-%d').date()
-                        # #region agent log
-                        if filters.get('date_end') == '2026-01-13':
-                            log_data = {
-                                'sessionId': 'debug-session',
-                                'runId': 'run1',
-                                'hypothesisId': 'N',
-                                'location': 'views.py:3280',
-                                'message': 'Checking date_end filter',
-                                'data': {
-                                    'original_index': trans.get('original_index'),
-                                    'date_end': str(date_end),
-                                    'trans_date': str(trans.get('transaction_date')),
-                                    'will_pass': trans['transaction_date'] <= date_end
-                                },
-                                'timestamp': int(time.time() * 1000)
-                            }
-                            safe_debug_log(log_data)
-                        # #endregion
                         if trans['transaction_date'] > date_end:
                             continue
                     except (ValueError, TypeError):
@@ -5938,27 +5295,6 @@ def transactions_import_execute(request):
                     category_filter = filters['category'].lower()
                     cat = trans.get('category', '') or ''
                     subcat = trans.get('subcategory', '') or ''
-                    # #region agent log
-                    if 'templo' in category_filter or 'vivo' in category_filter or 'templo' in cat.lower() or 'vivo' in cat.lower():
-                        log_data = {
-                            'sessionId': 'debug-session',
-                            'runId': 'run1',
-                            'hypothesisId': 'M',
-                            'location': 'views.py:3288',
-                            'message': 'Checking category filter for Templo Vivo',
-                            'data': {
-                                'original_index': trans.get('original_index'),
-                                'category_filter': category_filter,
-                                'trans_category': cat,
-                                'trans_subcategory': subcat,
-                                'cat_match': category_filter in cat.lower(),
-                                'subcat_match': category_filter in subcat.lower(),
-                                'will_pass': category_filter in cat.lower() or category_filter in subcat.lower()
-                            },
-                            'timestamp': int(time.time() * 1000)
-                        }
-                        safe_debug_log(log_data)
-                    # #endregion
                     if category_filter not in cat.lower() and category_filter not in subcat.lower():
                         continue
                 
@@ -5986,43 +5322,7 @@ def transactions_import_execute(request):
                 filtered_transactions.append(trans)
                 filtered_count += 1
                 
-                # #region agent log
-                if filtered_count <= 5:  # Log apenas primeiras 5 filtradas
-                    log_data = {
-                        'sessionId': 'debug-session',
-                        'runId': 'run1',
-                        'hypothesisId': 'L',
-                        'location': 'views.py:3300',
-                        'message': 'Transaction passed filter',
-                        'data': {
-                            'original_index': trans.get('original_index'),
-                            'transaction_date': str(trans.get('transaction_date')),
-                            'account': trans.get('account', ''),
-                            'category': trans.get('category', ''),
-                            'selected': trans.get('selected', False)
-                        },
-                        'timestamp': int(time.time() * 1000)
-                    }
-                    safe_debug_log(log_data)
-                # #endregion
             
-            # #region agent log
-            selected_in_filtered = sum(1 for t in filtered_transactions if t.get('selected', False))
-            log_data = {
-                'sessionId': 'debug-session',
-                'runId': 'run1',
-                'hypothesisId': 'L',
-                'location': 'views.py:3340',
-                'message': 'After applying filters',
-                'data': {
-                    'filtered_count': len(filtered_transactions),
-                    'selected_in_filtered': selected_in_filtered,
-                    'filters_applied': filters
-                },
-                'timestamp': int(time.time() * 1000)
-            }
-            safe_debug_log(log_data)
-            # #endregion
             
             # Usar apenas transações filtradas para verificar seleção
             transactions_to_check = filtered_transactions
@@ -6030,63 +5330,12 @@ def transactions_import_execute(request):
             # Sem filtros, usar todas as transações
             transactions_to_check = transactions_data
         
-        # #region agent log
-        log_data = {
-            'sessionId': 'debug-session',
-            'runId': 'run1',
-            'hypothesisId': 'H',
-            'location': 'views.py:3213',
-            'message': 'Starting import execution',
-            'data': {
-                'selected_indices_count': len(selected_indices),
-                'total_transactions': len(transactions_data),
-                'filtered_transactions': len(transactions_to_check) if filters else len(transactions_data),
-                'has_filters': bool(filters),
-                'selected_indices_empty': not selected_indices
-            },
-            'timestamp': int(time.time() * 1000)
-        }
-        safe_debug_log(log_data)
-        # #endregion
         
         # Filtrar apenas transações selecionadas
         # Se selected_indices estiver vazio, importar todas com selected=True (mas apenas das filtradas, se houver filtros)
         # Caso contrário, importar apenas as especificadas nos índices
         selected_transactions = []
         
-        # #region agent log
-        selected_count_before = sum(1 for t in transactions_to_check if t.get('selected', False))
-        selected_count_with_default = sum(1 for t in transactions_to_check if t.get('selected', True))
-        # Verificar alguns exemplos de selected
-        sample_selected = []
-        for i, t in enumerate(transactions_to_check[:5]):
-            sample_selected.append({
-                'index': i,
-                'original_index': t.get('original_index'),
-                'selected': t.get('selected'),
-                'selected_type': type(t.get('selected')).__name__ if 'selected' in t else 'missing'
-            })
-        log_data = {
-            'sessionId': 'debug-session',
-            'runId': 'run1',
-            'hypothesisId': 'J',
-            'location': 'views.py:3420',
-            'message': 'Before filtering selected transactions',
-            'data': {
-                'total_transactions': len(transactions_data),
-                'transactions_to_check': len(transactions_to_check),
-                'selected_count_in_check_false_default': selected_count_before,
-                'selected_count_in_check_true_default': selected_count_with_default,
-                'selected_indices_empty': not selected_indices,
-                'selected_indices_count': len(selected_indices) if selected_indices else 0,
-                'has_filters': bool(filters),
-                'filters': filters if filters else None,
-                'sample_selected': sample_selected
-            },
-            'timestamp': int(time.time() * 1000)
-        }
-        safe_debug_log(log_data)
-        # #endregion
         
         checked_count = 0
         included_count = 0
@@ -6095,23 +5344,6 @@ def transactions_import_execute(request):
         # Com filtros: default é False (apenas explicitamente selecionadas)
         default_selected = not bool(filters)
         
-        # #region agent log
-        log_data = {
-            'sessionId': 'debug-session',
-            'runId': 'run1',
-            'hypothesisId': 'A',
-            'location': 'views.py:4265',
-            'message': 'Starting to check transactions for import',
-            'data': {
-                'default_selected': default_selected,
-                'has_filters': bool(filters),
-                'selected_indices_empty': not selected_indices,
-                'transactions_to_check_count': len(transactions_to_check)
-            },
-            'timestamp': int(time.time() * 1000)
-        }
-        safe_debug_log(log_data)
-        # #endregion
         
         for trans in transactions_to_check:
             checked_count += 1
@@ -6129,26 +5361,6 @@ def transactions_import_execute(request):
                 # Lista com índices = importar apenas essas
                 should_include = trans.get('original_index') in selected_indices
             
-            # #region agent log
-            # Log reduzido: apenas primeiras 5 transações para debug
-            if checked_count <= 5:
-                log_data = {
-                    'sessionId': 'debug-session',
-                    'runId': 'run1',
-                    'hypothesisId': 'J',
-                    'location': 'views.py:3488',
-                    'message': 'Checking transaction for import',
-                    'data': {
-                        'original_index': trans.get('original_index'),
-                        'transaction_date': str(trans.get('transaction_date')),
-                        'account': trans.get('account', ''),
-                        'selected': trans.get('selected', False),
-                        'should_include': should_include,
-                    },
-                    'timestamp': int(time.time() * 1000)
-                }
-                safe_debug_log(log_data)
-            # #endregion
             
             if should_include:
                 trans_copy = trans.copy()
@@ -6159,21 +5371,6 @@ def transactions_import_execute(request):
                         try:
                             trans_copy['transaction_date'] = datetime.strptime(trans_copy['transaction_date'], '%Y-%m-%d').date()
                         except (ValueError, TypeError):
-                            # #region agent log
-                            log_data = {
-                                'sessionId': 'debug-session',
-                                'runId': 'run1',
-                                'hypothesisId': 'P',
-                                'location': 'views.py:3525',
-                                'message': 'Failed to parse transaction_date',
-                                'data': {
-                                    'original_index': trans.get('original_index'),
-                                    'transaction_date': str(trans_copy.get('transaction_date'))
-                                },
-                                'timestamp': int(time.time() * 1000)
-                            }
-                            safe_debug_log(log_data)
-                            # #endregion
                             continue
                     # Se já é date, manter como está
                 if trans_copy.get('value'):
@@ -6182,88 +5379,15 @@ def transactions_import_execute(request):
                         try:
                             trans_copy['value'] = Decimal(str(trans_copy['value']))
                         except (ValueError, TypeError):
-                            # #region agent log
-                            log_data = {
-                                'sessionId': 'debug-session',
-                                'runId': 'run1',
-                                'hypothesisId': 'P',
-                                'location': 'views.py:3545',
-                                'message': 'Failed to parse value',
-                                'data': {
-                                    'original_index': trans.get('original_index'),
-                                    'value': str(trans_copy.get('value'))
-                                },
-                                'timestamp': int(time.time() * 1000)
-                            }
-                            safe_debug_log(log_data)
-                            # #endregion
                             continue
                     # Se já é Decimal, manter como está
                 
-                # #region agent log
-                if len(selected_transactions) < 5:  # Log primeiras 5 incluídas
-                    log_data = {
-                        'sessionId': 'debug-session',
-                        'runId': 'run1',
-                        'hypothesisId': 'P',
-                        'location': 'views.py:3560',
-                        'message': 'Transaction added to selected_transactions',
-                        'data': {
-                            'original_index': trans.get('original_index'),
-                            'transaction_date': str(trans_copy.get('transaction_date')),
-                            'account': trans_copy.get('account', ''),
-                            'category': trans_copy.get('category', ''),
-                            'value': str(trans_copy.get('value'))
-                        },
-                        'timestamp': int(time.time() * 1000)
-                    }
-                    safe_debug_log(log_data)
-                # #endregion
                 
                 selected_transactions.append(trans_copy)
                 included_count += 1
         
-        # #region agent log
-        log_data = {
-            'sessionId': 'debug-session',
-            'runId': 'run1',
-            'hypothesisId': 'H',
-            'location': 'views.py:4390',
-            'message': 'After filtering selected transactions',
-            'data': {
-                'selected_count': len(selected_transactions),
-                'checked_count': checked_count,
-                'included_count': included_count,
-                'using_selected_field': not selected_indices,
-                'has_filters': bool(filters),
-                'default_selected': default_selected,
-                'total_transactions_data': len(transactions_data),
-                'transactions_to_check_count': len(transactions_to_check)
-            },
-            'timestamp': int(time.time() * 1000)
-        }
-        safe_debug_log(log_data)
-        # #endregion
         
         if not selected_transactions:
-            # #region agent log
-            log_data = {
-                'sessionId': 'debug-session',
-                'runId': 'run1',
-                'hypothesisId': 'EMPTY',
-                'location': 'views.py:4410',
-                'message': 'No transactions selected for import',
-                'data': {
-                    'checked_count': checked_count,
-                    'included_count': included_count,
-                    'default_selected': default_selected,
-                    'has_filters': bool(filters),
-                    'selected_indices_empty': not selected_indices
-                },
-                'timestamp': int(time.time() * 1000)
-            }
-            safe_debug_log(log_data)
-            # #endregion
             messages.warning(request, 'Nenhuma transação selecionada para importar')
             return redirect('finance:transactions_import_staging')
         
@@ -6303,23 +5427,6 @@ def transactions_import_execute(request):
             selected_transactions = filtered_transactions
             filtered_count = len(filtered_by_investment)
             
-            # #region agent log
-            log_data = {
-                'sessionId': 'debug-session',
-                'runId': 'run1',
-                'hypothesisId': 'INVESTMENT_FILTER',
-                'location': 'views.py:5007',
-                'message': 'Filtered transactions by investment accounts',
-                'data': {
-                    'original_count': original_count,
-                    'filtered_count': filtered_count,
-                    'remaining_count': len(selected_transactions),
-                    'investment_accounts_count': len(investment_accounts_set)
-                },
-                'timestamp': int(time.time() * 1000)
-            }
-            safe_debug_log(log_data)
-            # #endregion
         
         # Estatísticas
         stats = {
@@ -6334,21 +5441,9 @@ def transactions_import_execute(request):
         }
         
         # Processar transações
-        # #region agent log
-        log_data = {
-            'sessionId': 'debug-session',
-            'runId': 'run1',
-            'hypothesisId': 'A',
-            'location': 'views.py:3160',
-            'message': 'Entering atomic transaction block',
-            'data': {'selected_count': len(selected_transactions)},
-            'timestamp': int(time.time() * 1000)
-        }
-        safe_debug_log(log_data)
-        # #endregion
         
         with db_transaction.atomic():
-            batch_size = 500  # Aumentado de 100 para 500 para melhor performance
+            batch_size = TRANSACTIONS_IMPORT_BATCH_SIZE
             transactions_to_create = []
             
             # OTIMIZAÇÃO: Pré-coletar todos os nomes únicos para evitar queries repetidas
@@ -6460,27 +5555,6 @@ def transactions_import_execute(request):
                 else:
                     # CORREÇÃO: Regenerar hash para transações normais que perderam o hash
                     missing_hash_in_selected += 1
-                    # #region agent log
-                    if missing_hash_in_selected <= 5:  # Log apenas primeiras 5
-                        log_data = {
-                            'sessionId': 'debug-session',
-                            'runId': 'run1',
-                            'hypothesisId': 'MISSING_HASH_SELECTED',
-                            'location': 'views.py:4809',
-                            'message': 'Missing import_hash in selected transaction - will regenerate',
-                            'data': {
-                                'original_index': t.get('original_index'),
-                                'line_num': t.get('line_num'),
-                                'account': t.get('account'),
-                                'has_import_hash_key': 'import_hash' in t,
-                                'is_transfer': t.get('is_transfer', False),
-                                'transaction_date': str(t.get('transaction_date')),
-                                'value': str(t.get('value'))
-                            },
-                            'timestamp': int(time.time() * 1000)
-                        }
-                        safe_debug_log(log_data)
-                    # #endregion
                     
                     # Regenerar hash para transação normal
                     try:
@@ -6506,61 +5580,10 @@ def transactions_import_execute(request):
                         all_import_hashes.append(regenerated_hash)
                         regenerated_hash_count += 1
                         
-                        # #region agent log
-                        if regenerated_hash_count <= 5:  # Log apenas primeiras 5
-                            log_data = {
-                                'sessionId': 'debug-session',
-                                'runId': 'run1',
-                                'hypothesisId': 'REGENERATED_HASH',
-                                'location': 'views.py:4850',
-                                'message': 'Regenerated import_hash for transaction',
-                                'data': {
-                                    'original_index': t.get('original_index'),
-                                    'line_num': t.get('line_num'),
-                                    'regenerated_hash': regenerated_hash[:20]
-                                },
-                                'timestamp': int(time.time() * 1000)
-                            }
-                            safe_debug_log(log_data)
-                        # #endregion
                     except Exception as e:
-                        # #region agent log
-                        log_data = {
-                            'sessionId': 'debug-session',
-                            'runId': 'run1',
-                            'hypothesisId': 'REGENERATE_HASH_ERROR',
-                            'location': 'views.py:4860',
-                            'message': 'Error regenerating import_hash',
-                            'data': {
-                                'original_index': t.get('original_index'),
-                                'error': str(e),
-                                'error_type': type(e).__name__
-                            },
-                            'timestamp': int(time.time() * 1000)
-                        }
-                        safe_debug_log(log_data)
-                        # #endregion
                         # Se não conseguir regenerar, a transação será pulada no loop principal
                         pass
             
-            # #region agent log
-            log_data = {
-                'sessionId': 'debug-session',
-                'runId': 'run1',
-                'hypothesisId': 'HASH_COLLECTION',
-                'location': 'views.py:4880',
-                'message': 'After collecting import_hashes',
-                'data': {
-                    'total_selected': len(selected_transactions),
-                    'total_hashes_collected': len(all_import_hashes),
-                    'missing_hash_in_selected': missing_hash_in_selected,
-                    'regenerated_hash_count': regenerated_hash_count,
-                    'transfer_hashes_cache_size': len(transfer_hashes_cache)
-                },
-                'timestamp': int(time.time() * 1000)
-            }
-            safe_debug_log(log_data)
-            # #endregion
             
             # Verificar hashes existentes no banco de dados
             # Dividir em lotes para evitar problemas com muitas variáveis SQL
@@ -6577,44 +5600,12 @@ def transactions_import_execute(request):
             # Set para rastrear hashes do lote atual (evita duplicatas dentro do mesmo lote)
             batch_hashes_set = set()
             
-            # #region agent log
-            log_data = {
-                'sessionId': 'debug-session',
-                'runId': 'run1',
-                'hypothesisId': 'B',
-                'location': 'views.py:3665',
-                'message': 'Inside atomic block, starting loop',
-                'data': {
-                    'batch_size': batch_size,
-                    'total_hashes': len(all_import_hashes),
-                    'existing_hashes': len(existing_hashes_set)
-                },
-                'timestamp': int(time.time() * 1000)
-            }
-            safe_debug_log(log_data)
-            # #endregion
             
             total_transactions = len(selected_transactions)
             for i, trans_data in enumerate(selected_transactions, 1):
-                # Log de progresso a cada 5000 transações (reduzido de 1000 para melhor performance)
-                if i % 5000 == 0:
-                    # #region agent log
-                    log_data = {
-                        'sessionId': 'debug-session',
-                        'runId': 'run1',
-                        'hypothesisId': 'PROGRESS',
-                        'location': 'views.py:4412',
-                        'message': 'Import progress',
-                        'data': {
-                            'processed': i,
-                            'total': total_transactions,
-                            'percentage': round((i / total_transactions) * 100, 2),
-                            'transactions_to_create_count': len(transactions_to_create)
-                        },
-                        'timestamp': int(time.time() * 1000)
-                    }
-                    safe_debug_log(log_data)
-                    # #endregion
+                # Log de progresso a cada N transações
+                if i % TRANSACTIONS_IMPORT_PROGRESS_LOG_INTERVAL == 0:
+                    logger.debug('Import progress: %s / %s', i, total_transactions)
                 
                 try:
                     # OTIMIZAÇÃO: Usar cache em vez de get_or_create
@@ -6770,29 +5761,6 @@ def transactions_import_execute(request):
                                 line_num=line_num
                             )
                         
-                        # #region agent log
-                        # Log apenas para linhas específicas (28091 e 28093) para debug
-                        if line_num in [28091, 28093]:
-                            try:
-                                with open(r'c:\Users\jafonseca\projects\django\own_system\.cursor\debug.log', 'a', encoding='utf-8') as f:
-                                    f.write(json.dumps({
-                                        'sessionId': 'debug-session',
-                                        'runId': 'run1',
-                                        'hypothesisId': 'H3',
-                                        'location': 'views.py:4481',
-                                        'message': 'After hash generation, checking duplicates',
-                                        'data': {
-                                            'line_num': line_num,
-                                            'import_hash_debit': import_hash_debit,
-                                            'import_hash_credit': import_hash_credit,
-                                            'debit_in_set': import_hash_debit in existing_hashes_set,
-                                            'credit_in_set': import_hash_credit in existing_hashes_set,
-                                            'set_size': len(existing_hashes_set)
-                                        },
-                                        'timestamp': int(__import__('time').time() * 1000)
-                                    }) + '\n')
-                            except: pass
-                        # #endregion
                         
                         # Verificar duplicatas para ambas as transações
                         # Verificar tanto no banco de dados quanto no lote atual
@@ -6814,7 +5782,7 @@ def transactions_import_execute(request):
                             account=source_account,
                             beneficiary=None,
                             subcategory=None,
-                            transaction_type='DB',
+                            transaction_type=TRANSACTION_TYPE_DB,
                             value=trans_data['value'],
                             transaction_date=trans_data['transaction_date'],
                             due_date=None,
@@ -6831,7 +5799,7 @@ def transactions_import_execute(request):
                             account=destination_account,
                             beneficiary=None,
                             subcategory=None,
-                            transaction_type='CR',
+                            transaction_type=TRANSACTION_TYPE_CR,
                             value=trans_data['value'],
                             transaction_date=trans_data['transaction_date'],
                             due_date=None,
@@ -6853,26 +5821,6 @@ def transactions_import_execute(request):
                         line_num = trans_data.get('line_num')
                         
                         if not import_hash:
-                            # #region agent log
-                            log_data = {
-                                'sessionId': 'debug-session',
-                                'runId': 'run1',
-                                'hypothesisId': 'MISSING_HASH',
-                                'location': 'views.py:5079',
-                                'message': 'Missing import_hash in transaction',
-                                'data': {
-                                    'original_index': trans_data.get('original_index'),
-                                    'line_num': line_num,
-                                    'account': trans_data.get('account'),
-                                    'transaction_date': str(trans_data.get('transaction_date')),
-                                    'value': str(trans_data.get('value')),
-                                    'has_import_hash_key': 'import_hash' in trans_data,
-                                    'all_keys': list(trans_data.keys())[:20]  # Primeiras 20 chaves
-                                },
-                                'timestamp': int(time.time() * 1000)
-                            }
-                            safe_debug_log(log_data)
-                            # #endregion
                             # Se não há hash, pular esta transação (não deve acontecer, mas por segurança)
                             stats['errors'].append(f'Linha {line_num or "?"}: Hash de importação não encontrado')
                             continue
@@ -6881,50 +5829,12 @@ def transactions_import_execute(request):
                         # E também no batch_hashes_set para evitar duplicatas dentro do mesmo lote
                         is_duplicate = import_hash in existing_hashes_set or import_hash in batch_hashes_set
                         if is_duplicate:
-                            # #region agent log
-                            if stats['duplicates'] < 5:  # Log apenas primeiras 5 duplicatas
-                                log_data = {
-                                    'sessionId': 'debug-session',
-                                    'runId': 'run1',
-                                    'hypothesisId': 'DUPLICATE',
-                                    'location': 'views.py:5238',
-                                    'message': 'Transaction marked as duplicate',
-                                    'data': {
-                                        'original_index': trans_data.get('original_index'),
-                                        'line_num': line_num,
-                                        'import_hash': import_hash[:20] if import_hash else None,
-                                        'in_existing_set': import_hash in existing_hashes_set if import_hash else False,
-                                        'in_batch_set': import_hash in batch_hashes_set if import_hash else False
-                                    },
-                                    'timestamp': int(time.time() * 1000)
-                                }
-                                safe_debug_log(log_data)
-                            # #endregion
                             stats['duplicates'] += 1
                             continue
                         
                         # Adicionar ao set para evitar duplicatas dentro do mesmo lote
                         batch_hashes_set.add(import_hash)
                         
-                        # #region agent log
-                        if len(transactions_to_create) < 5:  # Log apenas primeiras 5
-                            log_data = {
-                                'sessionId': 'debug-session',
-                                'runId': 'run1',
-                                'hypothesisId': 'CREATING_TRANSACTION',
-                                'location': 'views.py:5243',
-                                'message': 'Creating transaction object',
-                                'data': {
-                                    'original_index': trans_data.get('original_index'),
-                                    'line_num': line_num,
-                                    'account': account_name,
-                                    'import_hash': import_hash[:20] if import_hash else None,
-                                    'transactions_to_create_count': len(transactions_to_create) + 1
-                                },
-                                'timestamp': int(time.time() * 1000)
-                            }
-                            safe_debug_log(log_data)
-                        # #endregion
 
                         # Criar Transaction
                         transaction_obj = Transaction(
@@ -6943,103 +5853,17 @@ def transactions_import_execute(request):
 
                     # Criar em lotes para melhor performance
                     if len(transactions_to_create) >= batch_size:
-                        # #region agent log
-                        log_data = {
-                            'sessionId': 'debug-session',
-                            'runId': 'run1',
-                            'hypothesisId': 'C',
-                            'location': 'views.py:3252',
-                            'message': 'Before bulk_create',
-                            'data': {'batch_size': len(transactions_to_create)},
-                            'timestamp': int(time.time() * 1000)
-                        }
-                        safe_debug_log(log_data)
-                        # #endregion
                         
                         try:
-                            # #region agent log
-                            # Log detalhado ANTES do bulk_create para verificar o estado
-                            sample_trans = transactions_to_create[0] if transactions_to_create else None
-                            log_data = {
-                                'sessionId': 'debug-session',
-                                'runId': 'run1',
-                                'hypothesisId': 'BULK_CREATE_PRE',
-                                'location': 'views.py:5316',
-                                'message': 'Before bulk_create - checking transaction objects',
-                                'data': {
-                                    'batch_size': len(transactions_to_create),
-                                    'sample_has_account': sample_trans.account is not None if sample_trans else False,
-                                    'sample_has_beneficiary': sample_trans.beneficiary is not None if sample_trans else False,
-                                    'sample_has_subcategory': sample_trans.subcategory is not None if sample_trans else False,
-                                    'sample_account_id': sample_trans.account.id if sample_trans and sample_trans.account else None,
-                                    'sample_subcategory_id': sample_trans.subcategory.id if sample_trans and sample_trans.subcategory else None,
-                                    'sample_import_hash': sample_trans.import_hash[:20] if sample_trans and sample_trans.import_hash else None,
-                                    'sample_account_name': str(sample_trans.account) if sample_trans and sample_trans.account else None
-                                },
-                                'timestamp': int(time.time() * 1000)
-                            }
-                            safe_debug_log(log_data)
-                            # #endregion
                             
                             created_objs = Transaction.objects.bulk_create(transactions_to_create, ignore_conflicts=False)
                             actual_created = len(created_objs) if created_objs else 0
                             stats['created_transactions'] += actual_created
                             
-                            # #region agent log
-                            log_data = {
-                                'sessionId': 'debug-session',
-                                'runId': 'run1',
-                                'hypothesisId': 'C',
-                                'location': 'views.py:5336',
-                                'message': 'After bulk_create',
-                                'data': {
-                                    'created': actual_created,
-                                    'expected': len(transactions_to_create),
-                                    'stats_created': stats['created_transactions'],
-                                    'created_objs_is_none': created_objs is None,
-                                    'created_objs_type': type(created_objs).__name__ if created_objs else None
-                                },
-                                'timestamp': int(time.time() * 1000)
-                            }
-                            safe_debug_log(log_data)
-                            # #endregion
                         except Exception as e:
-                            # #region agent log
-                            log_data = {
-                                'sessionId': 'debug-session',
-                                'runId': 'run1',
-                                'hypothesisId': 'BULK_CREATE_EXCEPTION',
-                                'location': 'views.py:5360',
-                                'message': 'Exception in bulk_create',
-                                'data': {
-                                    'error': str(e),
-                                    'error_type': type(e).__name__,
-                                    'error_args': str(e.args) if hasattr(e, 'args') else None,
-                                    'batch_size': len(transactions_to_create),
-                                    'is_integrity_error': 'IntegrityError' in type(e).__name__ or 'UNIQUE' in str(e) or 'FOREIGN KEY' in str(e)
-                                },
-                                'timestamp': int(time.time() * 1000)
-                            }
-                            safe_debug_log(log_data)
-                            # #endregion
                             
                             # Se for erro de UNIQUE constraint, tratar como duplicatas
                             if 'UNIQUE constraint failed' in str(e) and 'import_hash' in str(e):
-                                # #region agent log
-                                log_data = {
-                                    'sessionId': 'debug-session',
-                                    'runId': 'run1',
-                                    'hypothesisId': 'DUP_BULK',
-                                    'location': 'views.py:3849',
-                                    'message': 'UNIQUE constraint in bulk_create - trying individual creates',
-                                    'data': {
-                                        'batch_size': len(transactions_to_create),
-                                        'error': str(e)
-                                    },
-                                    'timestamp': int(time.time() * 1000)
-                                }
-                                safe_debug_log(log_data)
-                                # #endregion
                                 
                                 # Tentar criar uma por uma para identificar quais são duplicatas
                                 for trans_obj in transactions_to_create:
@@ -7064,42 +5888,9 @@ def transactions_import_execute(request):
                                             stats['errors'].append(f'Erro ao criar transação individual: {str(individual_error)}')
                             else:
                                 # Outros tipos de erro (IntegrityError, ForeignKey, etc.)
-                                # #region agent log
-                                log_data = {
-                                    'sessionId': 'debug-session',
-                                    'runId': 'run1',
-                                    'hypothesisId': 'BULK_CREATE_OTHER_ERROR',
-                                    'location': 'views.py:5400',
-                                    'message': 'Other error in bulk_create (not UNIQUE constraint)',
-                                    'data': {
-                                        'error': str(e),
-                                        'error_type': type(e).__name__,
-                                        'error_repr': repr(e),
-                                        'batch_size': len(transactions_to_create),
-                                        'is_foreign_key_error': 'FOREIGN KEY' in str(e) or 'foreign key' in str(e).lower(),
-                                        'is_integrity_error': 'IntegrityError' in type(e).__name__
-                                    },
-                                    'timestamp': int(time.time() * 1000)
-                                }
-                                safe_debug_log(log_data)
-                                # #endregion
                                 
                                 # Se for erro de chave estrangeira, tentar criar uma por uma para identificar o problema
                                 if 'FOREIGN KEY' in str(e) or 'foreign key' in str(e).lower() or 'IntegrityError' in type(e).__name__:
-                                    # #region agent log
-                                    log_data = {
-                                        'sessionId': 'debug-session',
-                                        'runId': 'run1',
-                                        'hypothesisId': 'FK_ERROR_RECOVERY',
-                                        'location': 'views.py:5415',
-                                        'message': 'Foreign key error - trying individual creates',
-                                        'data': {
-                                            'batch_size': len(transactions_to_create)
-                                        },
-                                        'timestamp': int(time.time() * 1000)
-                                    }
-                                    safe_debug_log(log_data)
-                                    # #endregion
                                     
                                     # Tentar criar uma por uma para identificar qual transação está causando o problema
                                     for idx, trans_obj in enumerate(transactions_to_create):
@@ -7122,28 +5913,6 @@ def transactions_import_execute(request):
                                             )
                                             stats['created_transactions'] += 1
                                         except Exception as individual_error:
-                                            # #region agent log
-                                            if idx < 5:  # Log apenas primeiras 5 falhas
-                                                log_data = {
-                                                    'sessionId': 'debug-session',
-                                                    'runId': 'run1',
-                                                    'hypothesisId': 'INDIVIDUAL_CREATE_ERROR',
-                                                    'location': 'views.py:5440',
-                                                    'message': 'Error creating individual transaction',
-                                                    'data': {
-                                                        'index': idx,
-                                                        'error': str(individual_error),
-                                                        'error_type': type(individual_error).__name__,
-                                                        'has_account': trans_obj.account is not None,
-                                                        'has_subcategory': trans_obj.subcategory is not None,
-                                                        'account_id': trans_obj.account.id if trans_obj.account else None,
-                                                        'subcategory_id': trans_obj.subcategory.id if trans_obj.subcategory else None,
-                                                        'import_hash': trans_obj.import_hash[:20] if trans_obj.import_hash else None
-                                                    },
-                                                    'timestamp': int(time.time() * 1000)
-                                                }
-                                                safe_debug_log(log_data)
-                                            # #endregion
                                             
                                             if 'UNIQUE constraint failed' in str(individual_error) and 'import_hash' in str(individual_error):
                                                 stats['duplicates'] += 1
@@ -7163,58 +5932,15 @@ def transactions_import_execute(request):
 
             # Criar transações restantes
             if transactions_to_create:
-                # #region agent log
-                log_data = {
-                    'sessionId': 'debug-session',
-                    'runId': 'run1',
-                    'hypothesisId': 'D',
-                    'location': 'views.py:3426',
-                    'message': 'Before final bulk_create',
-                    'data': {'remaining': len(transactions_to_create)},
-                    'timestamp': int(time.time() * 1000)
-                }
-                safe_debug_log(log_data)
-                # #endregion
                 
                 try:
                     created_objs = Transaction.objects.bulk_create(transactions_to_create, ignore_conflicts=False)
                     actual_created = len(created_objs) if created_objs else 0
                     stats['created_transactions'] += actual_created
                     
-                    # #region agent log
-                    log_data = {
-                        'sessionId': 'debug-session',
-                        'runId': 'run1',
-                        'hypothesisId': 'D',
-                        'location': 'views.py:3843',
-                        'message': 'After final bulk_create',
-                        'data': {
-                            'created': actual_created,
-                            'expected': len(transactions_to_create),
-                            'stats_created': stats['created_transactions']
-                        },
-                        'timestamp': int(time.time() * 1000)
-                    }
-                    safe_debug_log(log_data)
-                    # #endregion
                 except Exception as e:
                     # Se for erro de UNIQUE constraint, tratar como duplicatas
                     if 'UNIQUE constraint failed' in str(e) and 'import_hash' in str(e):
-                        # #region agent log
-                        log_data = {
-                            'sessionId': 'debug-session',
-                            'runId': 'run1',
-                            'hypothesisId': 'DUP_BULK',
-                            'location': 'views.py:3860',
-                            'message': 'UNIQUE constraint in final bulk_create - trying individual creates',
-                            'data': {
-                                'batch_size': len(transactions_to_create),
-                                'error': str(e)
-                            },
-                            'timestamp': int(time.time() * 1000)
-                        }
-                        safe_debug_log(log_data)
-                        # #endregion
                         
                         # Tentar criar uma por uma para identificar quais são duplicatas
                         for trans_obj in transactions_to_create:
@@ -7238,52 +5964,12 @@ def transactions_import_execute(request):
                                 else:
                                     stats['errors'].append(f'Erro ao criar transação individual: {str(individual_error)}')
                     else:
-                        # #region agent log
-                        log_data = {
-                            'sessionId': 'debug-session',
-                            'runId': 'run1',
-                            'hypothesisId': 'ERROR',
-                            'location': 'views.py:3900',
-                            'message': 'Error in final bulk_create',
-                            'data': {
-                                'error': str(e),
-                                'error_type': type(e).__name__,
-                                'batch_size': len(transactions_to_create)
-                            },
-                            'timestamp': int(time.time() * 1000)
-                        }
-                        safe_debug_log(log_data)
-                        # #endregion
                         stats['errors'].append(f'Erro ao criar lote final: {str(e)}')
         
-        # #region agent log
-        log_data = {
-            'sessionId': 'debug-session',
-            'runId': 'run1',
-            'hypothesisId': 'A',
-            'location': 'views.py:3458',
-            'message': 'Exited atomic transaction block',
-            'data': {'stats': stats},
-            'timestamp': int(time.time() * 1000)
-        }
-        safe_debug_log(log_data)
-        # #endregion
         
         # Fechar conexões antigas para evitar locks no SQLite
         close_old_connections()
         
-        # #region agent log
-        log_data = {
-            'sessionId': 'debug-session',
-            'runId': 'run1',
-            'hypothesisId': 'I',
-            'location': 'views.py:3465',
-            'message': 'After close_old_connections, before session modification',
-            'data': {},
-            'timestamp': int(time.time() * 1000)
-        }
-        safe_debug_log(log_data)
-        # #endregion
         
         # Limpar sessão (após garantir que a transação foi commitada)
         if 'transactions_staging_data' in request.session:
@@ -7291,34 +5977,7 @@ def transactions_import_execute(request):
         if 'transactions_staging_count' in request.session:
             del request.session['transactions_staging_count']
         
-        # #region agent log
-        log_data = {
-            'sessionId': 'debug-session',
-            'runId': 'run1',
-            'hypothesisId': 'I',
-            'location': 'views.py:3475',
-            'message': 'After session modification, before redirect',
-            'data': {},
-            'timestamp': int(time.time() * 1000)
-        }
-        safe_debug_log(log_data)
-        # #endregion
         
-        # #region agent log
-        log_data = {
-            'sessionId': 'debug-session',
-            'runId': 'run1',
-            'hypothesisId': 'FINAL',
-            'location': 'views.py:3850',
-            'message': 'Import execution completed',
-            'data': {
-                'stats': stats,
-                'selected_transactions_count': len(selected_transactions)
-            },
-            'timestamp': int(time.time() * 1000)
-        }
-        safe_debug_log(log_data)
-        # #endregion
         
         # Mensagens de sucesso
         success_msg = (
@@ -7339,22 +5998,6 @@ def transactions_import_execute(request):
         if stats['errors']:
             messages.warning(request, f'{len(stats["errors"])} erros encontrados durante a importação.')
         
-        # #region agent log
-        log_data = {
-            'sessionId': 'debug-session',
-            'runId': 'run1',
-            'hypothesisId': 'E',
-            'location': 'views.py:5120',
-            'message': 'Before redirect to transaction_list',
-            'data': {
-                'stats': stats,
-                'created_transactions': stats['created_transactions'],
-                'total_selected': len(selected_transactions)
-            },
-            'timestamp': int(time.time() * 1000)
-        }
-        safe_debug_log(log_data)
-        # #endregion
         
         # Verificar se é uma requisição AJAX
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.content_type == 'application/json':
@@ -7370,18 +6013,6 @@ def transactions_import_execute(request):
             return redirect('finance:transaction_list')
         
     except Exception as e:
-        # #region agent log
-        log_data = {
-            'sessionId': 'debug-session',
-            'runId': 'run1',
-            'hypothesisId': 'F',
-            'location': 'views.py:3287',
-            'message': 'Exception caught',
-            'data': {'error': str(e), 'type': type(e).__name__},
-            'timestamp': int(time.time() * 1000)
-        }
-        safe_debug_log(log_data)
-        # #endregion
         
         messages.error(request, f'Erro durante importação: {str(e)}')
         return redirect('finance:transactions_import_staging')
@@ -7587,7 +6218,7 @@ def asset_transactions_import_staging(request):
     selected_count = sum(1 for t in filtered_transactions if t.get('selected', False))
     
     # Paginação
-    paginator = Paginator(filtered_transactions, 100)
+    paginator = Paginator(filtered_transactions, IMPORT_STAGING_ASSET_TRANSACTIONS_PER_PAGE)
     page_number = request.GET.get('page', 1)
     page_obj = paginator.get_page(page_number)
     
@@ -7660,24 +6291,6 @@ def asset_transactions_import_edit_item(request):
                 # Converter para booleano
                 trans['selected'] = bool(value)
             
-            # #region agent log
-            import time
-            log_data = {
-                'sessionId': 'debug-session',
-                'runId': 'run1',
-                'hypothesisId': 'W',
-                'location': 'views.py:5621',
-                'message': 'Updating selected state',
-                'data': {
-                    'original_index': index,
-                    'old_selected': transactions_data[transactions_data.index(trans)].get('selected') if trans in transactions_data else None,
-                    'new_selected': trans['selected'],
-                    'new_selected_type': type(trans['selected']).__name__,
-                },
-                'timestamp': int(time.time() * 1000)
-            }
-            safe_debug_log(log_data)
-            # #endregion
         else:
             return JsonResponse({'success': False, 'error': 'Campo inválido'}, status=400)
         
@@ -7798,24 +6411,6 @@ def asset_transactions_import_remove_item(request):
 
 def asset_transactions_import_execute(request):
     """View para executar importação final das transações de ativos selecionadas"""
-    # #region agent log
-    import json as json_module
-    from datetime import datetime
-    log_path = r'c:\Users\jafonseca\projects\django\own_system\.cursor\debug.log'
-    try:
-        with open(log_path, 'a', encoding='utf-8') as f:
-            f.write(json_module.dumps({
-                'sessionId': 'debug-session',
-                'runId': 'run1',
-                'hypothesisId': 'J',
-                'location': 'views.py:5363',
-                'message': 'asset_transactions_import_execute chamada',
-                'data': {'method': request.method, 'has_body': bool(request.body)},
-                'timestamp': int(datetime.now().timestamp() * 1000)
-            }) + '\n')
-    except Exception:
-        pass
-    # #endregion
     if request.method != 'POST':
         messages.error(request, 'Método não permitido')
         return redirect('finance:asset_transactions_import_staging')
@@ -7824,21 +6419,6 @@ def asset_transactions_import_execute(request):
         data = json.loads(request.body)
         selected_indices = data.get('selected_indices', [])
         filters = data.get('filters')
-        # #region agent log
-        try:
-            with open(log_path, 'a', encoding='utf-8') as f:
-                f.write(json_module.dumps({
-                    'sessionId': 'debug-session',
-                    'runId': 'run1',
-                    'hypothesisId': 'K',
-                    'location': 'views.py:5372',
-                    'message': 'Dados recebidos na view',
-                    'data': {'selected_indices_length': len(selected_indices), 'has_filters': bool(filters), 'has_staging_data': 'asset_transactions_staging_data' in request.session},
-                    'timestamp': int(datetime.now().timestamp() * 1000)
-                }) + '\n')
-        except Exception:
-            pass
-        # #endregion
         
         if 'asset_transactions_staging_data' not in request.session:
             messages.error(request, 'Nenhum dado em staging')
@@ -7925,44 +6505,10 @@ def asset_transactions_import_execute(request):
         
         selected_transactions = []
         
-        # #region agent log
-        import time
-        log_data = {
-            'sessionId': 'debug-session',
-            'runId': 'run1',
-            'hypothesisId': 'U',
-            'location': 'views.py:5854',
-            'message': 'Starting import execution',
-            'data': {
-                'total_transactions': len(transactions_to_check),
-                'selected_indices_provided': bool(selected_indices),
-                'selected_indices_count': len(selected_indices) if selected_indices else 0,
-            },
-            'timestamp': int(time.time() * 1000)
-        }
-        safe_debug_log(log_data)
-        # #endregion
         
         # Contar quantas transações têm selected=True antes do loop
         selected_count_before = sum(1 for t in transactions_to_check if t.get('selected', False) is True)
         
-        # #region agent log
-        log_data = {
-            'sessionId': 'debug-session',
-            'runId': 'run1',
-            'hypothesisId': 'V',
-            'location': 'views.py:5857',
-            'message': 'Before filtering loop',
-            'data': {
-                'total_transactions_to_check': len(transactions_to_check),
-                'selected_count_before': selected_count_before,
-                'selected_indices_provided': bool(selected_indices),
-                'selected_indices_count': len(selected_indices) if selected_indices else 0,
-            },
-            'timestamp': int(time.time() * 1000)
-        }
-        safe_debug_log(log_data)
-        # #endregion
         
         for trans in transactions_to_check:
             should_include = False
@@ -8009,22 +6555,6 @@ def asset_transactions_import_execute(request):
                             trans_copy[field] = Decimal('0')
                 selected_transactions.append(trans_copy)
         
-        # #region agent log
-        log_data = {
-            'sessionId': 'debug-session',
-            'runId': 'run1',
-            'hypothesisId': 'V',
-            'location': 'views.py:5922',
-            'message': 'After filtering selected transactions',
-            'data': {
-                'total_transactions_checked': len(transactions_to_check),
-                'selected_transactions_count': len(selected_transactions),
-                'selected_count_before': selected_count_before,
-            },
-            'timestamp': int(time.time() * 1000)
-        }
-        safe_debug_log(log_data)
-        # #endregion
         
         if not selected_transactions:
             messages.warning(request, 'Nenhuma transação selecionada para importar')
@@ -8205,20 +6735,17 @@ def chatbot_api(request):
         if not query:
             return JsonResponse({'error': 'Query não fornecida'}, status=400)
         
-        # Importar serviço do chatbot
-        from .chatbot_service import get_chatbot_response
-        
         # Obter histórico da sessão (opcional)
         chat_history = request.session.get('chat_history', [])
         
         # Processar query
         response = get_chatbot_response(query, chat_history)
         
-        # Atualizar histórico na sessão (manter últimas 10 mensagens)
+        # Atualizar histórico na sessão (manter últimas N mensagens)
         chat_history.append({'role': 'user', 'content': query})
         chat_history.append({'role': 'assistant', 'content': response})
-        if len(chat_history) > 20:  # Manter últimas 10 interações (20 mensagens)
-            chat_history = chat_history[-20:]
+        if len(chat_history) > CHAT_HISTORY_MAX_MESSAGES:
+            chat_history = chat_history[-CHAT_HISTORY_MAX_MESSAGES:]
         request.session['chat_history'] = chat_history
         
         return JsonResponse({
