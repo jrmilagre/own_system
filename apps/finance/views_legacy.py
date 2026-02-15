@@ -1364,12 +1364,16 @@ def scheduler_update(request, pk):
             if scheduler.due_date and not scheduler.original_due_date:
                 scheduler.original_due_date = scheduler.due_date
             scheduler.save()
+            next_url = request.POST.get('next') or request.GET.get('next')
+            if next_url:
+                return redirect(next_url)
             return redirect('finance:scheduler_list')
         else:
-            return render(request, 'finance/scheduler_form.html', {'form': form, 'scheduler': scheduler, 'categories': categories})
+            return render(request, 'finance/scheduler_form.html', {'form': form, 'scheduler': scheduler, 'categories': categories, 'next_url': request.GET.get('next', '')})
     else:
         form = SchedulerForm(instance=scheduler)
-    return render(request, 'finance/scheduler_form.html', {'form': form, 'scheduler': scheduler, 'categories': categories})
+    next_url = request.GET.get('next', '')
+    return render(request, 'finance/scheduler_form.html', {'form': form, 'scheduler': scheduler, 'categories': categories, 'next_url': next_url})
 
 
 def scheduler_delete(request, pk):
@@ -4441,10 +4445,14 @@ def budget_update(request, pk):
                 budget.budget_date = budget.budget_date.replace(day=1)
             budget.save()
             messages.success(request, 'Orçamento atualizado com sucesso!')
+            next_url = request.POST.get('next') or request.GET.get('next')
+            if next_url:
+                return redirect(next_url)
             return redirect('finance:budget_list')
     else:
         form = BudgetForm(instance=budget)
-    return render(request, 'finance/budget_form.html', {'form': form, 'budget': budget})
+    next_url = request.GET.get('next', '')
+    return render(request, 'finance/budget_form.html', {'form': form, 'budget': budget, 'next_url': next_url})
 
 
 def budget_delete(request, pk):
@@ -4810,6 +4818,229 @@ def cash_flow_report(request):
         'total_scheduled_general': total_scheduled_general,
         'total_projected_general': total_projected_general,
     })
+
+
+def cash_flow_line_detail(request):
+    """Retorna HTML parcial com transações, orçamentos e agendamentos da linha do fluxo de caixa (para modal)."""
+    item_id = request.GET.get('item_id')
+    code = request.GET.get('code')
+    start_date_str = request.GET.get('start_date')
+    end_date_str = request.GET.get('end_date')
+    account_id = request.GET.get('account')
+    include_future = request.GET.get('include_future') in ('1', 'on', 'true')
+
+    if not item_id and not code:
+        return render(request, 'finance/partials/cash_flow_line_detail.html', {
+            'error': 'Item não especificado (item_id ou code).',
+            'transactions': [],
+            'budgets': [],
+            'schedulers': [],
+            'asset_transactions': [],
+        })
+
+    if not start_date_str or not end_date_str:
+        return render(request, 'finance/partials/cash_flow_line_detail.html', {
+            'error': 'Período (start_date e end_date) é obrigatório.',
+            'transactions': [],
+            'budgets': [],
+            'schedulers': [],
+            'asset_transactions': [],
+        })
+
+    try:
+        start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+        end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+    except (ValueError, TypeError):
+        return render(request, 'finance/partials/cash_flow_line_detail.html', {
+            'error': 'Datas inválidas.',
+            'transactions': [],
+            'budgets': [],
+            'schedulers': [],
+            'asset_transactions': [],
+        })
+
+    account = None
+    if account_id and account_id != 'all':
+        try:
+            account = Account.objects.get(pk=account_id)
+        except Account.DoesNotExist:
+            account = None
+
+    try:
+        if item_id:
+            item = CashFlowItem.objects.get(pk=item_id)
+        else:
+            item = CashFlowItem.objects.get(code=code)
+    except CashFlowItem.DoesNotExist:
+        return render(request, 'finance/partials/cash_flow_line_detail.html', {
+            'error': 'Item do fluxo de caixa não encontrado.',
+            'transactions': [],
+            'budgets': [],
+            'schedulers': [],
+            'asset_transactions': [],
+        })
+
+    has_transfer_rules = any(
+        r.get('type') == 'transfer' for r in (item.calculation_rules or [])
+    )
+    has_asset_rules = any(
+        r.get('type') == 'asset_transaction' for r in (item.calculation_rules or [])
+    )
+    return_url = reverse('finance:cash_flow_report') + '?' + urlencode({
+        'start_date': start_date_str,
+        'end_date': end_date_str,
+        'account': account_id or 'all',
+        'include_future': '1' if include_future else '0',
+    })
+
+    def _transactions_split(trans_qs):
+        """Retorna (subcategory_list, transfer_list) com select_related."""
+        pk_list = list(trans_qs.values_list('pk', flat=True))
+        if not pk_list:
+            return [], []
+        trans_list = list(
+            Transaction.objects.filter(pk__in=pk_list)
+            .select_related('beneficiary', 'subcategory', 'subcategory__category', 'account')
+            .order_by('-transaction_date', '-due_date', '-created_at')
+        )
+        subcategory_list = [t for t in trans_list if not t.is_transfer]
+        transfer_list = [t for t in trans_list if t.is_transfer]
+        return subcategory_list, transfer_list
+
+    def _budgets_list(budgets_qs):
+        budget_pks = list(budgets_qs.values_list('pk', flat=True))
+        if not budget_pks:
+            return []
+        result = list(
+            Budget.objects.filter(pk__in=budget_pks)
+            .select_related('subcategory', 'subcategory__category')
+            .order_by('budget_date', 'subcategory')
+        )
+        # Deduplicate by (budget_date, subcategory_id): same month+subcategory shows once (first by order)
+        seen_key = set()
+        deduped = []
+        for b in result:
+            key = (b.budget_date, b.subcategory_id)
+            if key not in seen_key:
+                seen_key.add(key)
+                deduped.append(b)
+        result = deduped
+        return result
+
+    def _scheduler_occurrences(scheduler_list, period_start, period_end):
+        """Converte lista de Scheduler em lista de ocorrências (uma por data no período), como no Extrato."""
+        occurrences = []
+        for s in scheduler_list:
+            if not s.is_valid():
+                continue
+            for occ_date in s.get_occurrence_dates_in_range(period_start, period_end):
+                occurrences.append({'date': occ_date, 'scheduler': s})
+        occurrences.sort(key=lambda x: (x['date'], x['scheduler'].pk))
+        return occurrences
+
+    grouped_data = None
+    transactions_subcategory = []
+    transactions_transfer = []
+    budgets = []
+    schedulers = []
+    scheduler_occurrences = []
+    asset_transactions = []
+
+    try:
+        if item.calculation_type == 'SUBTOTAL':
+            # Agrupar por item filho (e itens que acumulam neste)
+            children = item.get_children()
+            children_codes = set()
+            contributing_children = []
+            for child in children:
+                if not child.accumulates_in or child.accumulates_in == item:
+                    children_codes.add(child.code)
+                    contributing_children.append(child)
+            accumulated_items = list(
+                CashFlowItem.objects.filter(accumulates_in=item).exclude(code__in=children_codes)
+            )
+            grouped_data = []
+            for child_item in contributing_children + accumulated_items:
+                trans_qs = child_item.get_transactions(start_date, end_date, account)
+                sub_list, transfer_list = _transactions_split(trans_qs)
+                budgets_qs = child_item.get_budgets(start_date, end_date, account)
+                child_budgets = _budgets_list(budgets_qs)
+                child_schedulers = list(child_item.get_schedulers(start_date, end_date, account)) if include_future else []
+                child_scheduler_occurrences = _scheduler_occurrences(child_schedulers, start_date, end_date)
+                child_has_asset = any(
+                    r.get('type') == 'asset_transaction' for r in (child_item.calculation_rules or [])
+                )
+                child_asset = list(child_item.get_asset_transactions(start_date, end_date, account)) if child_has_asset else []
+                child_has_transfer = any(
+                    r.get('type') == 'transfer' for r in (child_item.calculation_rules or [])
+                )
+                grouped_data.append({
+                    'item': child_item,
+                    'transactions_subcategory': sub_list,
+                    'transactions_transfer': transfer_list,
+                    'budgets': child_budgets,
+                    'scheduler_occurrences': child_scheduler_occurrences,
+                    'asset_transactions': child_asset,
+                    'has_transfer_rules': child_has_transfer,
+                    'has_asset_rules': child_has_asset,
+                })
+        else:
+            transactions_qs = item.get_transactions(start_date, end_date, account)
+            transactions_subcategory, transactions_transfer = _transactions_split(transactions_qs)
+            budgets_qs = item.get_budgets(start_date, end_date, account)
+            budgets = _budgets_list(budgets_qs)
+            schedulers_list = list(item.get_schedulers(start_date, end_date, account)) if include_future else []
+            scheduler_occurrences = _scheduler_occurrences(schedulers_list, start_date, end_date)
+            asset_transactions = list(item.get_asset_transactions(start_date, end_date, account)) if has_asset_rules else []
+
+    except Exception as e:
+        try:
+            _logpath = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), '.cursor', 'debug.log')
+            os.makedirs(os.path.dirname(_logpath), exist_ok=True)
+            with open(_logpath, 'a') as _log:
+                _log.write(json_module.dumps({"hypothesisId": "detail_error", "location": "cash_flow_line_detail except", "message": "exception in detail", "data": {"item_id": item_id, "error": str(e), "traceback": traceback.format_exc()}, "timestamp": int(time.time() * 1000)}) + '\n')
+        except Exception:
+            pass
+        return render(request, 'finance/partials/cash_flow_line_detail.html', {
+            'error': f'Erro ao carregar detalhe: {str(e)}',
+            'transactions': [],
+            'budgets': [],
+            'schedulers': [],
+            'asset_transactions': [],
+        })
+
+    try:
+        return render(request, 'finance/partials/cash_flow_line_detail.html', {
+            'item': item,
+            'grouped_data': grouped_data,
+            'transactions_subcategory': transactions_subcategory,
+            'transactions_transfer': transactions_transfer,
+            'budgets': budgets,
+            'scheduler_occurrences': scheduler_occurrences,
+            'asset_transactions': asset_transactions,
+            'has_transfer_rules': has_transfer_rules,
+            'has_asset_rules': has_asset_rules,
+            'return_url': return_url,
+            'include_future': include_future,
+            'start_date': start_date,
+            'end_date': end_date,
+            'selected_account': account,
+        })
+    except Exception as e:
+        try:
+            _logpath = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), '.cursor', 'debug.log')
+            os.makedirs(os.path.dirname(_logpath), exist_ok=True)
+            with open(_logpath, 'a') as _log:
+                _log.write(json_module.dumps({"hypothesisId": "render_error", "location": "cash_flow_line_detail render", "message": "exception during render", "data": {"item_id": item_id, "error": str(e), "traceback": traceback.format_exc()}, "timestamp": int(time.time() * 1000)}) + '\n')
+        except Exception:
+            pass
+        return render(request, 'finance/partials/cash_flow_line_detail.html', {
+            'error': f'Erro ao carregar detalhe: {str(e)}',
+            'transactions': [],
+            'budgets': [],
+            'schedulers': [],
+            'asset_transactions': [],
+        })
 
 
 # Transactions Import Views

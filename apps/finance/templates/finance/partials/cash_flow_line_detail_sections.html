@@ -1,0 +1,172 @@
+{% comment %}
+Seções reutilizáveis: Transações (subcategoria), Transferências, Orçamentos, Agendamentos, Transações de ativos.
+Variáveis: transactions, transactions_transfer, budgets, schedulers, asset_transactions, has_transfer_rules, has_asset_rules, include_future, return_url
+{% endcomment %}
+
+<div class="mb-2">
+    <h6 class="border-bottom pb-1 mb-1"><i class="fas fa-exchange-alt me-2"></i>Transações</h6>
+    {% if transactions %}
+    <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Data da transação</th>
+                    <th>Conta</th>
+                    <th>Beneficiário</th>
+                    <th>Categoria : Subcategoria</th>
+                    <th class="text-end">Valor</th>
+                    <th class="text-end" style="width:2.5rem;"></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for trans in transactions %}
+                <tr>
+                    <td>{% if trans.transaction_date %}{{ trans.transaction_date|date:"d/m/Y" }}{% elif trans.due_date %}{{ trans.due_date|date:"d/m/Y" }}{% else %}—{% endif %}</td>
+                    <td>{{ trans.account.name }}</td>
+                    <td>{% if trans.beneficiary %}{{ trans.beneficiary.full_name }}{% else %}—{% endif %}</td>
+                    <td>{% if trans.subcategory %}{{ trans.subcategory.category.category }} : {{ trans.subcategory.subcategory }}{% else %}—{% endif %}</td>
+                    <td class="text-end {% if trans.transaction_type == 'DB' %}text-danger{% endif %}">R$ {{ trans.value|floatformat:2 }}</td>
+                    <td class="text-end"><a href="{% url 'finance:transaction_update' trans.pk %}?next={{ return_url|urlencode }}" class="edit-link">Editar</a></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="text-muted small mb-0">Nenhuma transação no período.</p>
+    {% endif %}
+</div>
+
+{% if has_transfer_rules %}
+<div class="mb-2">
+    <h6 class="border-bottom pb-1 mb-1"><i class="fas fa-random me-2"></i>Transferências</h6>
+    {% if transactions_transfer %}
+    <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Data da transação</th>
+                    <th>Conta</th>
+                    <th class="text-end">Valor</th>
+                    <th class="text-end" style="width:2.5rem;"></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for trans in transactions_transfer %}
+                <tr>
+                    <td>{% if trans.transaction_date %}{{ trans.transaction_date|date:"d/m/Y" }}{% elif trans.due_date %}{{ trans.due_date|date:"d/m/Y" }}{% else %}—{% endif %}</td>
+                    <td>{{ trans.account.name }}</td>
+                    <td class="text-end {% if trans.transaction_type == 'DB' %}text-danger{% endif %}">R$ {{ trans.value|floatformat:2 }}</td>
+                    <td class="text-end"><a href="{% url 'finance:transaction_update' trans.pk %}?next={{ return_url|urlencode }}" class="edit-link">Editar</a></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="text-muted small mb-0">Nenhuma transferência no período.</p>
+    {% endif %}
+</div>
+{% endif %}
+
+<div class="mb-2">
+    <h6 class="border-bottom pb-1 mb-1"><i class="fas fa-coins me-2"></i>Orçamentos</h6>
+    {% if budgets %}
+    <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Mês/Ano</th>
+                    <th>Categoria</th>
+                    <th>Subcategoria</th>
+                    <th>Anotações</th>
+                    <th class="text-end">Valor</th>
+                    <th class="text-end" style="width:2.5rem;"></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for budget in budgets %}
+                <tr>
+                    <td>{{ budget.budget_date|date:"m/Y" }}</td>
+                    <td>{{ budget.subcategory.category.category }}</td>
+                    <td>{{ budget.subcategory.subcategory }}</td>
+                    <td>{{ budget.notes|default:"—" }}</td>
+                    <td class="text-end">R$ {{ budget.amount|floatformat:2 }}</td>
+                    <td class="text-end"><a href="{% url 'finance:budget_update' budget.pk %}?next={{ return_url|urlencode }}" class="edit-link">Editar</a></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="text-muted small mb-0">Nenhum orçamento no período.</p>
+    {% endif %}
+</div>
+
+{% if include_future %}
+<div class="mb-2">
+    <h6 class="border-bottom pb-1 mb-1"><i class="fas fa-calendar-check me-2"></i>Agendamentos</h6>
+    {% if scheduler_occurrences %}
+    <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Data do agendamento</th>
+                    <th>Conta</th>
+                    <th>Beneficiário / Subcategoria</th>
+                    <th class="text-end">Valor</th>
+                    <th class="text-end" style="width:2.5rem;"></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for occ in scheduler_occurrences %}
+                <tr>
+                    <td>{{ occ.date|date:"d/m/Y" }}</td>
+                    <td>{{ occ.scheduler.account.name }}</td>
+                    <td>{% if occ.scheduler.beneficiary %}{{ occ.scheduler.beneficiary.full_name }}{% elif occ.scheduler.subcategory %}{{ occ.scheduler.subcategory.subcategory }}{% else %}—{% endif %}</td>
+                    <td class="text-end {% if occ.scheduler.transaction_type == 'DB' %}text-danger{% endif %}">R$ {{ occ.scheduler.value|floatformat:2 }}</td>
+                    <td class="text-end"><a href="{% url 'finance:scheduler_update' occ.scheduler.pk %}?next={{ return_url|urlencode }}" class="edit-link">Editar</a></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="text-muted small mb-0">Nenhum agendamento no período.</p>
+    {% endif %}
+</div>
+{% endif %}
+
+{% if has_asset_rules %}
+<div class="mb-0">
+    <h6 class="border-bottom pb-1 mb-1"><i class="fas fa-chart-line me-2"></i>Transações de ativos</h6>
+    {% if asset_transactions %}
+    <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Data</th>
+                    <th>Ativo</th>
+                    <th>Operação</th>
+                    <th class="text-end">Valor</th>
+                    <th class="text-end" style="width:2.5rem;"></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for at in asset_transactions %}
+                <tr>
+                    <td>{{ at.date|date:"d/m/Y" }}</td>
+                    <td>{{ at.asset.name }}</td>
+                    <td>{{ at.get_operation_type_display }}</td>
+                    <td class="text-end">R$ {{ at.get_net_value|floatformat:2 }}</td>
+                    <td class="text-end"><a href="{% url 'finance:asset_transaction_update' at.pk %}?next={{ return_url|urlencode }}" class="edit-link">Editar</a></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="text-muted small mb-0">Nenhuma transação de ativo no período.</p>
+    {% endif %}
+</div>
+{% endif %}

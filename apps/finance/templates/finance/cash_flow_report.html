@@ -119,7 +119,7 @@
                 </thead>
                 <tbody>
                     {% for data in report_data %}
-                    <tr class="level-{{ data.level }} tree-row" data-code="{{ data.code }}" data-parent-code="{{ data.parent_code|default:'' }}" data-level="{{ data.level }}">
+                    <tr class="level-{{ data.level }} tree-row cash-flow-row" data-code="{{ data.code }}" data-parent-code="{{ data.parent_code|default:'' }}" data-level="{{ data.level }}" data-item-id="{{ data.item.pk }}">
                         <td class="code-cell ps-3">
                             <div class="d-flex align-items-center tree-content-wrapper" data-level="{{ data.level }}">
                                 <span class="expand-toggle" style="cursor: pointer; min-width: 24px; text-align: center; flex-shrink: 0;">
@@ -180,6 +180,26 @@
                     {% endif %}
                 </tfoot>
             </table>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Detalhe da linha (transações, orçamentos, agendamentos) -->
+<div class="modal fade" id="cashFlowLineDetailModal" tabindex="-1" aria-labelledby="cashFlowLineDetailModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="cashFlowLineDetailModalLabel">
+                    <i class="fas fa-list me-2"></i>Detalhe da linha
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body" id="cash-flow-line-modal-body">
+                <div class="text-center text-muted py-4">
+                    <div class="spinner-border" role="status"><span class="visually-hidden">Carregando...</span></div>
+                    <p class="mt-2 mb-0">Carregando...</p>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -323,7 +343,8 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const rows = document.querySelectorAll('tbody tr[data-code]');
-    
+    const detailUrlBase = "{% url 'finance:cash_flow_line_detail' %}";
+
     // Inicialmente, ocultar todos os filhos (nível > 0)
     rows.forEach(function(row) {
         const level = parseInt(row.className.match(/level-(\d+)/)?.[1] || '0');
@@ -331,7 +352,7 @@ document.addEventListener('DOMContentLoaded', function() {
             row.style.display = 'none';
         }
     });
-    
+
     // Função para mostrar/ocultar filhos
     function toggleChildren(parentCode, show) {
         rows.forEach(function(row) {
@@ -352,7 +373,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
-    
+
     // Adicionar event listeners aos botões de expandir/recolher
     document.querySelectorAll('.expand-toggle').forEach(function(btn) {
         btn.addEventListener('click', function(e) {
@@ -361,7 +382,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const code = row.getAttribute('data-code');
             const icon = this.querySelector('.expand-icon');
             const isExpanded = icon && icon.classList.contains('expanded');
-            
+
             if (isExpanded) {
                 // Recolher
                 icon.classList.remove('expanded');
@@ -372,7 +393,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 toggleChildren(code, true);
             }
         });
-        
+
         // Adicionar hover effect
         btn.addEventListener('mouseenter', function() {
             const icon = this.querySelector('.expand-icon');
@@ -380,7 +401,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 icon.style.transform = icon.classList.contains('expanded') ? 'rotate(90deg) scale(1.1)' : 'scale(1.1)';
             }
         });
-        
+
         btn.addEventListener('mouseleave', function() {
             const icon = this.querySelector('.expand-icon');
             if (icon) {
@@ -388,6 +409,62 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     });
+
+    // Clique na linha: abrir modal com detalhe (transações, orçamentos, agendamentos)
+    const modalEl = document.getElementById('cashFlowLineDetailModal');
+    const modalBody = document.getElementById('cash-flow-line-modal-body');
+    if (modalEl && modalBody) {
+        const loadingHtml = '<div class="text-center text-muted py-4"><div class="spinner-border" role="status"><span class="visually-hidden">Carregando...</span></div><p class="mt-2 mb-0">Carregando...</p></div>';
+        const errorHtml = '<div class="alert alert-danger mb-0"><i class="fas fa-exclamation-circle me-2"></i>Não foi possível carregar o detalhe. Tente novamente.</div>';
+
+        document.querySelectorAll('.cash-flow-row').forEach(function(row) {
+            row.addEventListener('click', function(e) {
+                // Não abrir modal se clicou no botão de expandir/recolher
+                if (e.target.closest('.expand-toggle')) return;
+
+                const itemId = row.getAttribute('data-item-id');
+                if (!itemId) return;
+
+                const startDate = document.getElementById('start_date');
+                const endDate = document.getElementById('end_date');
+                const account = document.getElementById('account');
+                const includeFuture = document.getElementById('include_future');
+
+                const params = new URLSearchParams({
+                    item_id: itemId,
+                    start_date: startDate ? startDate.value : '',
+                    end_date: endDate ? endDate.value : '',
+                    account: account ? (account.value || 'all') : 'all',
+                    include_future: includeFuture && includeFuture.checked ? '1' : '0'
+                });
+
+                modalBody.innerHTML = loadingHtml;
+                const modal = new bootstrap.Modal(modalEl);
+                modal.show();
+
+                var _logIngest = 'http://127.0.0.1:7244/ingest/3061bafa-0f1a-4a22-8b2d-dfc616a16100';
+                function _agentLog(msg, data) {
+                    fetch(_logIngest, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'cash_flow_report.html', message: msg, data: data || {}, timestamp: Date.now(), hypothesisId: 'client' }) }).catch(function() {});
+                }
+
+                fetch(detailUrlBase + '?' + params.toString(), {
+                    headers: { 'Accept': 'text/html', 'X-Requested-With': 'XMLHttpRequest' }
+                }).then(function(response) {
+                    if (!response.ok) {
+                        _agentLog('detail response not ok', { itemId: itemId, status: response.status, statusText: response.statusText });
+                        throw new Error('Network response was not ok');
+                    }
+                    return response.text();
+                }).then(function(html) {
+                    modalBody.innerHTML = html;
+                    _agentLog('detail fetch ok', { itemId: itemId });
+                }).catch(function(err) {
+                    _agentLog('detail fetch catch', { itemId: itemId, error: String(err && err.message) });
+                    modalBody.innerHTML = errorHtml;
+                });
+            });
+        });
+    }
 });
 </script>
 {% endblock %}

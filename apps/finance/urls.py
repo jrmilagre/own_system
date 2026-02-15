@@ -88,6 +88,7 @@ urlpatterns = [
     path('reports/account-statement/', views.account_statement_report, name='account_statement_report'),
     path('reports/asset-stock-position/', views.asset_stock_position_report, name='asset_stock_position_report'),
     path('reports/cash-flow/', views.cash_flow_report, name='cash_flow_report'),
+    path('reports/cash-flow/detail/', views.cash_flow_line_detail, name='cash_flow_line_detail'),
     # Budget URLs
     path('budgets/', views.budget_list, name='budget_list'),
     path('budgets/create/', views.budget_create, name='budget_create'),

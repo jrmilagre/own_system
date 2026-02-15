@@ -2537,7 +2537,7 @@ class CashFlowItem(BaseModel):
         return Decimal('0')
 
     def _calculate_scheduled_by_subcategory(self, subcategory_id, start_date, end_date, account):
-        """Calcula valor agendado por subcategoria (Scheduler no período)."""
+        """Calcula valor agendado por subcategoria: totaliza todas as recorrências no período (cada data de ocorrência conta)."""
         from decimal import Decimal
 
         filters = {'subcategory_id': subcategory_id, 'status': 'ACTIVE'}
@@ -2557,7 +2557,7 @@ class CashFlowItem(BaseModel):
         return total
 
     def _calculate_scheduled_by_transfer(self, destination_account_id, value_type, start_date, end_date, account):
-        """Calcula valor agendado por transferência (Scheduler is_transfer no período)."""
+        """Calcula valor agendado por transferência: totaliza todas as recorrências no período (cada data de ocorrência conta)."""
         from decimal import Decimal
 
         total = Decimal('0')
@@ -2684,3 +2684,304 @@ class CashFlowItem(BaseModel):
                 total -= budget.amount
         
         return total
+
+    def get_transactions(self, start_date, end_date, account=None):
+        """Retorna QuerySet de Transaction que compõem o valor realizado deste item."""
+        from django.db.models import Q
+
+        if self.calculation_type == 'SUBTOTAL':
+            seen_pks = set()
+            children = self.get_children()
+            children_codes = set()
+            if children.exists():
+                for child in children:
+                    if not child.accumulates_in or child.accumulates_in == self:
+                        children_codes.add(child.code)
+                        for t in child.get_transactions(start_date, end_date, account):
+                            if t.pk not in seen_pks:
+                                seen_pks.add(t.pk)
+            accumulated_items = CashFlowItem.objects.filter(
+                accumulates_in=self
+            ).exclude(code__in=children_codes)
+            for item in accumulated_items:
+                for t in item.get_transactions(start_date, end_date, account):
+                    if t.pk not in seen_pks:
+                        seen_pks.add(t.pk)
+            return Transaction.objects.filter(pk__in=seen_pks).order_by('-transaction_date', '-due_date', '-created_at')
+
+        if self.calculation_type == 'RULES':
+            # Avoid union() so SQLite never sees "ORDER BY in subqueries of compound statements".
+            # Collect pks from each part (each part is a simple filtered queryset) then return a single filtered queryset.
+            seen_pks = set()
+            for rule in self.calculation_rules:
+                rule_type = rule.get('type')
+                if rule_type == 'subcategory':
+                    subcategory_id = rule.get('subcategory_id')
+                    if subcategory_id:
+                        part = self._get_transactions_by_subcategory(
+                            subcategory_id, start_date, end_date, account
+                        )
+                        for pk in part.values_list('pk', flat=True):
+                            seen_pks.add(pk)
+                elif rule_type == 'transfer':
+                    destination_account_id = rule.get('destination_account_id')
+                    value_type = rule.get('value_type') or ('credit' if rule.get('direction') == 'to' else 'debit')
+                    if destination_account_id and value_type:
+                        part = self._get_transactions_by_transfer(
+                            destination_account_id, value_type, start_date, end_date, account
+                        )
+                        for pk in part.values_list('pk', flat=True):
+                            seen_pks.add(pk)
+            if not seen_pks:
+                return Transaction.objects.none()
+            return Transaction.objects.filter(pk__in=seen_pks).order_by('-transaction_date', '-due_date', '-created_at')
+
+        return Transaction.objects.none()
+
+    def _get_transactions_by_subcategory(self, subcategory_id, start_date, end_date, account):
+        """Retorna QuerySet de Transaction por subcategoria no período."""
+        from django.db.models import Q
+        filters = {'subcategory_id': subcategory_id}
+        date_filter = Q(
+            Q(transaction_date__gte=start_date, transaction_date__lte=end_date) |
+            Q(transaction_date__isnull=True, due_date__gte=start_date, due_date__lte=end_date)
+        )
+        if account:
+            filters['account'] = account
+        # Clear default ordering so union with other parts does not trigger SQLite "ORDER BY not allowed in subqueries of compound statements"
+        return Transaction.objects.filter(**filters).filter(date_filter).order_by()
+
+    def _get_transactions_by_transfer(self, destination_account_id, value_type, start_date, end_date, account):
+        """Retorna QuerySet de Transaction de transferência no período."""
+        from django.db.models import Q
+        date_filter = Q(
+            Q(transaction_date__gte=start_date, transaction_date__lte=end_date) |
+            Q(transaction_date__isnull=True, due_date__gte=start_date, due_date__lte=end_date)
+        )
+        if value_type == 'credit':
+            filters = {
+                'is_transfer': True,
+                'account_id': destination_account_id,
+                'transaction_type': 'CR',
+            }
+            if account and account.id != destination_account_id:
+                return Transaction.objects.none()
+            return Transaction.objects.filter(**filters).filter(date_filter).order_by()
+        elif value_type == 'debit':
+            destination_transfers_query = Transaction.objects.filter(
+                is_transfer=True,
+                account_id=destination_account_id,
+                transaction_type='CR'
+            ).filter(date_filter)
+            if account:
+                source_transfers = Transaction.objects.filter(
+                    is_transfer=True,
+                    account=account,
+                    transaction_type='DB'
+                ).filter(date_filter).values_list('transfer_group_id', flat=True)
+                destination_transfers_query = destination_transfers_query.filter(
+                    transfer_group_id__in=list(source_transfers)
+                )
+            destination_transfers = list(destination_transfers_query.values_list('transfer_group_id', flat=True).distinct())
+            if not destination_transfers:
+                return Transaction.objects.none()
+            filters = {
+                'is_transfer': True,
+                'transaction_type': 'DB',
+                'transfer_group_id__in': destination_transfers,
+            }
+            if account:
+                filters['account'] = account
+            return Transaction.objects.filter(**filters).filter(date_filter).order_by()
+        return Transaction.objects.none()
+
+    def get_budgets(self, start_date, end_date, account=None):
+        """Retorna QuerySet de Budget que compõem o valor orçado deste item."""
+        if self.calculation_type == 'SUBTOTAL':
+            seen_pks = set()
+            children = self.get_children()
+            children_codes = set()
+            if children.exists():
+                for child in children:
+                    if not child.accumulates_in or child.accumulates_in == self:
+                        children_codes.add(child.code)
+                        for b in child.get_budgets(start_date, end_date, account):
+                            if b.pk not in seen_pks:
+                                seen_pks.add(b.pk)
+            accumulated_items = CashFlowItem.objects.filter(
+                accumulates_in=self
+            ).exclude(code__in=children_codes)
+            for item in accumulated_items:
+                for b in item.get_budgets(start_date, end_date, account):
+                    if b.pk not in seen_pks:
+                        seen_pks.add(b.pk)
+            return Budget.objects.filter(pk__in=seen_pks).order_by('budget_date', 'subcategory')
+
+        if self.calculation_type == 'RULES':
+            # Avoid union() for SQLite; collect pks from each part then return a single queryset.
+            seen_pks = set()
+            for rule in self.calculation_rules:
+                if rule.get('type') == 'subcategory':
+                    subcategory_id = rule.get('subcategory_id')
+                    if subcategory_id:
+                        part = self._get_budgets_by_subcategory(
+                            subcategory_id, start_date, end_date
+                        )
+                        for pk in part.values_list('pk', flat=True):
+                            seen_pks.add(pk)
+            if not seen_pks:
+                return Budget.objects.none()
+            return Budget.objects.filter(pk__in=seen_pks).order_by('budget_date', 'subcategory')
+
+        return Budget.objects.none()
+
+    def _get_budgets_by_subcategory(self, subcategory_id, start_date, end_date):
+        """Retorna QuerySet de Budget por subcategoria no período (Budget não tem conta)."""
+        return Budget.objects.filter(
+            subcategory_id=subcategory_id,
+            budget_date__gte=start_date.replace(day=1),
+            budget_date__lte=end_date.replace(day=1)
+        ).order_by()
+
+    def get_schedulers(self, start_date, end_date, account=None):
+        """Retorna lista de Scheduler que têm ocorrência no período (agendados)."""
+        if self.calculation_type == 'SUBTOTAL':
+            seen_pks = set()
+            result = []
+            children = self.get_children()
+            children_codes = set()
+            if children.exists():
+                for child in children:
+                    if not child.accumulates_in or child.accumulates_in == self:
+                        children_codes.add(child.code)
+                        for s in child.get_schedulers(start_date, end_date, account):
+                            if s.pk not in seen_pks:
+                                seen_pks.add(s.pk)
+                                result.append(s)
+            accumulated_items = CashFlowItem.objects.filter(
+                accumulates_in=self
+            ).exclude(code__in=children_codes)
+            for item in accumulated_items:
+                for s in item.get_schedulers(start_date, end_date, account):
+                    if s.pk not in seen_pks:
+                        seen_pks.add(s.pk)
+                        result.append(s)
+            return result
+
+        if self.calculation_type == 'RULES':
+            result = []
+            seen_pks = set()
+            for rule in self.calculation_rules:
+                rule_type = rule.get('type')
+                if rule_type == 'subcategory':
+                    subcategory_id = rule.get('subcategory_id')
+                    if subcategory_id:
+                        for s in self._get_schedulers_by_subcategory(
+                                subcategory_id, start_date, end_date, account):
+                            if s.pk not in seen_pks:
+                                seen_pks.add(s.pk)
+                                result.append(s)
+                elif rule_type == 'transfer':
+                    destination_account_id = rule.get('destination_account_id')
+                    value_type = rule.get('value_type') or ('credit' if rule.get('direction') == 'to' else 'debit')
+                    if destination_account_id and value_type:
+                        for s in self._get_schedulers_by_transfer(
+                                destination_account_id, value_type, start_date, end_date, account):
+                            if s.pk not in seen_pks:
+                                seen_pks.add(s.pk)
+                                result.append(s)
+            return result
+
+        return []
+
+    def _get_schedulers_by_subcategory(self, subcategory_id, start_date, end_date, account):
+        """Retorna Schedulers da subcategoria que têm pelo menos uma ocorrência no período."""
+        filters = {'subcategory_id': subcategory_id, 'status': 'ACTIVE'}
+        if account:
+            filters['account'] = account
+        for scheduler in Scheduler.objects.filter(**filters):
+            if not scheduler.is_valid():
+                continue
+            if scheduler.get_occurrence_dates_in_range(start_date, end_date):
+                yield scheduler
+
+    def _get_schedulers_by_transfer(self, destination_account_id, value_type, start_date, end_date, account):
+        """Retorna Schedulers de transferência que têm pelo menos uma ocorrência no período."""
+        if value_type == 'credit':
+            filters = {
+                'is_transfer': True,
+                'account_id': destination_account_id,
+                'transaction_type': 'CR',
+                'status': 'ACTIVE',
+            }
+            if account and account.id != destination_account_id:
+                return
+            for scheduler in Scheduler.objects.filter(**filters):
+                if not scheduler.is_valid():
+                    continue
+                if scheduler.get_occurrence_dates_in_range(start_date, end_date):
+                    yield scheduler
+        elif value_type == 'debit':
+            filters = {
+                'is_transfer': True,
+                'destination_account_id': destination_account_id,
+                'transaction_type': 'DB',
+                'status': 'ACTIVE',
+            }
+            if account:
+                filters['account'] = account
+            for scheduler in Scheduler.objects.filter(**filters):
+                if not scheduler.is_valid():
+                    continue
+                if scheduler.get_occurrence_dates_in_range(start_date, end_date):
+                    yield scheduler
+
+    def get_asset_transactions(self, start_date, end_date, account=None):
+        """Retorna QuerySet de AssetTransaction que compõem o valor deste item (regras asset_transaction)."""
+        if self.calculation_type == 'SUBTOTAL':
+            seen_pks = set()
+            children = self.get_children()
+            children_codes = set()
+            if children.exists():
+                for child in children:
+                    if not child.accumulates_in or child.accumulates_in == self:
+                        children_codes.add(child.code)
+                        for at in child.get_asset_transactions(start_date, end_date, account):
+                            if at.pk not in seen_pks:
+                                seen_pks.add(at.pk)
+            accumulated_items = CashFlowItem.objects.filter(
+                accumulates_in=self
+            ).exclude(code__in=children_codes)
+            for item in accumulated_items:
+                for at in item.get_asset_transactions(start_date, end_date, account):
+                    if at.pk not in seen_pks:
+                        seen_pks.add(at.pk)
+            return AssetTransaction.objects.filter(pk__in=seen_pks).order_by('-date', '-created_at')
+
+        if self.calculation_type == 'RULES':
+            # Avoid union() for SQLite; collect pks from each part then return a single queryset.
+            seen_pks = set()
+            for rule in self.calculation_rules:
+                if rule.get('type') != 'asset_transaction' or not rule.get('operation_type'):
+                    continue
+                part = self._get_asset_transactions_by_rule(rule, start_date, end_date, account)
+                for pk in part.values_list('pk', flat=True):
+                    seen_pks.add(pk)
+            if not seen_pks:
+                return AssetTransaction.objects.none()
+            return AssetTransaction.objects.filter(pk__in=seen_pks).order_by('-date', '-created_at')
+
+        return AssetTransaction.objects.none()
+
+    def _get_asset_transactions_by_rule(self, rule, start_date, end_date, account):
+        """Retorna QuerySet de AssetTransaction para uma regra asset_transaction."""
+        filters = {
+            'date__gte': start_date,
+            'date__lte': end_date,
+            'operation_type': rule.get('operation_type'),
+        }
+        if rule.get('asset_type'):
+            filters['asset__asset_type'] = rule['asset_type']
+        if account:
+            filters['account'] = account
+        return AssetTransaction.objects.filter(**filters).order_by()

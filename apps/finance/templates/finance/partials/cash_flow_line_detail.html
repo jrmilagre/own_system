@@ -1,0 +1,36 @@
+{% if error %}
+<div class="alert alert-warning mb-0">
+    <i class="fas fa-exclamation-triangle me-2"></i>{{ error }}
+</div>
+{% else %}
+<style>
+.cash-flow-line-detail { font-size: 0.7rem; }
+.cash-flow-line-detail .table { font-size: inherit; }
+.cash-flow-line-detail h6 { font-size: 0.85rem; }
+.cash-flow-line-detail .table td, .cash-flow-line-detail .table th { padding: 0.2rem 0.35rem; vertical-align: middle; }
+.cash-flow-line-detail .edit-link { font-size: 0.7rem; padding: 0.1rem 0.4rem; text-decoration: none; color: var(--bs-primary); }
+.cash-flow-line-detail .edit-link:hover { text-decoration: underline; }
+</style>
+<div class="cash-flow-line-detail">
+    <p class="text-muted small mb-3">
+        <strong>{{ item.code }}</strong> {{ item.description }}
+        {% if start_date and end_date %}
+        — Período: {{ start_date|date:"d/m/Y" }} a {{ end_date|date:"d/m/Y" }}
+        {% if selected_account %} — Conta: {{ selected_account.name }}{% endif %}
+        {% endif %}
+    </p>
+
+    {% if grouped_data %}
+    {# Vista agrupada por item filho (quando a linha clicada é SUBTOTAL) #}
+    {% for group in grouped_data %}
+    <div class="mb-3 border-start border-2 border-secondary ps-2">
+        <p class="mb-1 fw-bold"><span class="font-monospace">{{ group.item.code }}</span> {{ group.item.description }}</p>
+        {% include "finance/partials/cash_flow_line_detail_sections.html" with transactions=group.transactions_subcategory transactions_transfer=group.transactions_transfer budgets=group.budgets scheduler_occurrences=group.scheduler_occurrences asset_transactions=group.asset_transactions has_transfer_rules=group.has_transfer_rules has_asset_rules=group.has_asset_rules include_future=include_future return_url=return_url %}
+    </div>
+    {% endfor %}
+    {% else %}
+    {# Vista plana (item com regras) #}
+    {% include "finance/partials/cash_flow_line_detail_sections.html" with transactions=transactions_subcategory transactions_transfer=transactions_transfer budgets=budgets scheduler_occurrences=scheduler_occurrences asset_transactions=asset_transactions has_transfer_rules=has_transfer_rules has_asset_rules=has_asset_rules include_future=include_future return_url=return_url %}
+    {% endif %}
+</div>
+{% endif %}
