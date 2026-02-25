@@ -1500,7 +1500,11 @@ def scheduler_register(request, pk):
                     'notes': form.cleaned_data.get('notes', ''),
                 }
                 transaction = scheduler.register(transaction_data=transaction_data)
-                messages.success(request, f'Transação registrada com sucesso! Próxima data: {scheduler.due_date}')
+                if scheduler.should_be_deleted_after_register():
+                    scheduler.delete()
+                    messages.success(request, 'Transação registrada com sucesso! Agendamento removido (parcela única/última parcela).')
+                else:
+                    messages.success(request, f'Transação registrada com sucesso! Próxima data: {scheduler.due_date}')
                 return redirect('finance:scheduler_list')
             except ValueError as e:
                 messages.error(request, str(e))
@@ -3000,7 +3004,14 @@ def multiple_scheduler_register(request, group_id):
                 first_scheduler.refresh_from_db()
                 next_due_date = first_scheduler.due_date
                 
-                messages.success(request, f'Transações registradas com sucesso! {len(created_transactions)} transação(ões) criada(s). Próxima data: {next_due_date}')
+                if first_scheduler.should_be_deleted_after_register():
+                    Scheduler.objects.filter(
+                        multiple_scheduler_group_id=group_id,
+                        is_multiple=True
+                    ).delete()
+                    messages.success(request, f'Transações registradas com sucesso! {len(created_transactions)} transação(ões) criada(s). Agendamento múltiplo removido (parcela única/última parcela).')
+                else:
+                    messages.success(request, f'Transações registradas com sucesso! {len(created_transactions)} transação(ões) criada(s). Próxima data: {next_due_date}')
                 return redirect('finance:scheduler_list')
             except ValueError as e:
                 messages.error(request, str(e))

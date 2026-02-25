@@ -782,6 +782,21 @@ class Scheduler(BaseModel):
         self.status = 'COMPLETED'
         self.save()
 
+    def should_be_deleted_after_register(self):
+        """
+        Retorna True se, após registrar uma transação, não há mais ocorrências
+        (parcela única ou última parcela). Nesse caso o agendamento pode ser excluído.
+        """
+        if self.recurrence_type == 'NONE':
+            return True
+        if (
+            self.termination_type == 'INSTALLMENTS'
+            and self.remaining_installments is not None
+            and self.remaining_installments <= 0
+        ):
+            return True
+        return False
+
     def get_installment_info(self):
         """
         Retorna informações sobre as parcelas no formato {'current': int, 'total': int} ou None.
