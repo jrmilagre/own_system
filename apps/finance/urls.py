@@ -42,6 +42,7 @@ urlpatterns = [
     path('schedulers/<int:pk>/update/', views.scheduler_update, name='scheduler_update'),
     path('schedulers/<int:pk>/delete/', views.scheduler_delete, name='scheduler_delete'),
     path('schedulers/<int:pk>/register/', views.scheduler_register, name='scheduler_register'),
+    path('schedulers/bulk-register/', views.scheduler_bulk_register, name='scheduler_bulk_register'),
     # Multiple Scheduler URLs (usando group_id em vez de pk)
     path('schedulers/multiple/', views.multiple_scheduler_list, name='multiple_scheduler_list'),
     path('schedulers/multiple/create/', views.multiple_scheduler_create, name='multiple_scheduler_create'),

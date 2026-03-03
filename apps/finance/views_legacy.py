@@ -1266,6 +1266,8 @@ def scheduler_list(request):
                 total_value -= scheduler.value
         group_data['total_value'] = total_value
         group_data['count'] = len(group_data['schedulers'])
+        group_data['has_active'] = any(s.status == 'ACTIVE' for s in group_data['schedulers'])
+        group_data['group_id_str'] = str(group_data['group_id'])
         # Ordenar por ID para manter ordem
         group_data['schedulers'].sort(key=lambda x: x.id)
     
@@ -1566,6 +1568,90 @@ def scheduler_register(request, pk):
             'categories': categories,
             'budget_info': budget_info
         })
+
+
+def scheduler_bulk_register(request):
+    """Registrar em lote agendamentos simples e múltiplos selecionados (POST apenas)."""
+    if request.method != 'POST':
+        return redirect('finance:scheduler_list')
+    ids_raw = request.POST.getlist('ids')
+    group_ids_raw = request.POST.getlist('group_ids')
+    registered_simple = 0
+    registered_groups = 0
+    errors = []
+    next_url = request.POST.get('next', '')
+    redirect_url = reverse('finance:scheduler_list')
+    if next_url:
+        redirect_url = redirect_url + '?' + next_url
+    with db_transaction.atomic():
+        for pk in ids_raw:
+            try:
+                pk = int(pk)
+            except (ValueError, TypeError):
+                continue
+            scheduler = Scheduler.objects.filter(pk=pk).first()
+            if not scheduler:
+                continue
+            if scheduler.is_multiple:
+                continue
+            if scheduler.status != 'ACTIVE':
+                errors.append(f'Agendamento {pk} não está ativo.')
+                continue
+            if not scheduler.is_valid():
+                errors.append(f'Agendamento {pk} não está válido para registro.')
+                continue
+            try:
+                scheduler.refresh_from_db()
+                scheduler.sync_registered_count()
+                scheduler.register(transaction_data=None)
+                if scheduler.should_be_deleted_after_register():
+                    scheduler.delete()
+                registered_simple += 1
+            except ValueError as e:
+                errors.append(f'Agendamento {pk}: {e}')
+        for gid_str in group_ids_raw:
+            gid_str = (gid_str or '').strip()
+            if not gid_str:
+                continue
+            try:
+                group_id = uuid.UUID(gid_str)
+            except (ValueError, TypeError):
+                errors.append(f'Grupo inválido: {gid_str}')
+                continue
+            schedulers = Scheduler.objects.filter(
+                multiple_scheduler_group_id=group_id,
+                is_multiple=True
+            ).order_by('id')
+            if not schedulers.exists():
+                errors.append(f'Agendamento múltiplo {group_id} não encontrado.')
+                continue
+            if not any(s.status == 'ACTIVE' for s in schedulers):
+                errors.append(f'Agendamento múltiplo {group_id} não possui itens ativos.')
+                continue
+            try:
+                items_data = _build_default_items_data_for_group(schedulers)
+                count = _register_multiple_scheduler_group(group_id, items_data)
+                if count > 0:
+                    registered_groups += 1
+                else:
+                    errors.append(f'Agendamento múltiplo {group_id}: nenhum item válido para registro.')
+            except ValueError as e:
+                errors.append(f'Agendamento múltiplo {group_id}: {e}')
+            except Exception as e:
+                logger.exception('Erro ao registrar agendamento múltiplo %s', group_id)
+                errors.append(f'Agendamento múltiplo {group_id}: {e}')
+    if registered_simple or registered_groups:
+        parts = []
+        if registered_simple:
+            parts.append(f'{registered_simple} agendamento(s) simples')
+        if registered_groups:
+            parts.append(f'{registered_groups} agendamento(s) múltiplo(s)')
+        messages.success(request, f'Registrados com sucesso: {", ".join(parts)}.')
+    for err in errors:
+        messages.warning(request, err)
+    if not registered_simple and not registered_groups and not errors and (ids_raw or group_ids_raw):
+        messages.info(request, 'Nenhum agendamento elegível para registro.')
+    return redirect(redirect_url)
 
 
 def _calculate_multiple_budget_info(items_data, transaction_date):
@@ -2753,6 +2839,194 @@ def multiple_scheduler_delete(request, group_id):
         'group_id': group_id,
         'first_scheduler': first_scheduler
     })
+
+
+def _build_grouped_schedulers(schedulers):
+    """Retorna lista de schedulers na ordem: normais primeiro, depois transferências (apenas débito)."""
+    grouped = []
+    processed_credit_ids = set()
+    for s in schedulers:
+        if not s.is_transfer:
+            grouped.append(s)
+    for s in schedulers:
+        if s.is_transfer and s.destination_account:
+            grouped.append(s)
+            credit_s = schedulers.filter(
+                is_transfer=True,
+                destination_account=None,
+                account=s.destination_account,
+                value=s.value,
+                due_date=s.due_date
+            ).exclude(id__in=processed_credit_ids).first()
+            if credit_s:
+                processed_credit_ids.add(credit_s.id)
+    return grouped
+
+
+def _build_default_items_data_for_group(schedulers):
+    """Monta lista de dicts (mesma ordem que grouped_schedulers) com dados padrão dos schedulers."""
+    items_data = []
+    for s in schedulers:
+        if not s.is_transfer:
+            items_data.append({
+                'subcategory': s.subcategory,
+                'value': s.value,
+                'transaction_type': s.transaction_type,
+                'is_transfer': False,
+                'destination_account': None,
+                'notes': s.notes or '',
+            })
+    for s in schedulers:
+        if s.is_transfer and s.destination_account:
+            items_data.append({
+                'subcategory': None,
+                'value': s.value,
+                'transaction_type': None,
+                'is_transfer': True,
+                'destination_account': s.destination_account,
+                'notes': s.notes or '',
+            })
+    return items_data
+
+
+def _register_multiple_scheduler_group(group_id, items_data):
+    """
+    Registra transações do agendamento múltiplo com os dados fornecidos.
+    items_data: lista de dicts (subcategory, value, transaction_type, is_transfer, destination_account, notes).
+    Retorna o número de transações criadas.
+    Levanta ValueError em caso de validação (ex.: conta destino = origem em transferência).
+    """
+    schedulers = Scheduler.objects.filter(
+        multiple_scheduler_group_id=group_id,
+        is_multiple=True
+    ).order_by('id')
+    if not schedulers.exists():
+        raise ValueError('Agendamento múltiplo não encontrado.')
+    first_scheduler = schedulers.first()
+    grouped_schedulers = _build_grouped_schedulers(schedulers)
+    if len(items_data) != len(grouped_schedulers):
+        raise ValueError(
+            f'Número de itens ({len(items_data)}) não corresponde ao número de schedulers ({len(grouped_schedulers)}).'
+        )
+    for i, item_data in enumerate(items_data):
+        if item_data.get('is_transfer'):
+            dest = item_data.get('destination_account')
+            if dest and dest == first_scheduler.account:
+                raise ValueError('A conta de destino deve ser diferente da conta de origem para transferências.')
+    for i, item_data in enumerate(items_data):
+        if i >= len(grouped_schedulers):
+            break
+        s = grouped_schedulers[i]
+        if s.is_transfer and s.destination_account:
+            dest = item_data.get('destination_account', s.destination_account)
+            if dest == s.account:
+                raise ValueError('A conta de destino deve ser diferente da conta de origem para transferências.')
+    created_count = 0
+    updated_schedulers = set()
+    multiple_transaction_group_id = uuid.uuid4()
+    with db_transaction.atomic():
+        for i, item_data in enumerate(items_data):
+            if i >= len(grouped_schedulers):
+                break
+            scheduler = grouped_schedulers[i]
+            scheduler.refresh_from_db()
+            if not scheduler.is_valid():
+                continue
+            if scheduler.is_transfer and scheduler.destination_account:
+                destination_account = item_data.get('destination_account', scheduler.destination_account)
+                source_account = scheduler.account
+                value = item_data.get('value', scheduler.value)
+                transfer_notes = item_data.get('notes', scheduler.notes) or ''
+                transfer_group_id = uuid.uuid4()
+                Transaction.objects.create(
+                    account=source_account,
+                    beneficiary=scheduler.beneficiary,
+                    subcategory=None,
+                    transaction_type=TRANSACTION_TYPE_DB,
+                    value=value,
+                    due_date=scheduler.due_date,
+                    transaction_date=scheduler.due_date,
+                    purchase_date=scheduler.purchase_date,
+                    notes=transfer_notes,
+                    is_transfer=True,
+                    transfer_group_id=transfer_group_id,
+                    is_multiple=True,
+                    multiple_transaction_group_id=multiple_transaction_group_id,
+                )
+                Transaction.objects.create(
+                    account=destination_account,
+                    beneficiary=scheduler.beneficiary,
+                    subcategory=None,
+                    transaction_type=TRANSACTION_TYPE_CR,
+                    value=value,
+                    due_date=scheduler.due_date,
+                    transaction_date=scheduler.due_date,
+                    purchase_date=scheduler.purchase_date,
+                    notes=transfer_notes,
+                    is_transfer=True,
+                    transfer_group_id=transfer_group_id,
+                    is_multiple=True,
+                    multiple_transaction_group_id=multiple_transaction_group_id,
+                )
+                created_count += 2
+                updated_schedulers.add(scheduler.id)
+                credit_scheduler = schedulers.filter(
+                    is_transfer=True,
+                    destination_account=None,
+                    account=scheduler.destination_account,
+                    value=scheduler.value,
+                    due_date=scheduler.due_date
+                ).first()
+                if credit_scheduler:
+                    updated_schedulers.add(credit_scheduler.id)
+            else:
+                transaction_data = {
+                    'subcategory': item_data.get('subcategory', scheduler.subcategory),
+                    'transaction_type': item_data.get('transaction_type', scheduler.transaction_type),
+                    'value': item_data.get('value', scheduler.value),
+                    'notes': item_data.get('notes', ''),
+                    'is_multiple': True,
+                    'multiple_transaction_group_id': multiple_transaction_group_id,
+                    'is_transfer': False,
+                    'transfer_group_id': None,
+                }
+                scheduler.register(transaction_data=transaction_data)
+                created_count += 1
+                updated_schedulers.add(scheduler.id)
+        all_group_schedulers = Scheduler.objects.filter(
+            multiple_scheduler_group_id=group_id,
+            is_multiple=True
+        )
+        for group_scheduler in all_group_schedulers:
+            if group_scheduler.id not in updated_schedulers:
+                continue
+            if group_scheduler.is_transfer:
+                group_scheduler.refresh_from_db()
+                group_scheduler.registered_count += 1
+                if group_scheduler.termination_type == 'INSTALLMENTS' and group_scheduler.remaining_installments is not None:
+                    group_scheduler.remaining_installments -= 1
+                next_due = group_scheduler.calculate_next_due_date_from_current()
+                if next_due:
+                    group_scheduler.due_date = next_due
+                if group_scheduler.termination_type == 'INSTALLMENTS':
+                    if group_scheduler.remaining_installments is not None and group_scheduler.remaining_installments <= 0:
+                        group_scheduler.mark_completed()
+                    else:
+                        group_scheduler.save()
+                elif group_scheduler.termination_type == 'FINAL_DATE':
+                    if group_scheduler.final_date and next_due and next_due > group_scheduler.final_date:
+                        group_scheduler.mark_completed()
+                    else:
+                        group_scheduler.save()
+                else:
+                    group_scheduler.save()
+        first_scheduler.refresh_from_db()
+        if first_scheduler.should_be_deleted_after_register():
+            Scheduler.objects.filter(
+                multiple_scheduler_group_id=group_id,
+                is_multiple=True
+            ).delete()
+    return created_count
 
 
 def multiple_scheduler_register(request, group_id):

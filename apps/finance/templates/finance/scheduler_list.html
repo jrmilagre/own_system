@@ -195,10 +195,22 @@
 {% if scheduler_rows %}
 <div class="card shadow-sm border-0">
     <div class="card-body p-0">
+        <div class="d-flex justify-content-between align-items-center px-3 py-2 border-bottom bg-light">
+            <button type="submit" form="bulk-register-form" class="btn btn-success btn-sm">
+                <i class="fas fa-check-double me-1"></i>Registrar tudo
+            </button>
+            <button type="button" class="btn btn-link btn-sm p-0" id="bulk-select-toggle" title="Selecionar todos da página">
+                <i class="fas fa-check-double me-1"></i><span id="bulk-select-toggle-text">Selecionar todos</span>
+            </button>
+        </div>
+        <form id="bulk-register-form" method="post" action="{% url 'finance:scheduler_bulk_register' %}">
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{{ request.GET.urlencode }}">
         <div class="table-responsive">
             <table class="table table-hover table-sm mb-0" style="font-size: 0.9rem;">
                 <thead class="table-light">
                     <tr>
+                        <th class="text-center" style="width: 44px;">Selecionar</th>
                         <th class="text-center" style="width: 50px;" title="Tipo de Agendamento"></th>
                         <th class="ps-3 sortable-header" data-sort="beneficiary" style="cursor: pointer;">
                             Agendamento
@@ -281,6 +293,11 @@
                             {% for scheduler in row.group.schedulers %}
                             <tr class="table-row-compact">
                                 <td class="text-center py-1">
+                                    {% if forloop.first and row.group.has_active %}
+                                    <input type="checkbox" name="group_ids" value="{{ row.group.group_id_str }}" class="form-check-input bulk-register-cb" aria-label="Registrar agendamento múltiplo">
+                                    {% endif %}
+                                </td>
+                                <td class="text-center py-1">
                                     <span style="font-size: 1.2rem;" title="Agendamento Múltiplo">📦</span>
                                 </td>
                                 <td class="ps-3 py-1">
@@ -349,6 +366,11 @@
                         {% else %}
                             {% with scheduler=row.scheduler %}
                             <tr class="table-row-compact">
+                                <td class="text-center py-1">
+                                    {% if scheduler.status == 'ACTIVE' %}
+                                    <input type="checkbox" name="ids" value="{{ scheduler.pk }}" class="form-check-input bulk-register-cb" aria-label="Registrar agendamento">
+                                    {% endif %}
+                                </td>
                                 <td class="text-center py-1">
                                     <span style="font-size: 1.2rem;" title="Agendamento Simples">📅</span>
                                 </td>
@@ -420,13 +442,14 @@
                 </tbody>
                 <tfoot class="table-light">
                     <tr>
-                        <td colspan="4" class="text-end fw-bold">Subtotal (página):</td>
+                        <td colspan="5" class="text-end fw-bold">Subtotal (página):</td>
                         <td class="text-end fw-bold">R$ {{ subtotal|floatformat:2 }}</td>
-                        <td colspan="5"></td>
+                        <td colspan="6"></td>
                     </tr>
                 </tfoot>
             </table>
         </div>
+        </form>
     </div>
 </div>
 {% else %}
@@ -581,6 +604,18 @@ document.addEventListener('DOMContentLoaded', function() {
             if (e.target.type === 'checkbox' || e.target.closest('.form-check')) e.stopPropagation();
         });
     });
+
+    // Bulk register: selecionar/desmarcar todos os checkboxes de agendamentos
+    const bulkSelectToggle = document.getElementById('bulk-select-toggle');
+    const bulkCheckboxes = document.querySelectorAll('.bulk-register-cb');
+    const bulkSelectToggleText = document.getElementById('bulk-select-toggle-text');
+    if (bulkSelectToggle && bulkSelectToggleText) {
+        bulkSelectToggle.addEventListener('click', function() {
+            const allChecked = bulkCheckboxes.length && Array.from(bulkCheckboxes).every(cb => cb.checked);
+            bulkCheckboxes.forEach(cb => { cb.checked = !allChecked; });
+            bulkSelectToggleText.textContent = allChecked ? 'Selecionar todos' : 'Desmarcar todos';
+        });
+    }
 });
 </script>
 {% endblock %}
