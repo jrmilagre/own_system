@@ -1,380 +1,264 @@
 {% extends "finance/base.html" %}
 
-{% block section_name %}Contas{% endblock %}
-
 {% block title %}Contas{% endblock %}
+{% block section_name %}Gerenciador de contas{% endblock %}
 
-{% block content %}
-<style>
-    .dropdown-menu {
-        padding: 0.5rem 0 !important;
-    }
-    .dropdown-menu .form-check {
-        padding-left: 2rem !important;
-        padding-right: 1rem !important;
-        margin-bottom: 0;
-    }
-    .dropdown-menu .form-check-input {
-        position: absolute;
-        left: 0.75rem;
-        margin-top: 0.25rem;
-        margin-left: 0;
-    }
-    .dropdown-menu li {
-        overflow: visible !important;
-        position: relative;
-    }
-    .dropdown-menu .form-check-label {
-        padding-left: 0.5rem;
-    }
-</style>
-
-<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-    <h1 class="h4 mb-0">Contas</h1>
-    <div class="d-flex gap-2">
-        <a href="{% url 'finance:account_create' %}" class="btn btn-primary btn-sm">
-            <i class="fas fa-plus"></i> Nova conta...
-        </a>
+{% block sidebar %}
+<div class="flex items-center gap-2">
+    <div class="w-6 h-6 bg-teal-600 border border-white flex items-center justify-center text-white flex-shrink-0">
+        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
+        </svg>
     </div>
+    <h2 class="text-xl font-bold">Contas</h2>
 </div>
-
-<!-- Formulário de Filtros -->
-<div class="card shadow-sm border-0 mb-3">
-    <div class="card-header bg-light">
-        <h5 class="mb-0"><i class="fas fa-filter me-2"></i>Filtros</h5>
-    </div>
-    <div class="card-body">
-        <form method="get" action="{% url 'finance:account_list' %}" class="row g-3">
-            <div class="col-md-6 col-lg-3">
-                <label class="form-label">{{ filter_form.account_type.label }}</label>
-                <div class="dropdown">
-                    <button class="btn btn-outline-secondary form-control dropdown-toggle text-start" type="button" id="accountTypeDropdown" data-bs-toggle="dropdown" aria-expanded="false">
-                        <span class="selected-count" data-field="account_type">Selecione...</span>
-                    </button>
-                    <ul class="dropdown-menu" aria-labelledby="accountTypeDropdown" style="max-height: 300px; overflow-y: auto; overflow-x: visible; min-width: 100%;">
-                        <li>
-                            <div class="px-3 py-2 border-bottom">
-                                <button type="button" class="btn btn-sm btn-link p-0 select-all-btn" data-field="account_type">
-                                    <i class="fas fa-check-double me-1"></i>Selecionar todas
-                                </button>
-                            </div>
-                        </li>
-                        {% for checkbox in filter_form.account_type %}
-                        <li>
-                            <div class="form-check py-1">
-                                {{ checkbox.tag }}
-                                <label class="form-check-label w-100" for="{{ checkbox.id_for_label }}">
-                                    {{ checkbox.choice_label }}
-                                </label>
-                            </div>
-                        </li>
-                        {% endfor %}
-                    </ul>
-                </div>
-            </div>
-            <div class="col-md-6 col-lg-3">
-                <label for="{{ filter_form.name_search.id_for_label }}" class="form-label">{{ filter_form.name_search.label }}</label>
-                {{ filter_form.name_search }}
-            </div>
-            <div class="col-12">
-                <button type="submit" class="btn btn-primary btn-sm">
-                    <i class="fas fa-search me-1"></i>Filtrar
-                </button>
-                <a href="{% url 'finance:account_list' %}" class="btn btn-secondary btn-sm">
-                    <i class="fas fa-times me-1"></i>Limpar
-                </a>
-            </div>
-        </form>
-    </div>
-</div>
-
-{% if accounts %}
-<div class="card shadow-sm border-0">
-    <div class="card-body p-0">
-        <div class="table-responsive">
-            <table class="table table-hover table-sm mb-0" style="font-size: 0.9rem;">
-                <thead class="table-light">
-                    <tr>
-                        <th class="ps-3 sortable-header" data-sort="account_type" style="cursor: pointer;">
-                            Tipo
-                            {% if 'account_type' in sort_info %}
-                                <span class="badge bg-primary ms-1">{{ sort_info.account_type.priority }}</span>
-                                <i class="fas fa-sort-{% if sort_info.account_type.order == 'asc' %}up{% else %}down{% endif %} ms-1"></i>
-                            {% else %}
-                                <i class="fas fa-sort ms-1" style="opacity: 0.3;"></i>
-                            {% endif %}
-                        </th>
-                        <th class="sortable-header" data-sort="name" style="cursor: pointer;">
-                            Conta
-                            {% if 'name' in sort_info %}
-                                <span class="badge bg-primary ms-1">{{ sort_info.name.priority }}</span>
-                                <i class="fas fa-sort-{% if sort_info.name.order == 'asc' %}up{% else %}down{% endif %} ms-1"></i>
-                            {% else %}
-                                <i class="fas fa-sort ms-1" style="opacity: 0.3;"></i>
-                            {% endif %}
-                        </th>
-                        <th class="text-end pe-3 sortable-header" data-sort="balance" style="cursor: pointer;">
-                            Saldo
-                            {% if 'balance' in sort_info %}
-                                <span class="badge bg-primary ms-1">{{ sort_info.balance.priority }}</span>
-                                <i class="fas fa-sort-{% if sort_info.balance.order == 'asc' %}up{% else %}down{% endif %} ms-1"></i>
-                            {% else %}
-                                <i class="fas fa-sort ms-1" style="opacity: 0.3;"></i>
-                            {% endif %}
-                        </th>
-                        <th class="text-center pe-3">Ações</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for account in accounts %}
-                    <tr class="table-row-compact">
-                        <td class="ps-3 py-1" style="cursor: pointer;" onclick="window.location.href='{% url 'finance:account_statement_report' %}?account={{ account.pk }}'">
-                            <div class="d-flex align-items-center gap-2">
-                                {% if account.account_type == 'CASH' %}
-                                    <span style="font-size: 1.1rem;">💰</span>
-                                {% elif account.account_type == 'BANK' %}
-                                    <span style="font-size: 1.1rem;">🏦</span>
-                                {% elif account.account_type == 'INVEST' %}
-                                    <span style="font-size: 1.1rem;">📈</span>
-                                {% elif account.account_type == 'CREDCARD' %}
-                                    <span style="font-size: 1.1rem;">💳</span>
-                                {% else %}
-                                    <i class="fas fa-wallet text-muted"></i>
-                                {% endif %}
-                                <span>{{ account.get_account_type_display }}</span>
-                            </div>
-                        </td>
-                        <td class="py-1" style="cursor: pointer;" onclick="window.location.href='{% url 'finance:account_statement_report' %}?account={{ account.pk }}'">
-                            <span style="font-weight: 500;">{{ account.name }}</span>
-                        </td>
-                        <td class="text-end pe-3 py-1" style="cursor: pointer;" onclick="window.location.href='{% url 'finance:account_statement_report' %}?account={{ account.pk }}'">
-                            <span class="fw-bold {% if account.get_balance_from_annotation < 0 %}text-danger{% else %}text-dark{% endif %}" style="font-size: 0.95rem;">
-                                R$ {{ account.get_balance_from_annotation|floatformat:2 }}
-                            </span>
-                        </td>
-                        <td class="pe-3 py-1">
-                            <div class="btn-group btn-group-sm compact-buttons" role="group">
-                                <a href="{% url 'finance:account_statement_report' %}?account={{ account.pk }}" class="btn btn-sm btn-outline-info compact-btn" title="Ver histórico" onclick="event.stopPropagation();">
-                                    <i class="fas fa-chart-line"></i>
-                                </a>
-                                <a href="{% url 'finance:account_statement_report' %}?account={{ account.pk }}" class="btn btn-sm btn-outline-secondary compact-btn" title="Visualizar" onclick="event.stopPropagation();">
-                                    <i class="fas fa-eye"></i>
-                                </a>
-                                <a href="{% url 'finance:account_update' account.pk %}" class="btn btn-sm btn-outline-primary compact-btn" title="Editar" onclick="event.stopPropagation();">
-                                    <i class="fas fa-edit"></i>
-                                </a>
-                                <a href="{% url 'finance:account_delete' account.pk %}" class="btn btn-sm btn-outline-danger compact-btn" title="Excluir" onclick="event.stopPropagation();">
-                                    <i class="fas fa-trash"></i>
-                                </a>
-                            </div>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-                <tfoot class="bg-light">
-                    <tr>
-                        <td class="ps-3 fw-bold" colspan="2">Total</td>
-                        <td class="text-end pe-3">
-                            <span class="fw-bold {% if total_balance < 0 %}text-danger{% else %}text-dark{% endif %}" style="font-size: 1rem;">
-                                R$ {{ total_balance|floatformat:2 }}
-                            </span>
-                        </td>
-                        <td class="pe-3"></td>
-                    </tr>
-                </tfoot>
-            </table>
-        </div>
-    </div>
-</div>
-{% else %}
-<div class="alert alert-info">
-    <i class="fas fa-info-circle me-2"></i>Nenhuma conta cadastrada.
-</div>
-{% endif %}
-
-<!-- Paginação -->
-{% if page_obj.has_other_pages %}
-<nav aria-label="Paginação de contas" class="mt-3">
-    <ul class="pagination justify-content-center">
-        {% if page_obj.has_previous %}
-            <li class="page-item">
-                <a class="page-link" href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page=1">
-                    <i class="fas fa-angle-double-left"></i> Primeira
-                </a>
-            </li>
-            <li class="page-item">
-                <a class="page-link" href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ page_obj.previous_page_number }}">
-                    <i class="fas fa-angle-left"></i> Anterior
-                </a>
-            </li>
-        {% endif %}
-        
-        <li class="page-item active">
-            <span class="page-link">
-                Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}
-            </span>
-        </li>
-        
-        {% if page_obj.has_next %}
-            <li class="page-item">
-                <a class="page-link" href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ page_obj.next_page_number }}">
-                    Próxima <i class="fas fa-angle-right"></i>
-                </a>
-            </li>
-            <li class="page-item">
-                <a class="page-link" href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ page_obj.paginator.num_pages }}">
-                    Última <i class="fas fa-angle-double-right"></i>
-                </a>
-            </li>
-        {% endif %}
-    </ul>
-    <div class="text-center text-muted small">
-        Mostrando {{ page_obj.start_index }} a {{ page_obj.end_index }} de {{ page_obj.paginator.count }} conta(s)
-    </div>
-</nav>
-{% endif %}
-
+<p class="text-xs leading-relaxed text-gray-400">
+    Em 'Gerenciador de contas', você pode visualizar um resumo de todas as suas contas, criar uma nova conta e excluir ou modificar uma conta existente.
+</p>
 {% endblock %}
 
 {% block extra_css %}
 <style>
-.table-row-compact td {
-    padding-top: 0.25rem !important;
-    padding-bottom: 0.25rem !important;
-    vertical-align: middle;
-}
+    /* Dropdown compat without Bootstrap CSS */
+    .dropdown-menu { max-height: 300px; overflow-y: auto; }
+    .form-check { padding: 4px 8px 4px 28px; position: relative; cursor: pointer; font-size: 0.75rem; }
+    .form-check:hover { background: #f0f0f0; }
+    .form-check-input { position: absolute; left: 8px; top: 6px; }
+    .form-check-label { cursor: pointer; }
 
-.compact-buttons .compact-btn {
-    padding: 0.15rem 0.4rem !important;
-    font-size: 0.75rem;
-    line-height: 1.2;
-}
-
-.compact-buttons .compact-btn i {
-    font-size: 0.75rem;
-}
-
-.sortable-header {
-    user-select: none;
-    transition: background-color 0.2s;
-}
-
-.sortable-header:hover {
-    background-color: rgba(0, 0, 0, 0.05) !important;
-}
+    /* Table styles */
+    #accounts-table tbody tr:nth-child(even) { background-color: #f9f9f9; }
+    #accounts-table tbody tr:hover { background-color: #e8f0fe !important; }
+    .sortable-header { user-select: none; cursor: pointer; }
+    .sortable-header:hover { background-color: #d8d8d8; }
 </style>
+{% endblock %}
+
+{% block content %}
+
+<!-- Filter Toolbar -->
+<div class="bg-blue-50 border-b border-gray-300 px-3 py-1.5 flex-shrink-0">
+    <form method="get" action="{% url 'finance:account_list' %}" class="flex items-center gap-3 text-xs flex-wrap">
+        <span class="text-gray-600 font-medium">Filtrar:</span>
+
+        <div class="dropdown">
+            <button class="ms-button dropdown-toggle" type="button" id="accountTypeDropdown"
+                    data-bs-toggle="dropdown" aria-expanded="false">
+                <span class="selected-count" data-field="account_type">Tipo</span>
+            </button>
+            <ul class="dropdown-menu" aria-labelledby="accountTypeDropdown">
+                <li>
+                    <div class="px-3 py-1 border-b border-gray-200">
+                        <button type="button" class="text-blue-600 text-xs hover:underline select-all-btn" data-field="account_type">
+                            Selecionar todas
+                        </button>
+                    </div>
+                </li>
+                {% for checkbox in filter_form.account_type %}
+                <li>
+                    <div class="form-check">
+                        {{ checkbox.tag }}
+                        <label class="form-check-label" for="{{ checkbox.id_for_label }}">{{ checkbox.choice_label }}</label>
+                    </div>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+
+        <div class="flex items-center gap-1">
+            <label for="{{ filter_form.name_search.id_for_label }}" class="text-gray-600">Nome:</label>
+            <input type="text" name="name_search" id="{{ filter_form.name_search.id_for_label }}"
+                   value="{{ request.GET.name_search|default:'' }}"
+                   class="border border-gray-400 px-1.5 py-0.5 text-xs w-36" placeholder="Buscar...">
+        </div>
+
+        <button type="submit" class="ms-button">Filtrar</button>
+        <a href="{% url 'finance:account_list' %}" class="ms-button">Limpar</a>
+    </form>
+</div>
+
+<!-- Table View Label -->
+<div class="bg-blue-50 border-b border-gray-300 px-4 py-0.5 flex items-center text-xs text-blue-800 flex-shrink-0">
+    <span class="mr-1">▼</span>
+    <span class="mr-2">|</span>
+    <span>Visualizar: Saldos das contas</span>
+</div>
+
+<!-- Account Table -->
+<div class="flex-grow overflow-auto">
+    {% if accounts %}
+    <table class="w-full text-left border-collapse text-xs" id="accounts-table">
+        <thead>
+            <tr style="background-color: #e2e2e2; border-bottom: 1px solid #999;">
+                <th class="px-2 py-1 font-normal border-r border-gray-400 sortable-header" data-sort="name" style="width: 40%;">
+                    Nome
+                    {% if 'name' in sort_info %}
+                        <span class="inline-block bg-blue-600 text-white rounded px-1 ml-1" style="font-size:10px">{{ sort_info.name.priority }}</span>
+                        {% if sort_info.name.order == 'asc' %}▲{% else %}▼{% endif %}
+                    {% else %}<span class="opacity-30">⇅</span>{% endif %}
+                </th>
+                <th class="px-2 py-1 font-normal border-r border-gray-400 sortable-header" data-sort="account_type">
+                    Tipo
+                    {% if 'account_type' in sort_info %}
+                        <span class="inline-block bg-blue-600 text-white rounded px-1 ml-1" style="font-size:10px">{{ sort_info.account_type.priority }}</span>
+                        {% if sort_info.account_type.order == 'asc' %}▲{% else %}▼{% endif %}
+                    {% else %}<span class="opacity-30">⇅</span>{% endif %}
+                </th>
+                <th class="px-2 py-1 font-normal border-r border-gray-400 text-right sortable-header" data-sort="balance">
+                    Saldo
+                    {% if 'balance' in sort_info %}
+                        <span class="inline-block bg-blue-600 text-white rounded px-1 ml-1" style="font-size:10px">{{ sort_info.balance.priority }}</span>
+                        {% if sort_info.balance.order == 'asc' %}▲{% else %}▼{% endif %}
+                    {% else %}<span class="opacity-30">⇅</span>{% endif %}
+                </th>
+                <th class="px-2 py-1 font-normal text-center" style="width: 90px;">Ações</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for account in accounts %}
+            <tr class="border-b border-gray-100"
+                style="cursor: pointer;"
+                onclick="window.location.href='{% url 'finance:account_movements' account.pk %}'">
+                <td class="px-2 py-0.5 border-r border-gray-200">
+                    <div class="flex items-center gap-1.5">
+                        {% if account.account_type == 'CASH' %}<span>💰</span>
+                        {% elif account.account_type == 'BANK' %}<span>🏦</span>
+                        {% elif account.account_type == 'INVEST' %}<span>📈</span>
+                        {% elif account.account_type == 'CREDCARD' %}<span>💳</span>
+                        {% else %}<span>🏧</span>{% endif %}
+                        <span>{{ account.name }}</span>
+                    </div>
+                </td>
+                <td class="px-2 py-0.5 border-r border-gray-200">{{ account.get_account_type_display }}</td>
+                <td class="px-2 py-0.5 border-r border-gray-200 text-right {% if account.get_balance_from_annotation < 0 %}text-red-700{% endif %}">
+                    R$ {{ account.get_balance_from_annotation|floatformat:2 }}
+                </td>
+                <td class="px-2 py-0.5 text-center" onclick="event.stopPropagation();">
+                    <div class="flex items-center justify-center gap-1">
+                        <a href="{% url 'finance:account_movements' account.pk %}"
+                           class="ms-button px-1.5" title="Movimentação">📊</a>
+                        <a href="{% url 'finance:account_update' account.pk %}"
+                           class="ms-button px-1.5" title="Editar">✏️</a>
+                        <a href="{% url 'finance:account_delete' account.pk %}"
+                           class="ms-button px-1.5" title="Excluir">🗑️</a>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="text-sm text-gray-500 p-4">Nenhuma conta cadastrada.</p>
+    {% endif %}
+</div>
+
+<!-- Total Bar -->
+<div class="bg-gray-200 py-1 px-4 border-t border-gray-400 flex justify-end text-xs font-semibold flex-shrink-0">
+    <div class="flex gap-12">
+        <span>Saldos:</span>
+        <span class="{% if total_balance < 0 %}text-red-700{% endif %}">R$ {{ total_balance|floatformat:2 }}</span>
+    </div>
+</div>
+
+<!-- Footer: Actions + Pagination -->
+<div class="flex-shrink-0 border-t-2 border-white flex items-center gap-2 p-2 flex-wrap" style="background-color: #d4d0c8;">
+    {% if accounts %}
+    <a href="{% url 'finance:account_movements' accounts.0.pk %}" class="ms-button">Ir para conta</a>
+    {% endif %}
+    <button class="ms-button" disabled>Ir para instituição financeira</button>
+    <a href="{% url 'finance:account_create' %}" class="ms-button">Nova conta...</a>
+
+    {% if page_obj.has_other_pages %}
+    <div class="ml-auto flex items-center gap-1 text-xs text-gray-600">
+        {% if page_obj.has_previous %}
+        <a href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ page_obj.previous_page_number }}"
+           class="ms-button">◁ Anterior</a>
+        {% endif %}
+        <span class="px-2">Pág. {{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
+        {% if page_obj.has_next %}
+        <a href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ page_obj.next_page_number }}"
+           class="ms-button">Próxima ▷</a>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+
 {% endblock %}
 
 {% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Ordenação de colunas - suporte para múltiplas colunas
+    // Ordenação multi-coluna
     document.querySelectorAll('.sortable-header').forEach(header => {
         header.addEventListener('click', function(event) {
             const sortField = this.getAttribute('data-sort');
             const urlParams = new URLSearchParams(window.location.search);
-            
-            // Obter ordenações atuais
             const currentSorts = urlParams.get('sort') ? urlParams.get('sort').split(',') : [];
             const currentOrders = urlParams.get('order') ? urlParams.get('order').split(',') : [];
-            
-            let newSorts = [];
-            let newOrders = [];
-            
+            let newSorts = [], newOrders = [];
+
             if (event.shiftKey && currentSorts.length > 0) {
-                // Shift+Click: adicionar como ordenação secundária
                 newSorts = [...currentSorts];
                 newOrders = [...currentOrders];
-                
-                // Verificar se o campo já está na lista
                 const existingIndex = newSorts.indexOf(sortField);
                 if (existingIndex >= 0) {
-                    // Se já existe, alterna a ordem
                     newOrders[existingIndex] = newOrders[existingIndex] === 'asc' ? 'desc' : 'asc';
                 } else {
-                    // Adicionar novo campo
                     newSorts.push(sortField);
                     newOrders.push('desc');
                 }
             } else {
-                // Clique normal: definir como ordenação principal
                 const existingIndex = currentSorts.indexOf(sortField);
                 if (existingIndex === 0 && currentSorts.length > 0) {
-                    // Se é a primeira coluna, alterna a ordem
                     newSorts = [sortField];
                     newOrders = [currentOrders[0] === 'asc' ? 'desc' : 'asc'];
                 } else {
-                    // Nova ordenação principal
                     newSorts = [sortField];
                     newOrders = ['desc'];
                 }
             }
-            
-            // Atualizar parâmetros
+
             urlParams.set('sort', newSorts.join(','));
             urlParams.set('order', newOrders.join(','));
             urlParams.set('page', '1');
-            
-            // Redirecionar
             window.location.href = '?' + urlParams.toString();
         });
     });
 
-    // Função para atualizar contagem de selecionados
+    // Contagem de selecionados no dropdown
     function updateSelectedCount(fieldName) {
         const checkboxes = document.querySelectorAll(`input[name="${fieldName}"]`);
         const checked = Array.from(checkboxes).filter(cb => cb.checked);
         const countSpan = document.querySelector(`.selected-count[data-field="${fieldName}"]`);
-        
-        if (checked.length === 0) {
-            countSpan.textContent = 'Selecione...';
-        } else if (checked.length === checkboxes.length) {
-            countSpan.textContent = `Todos (${checked.length})`;
-        } else {
-            countSpan.textContent = `${checked.length} selecionado(s)`;
-        }
+        if (!countSpan) return;
+        if (checked.length === 0) countSpan.textContent = 'Tipo';
+        else if (checked.length === checkboxes.length) countSpan.textContent = `Todos (${checked.length})`;
+        else countSpan.textContent = `${checked.length} selecionado(s)`;
     }
 
-    // Atualizar contagem inicial para cada campo
     ['account_type'].forEach(fieldName => {
         updateSelectedCount(fieldName);
-        
-        // Atualizar contagem quando checkboxes mudarem
         document.querySelectorAll(`input[name="${fieldName}"]`).forEach(checkbox => {
-            checkbox.addEventListener('change', function() {
-                updateSelectedCount(fieldName);
-            });
+            checkbox.addEventListener('change', () => updateSelectedCount(fieldName));
         });
     });
 
-    // Controle dos botões "Selecionar todas"
+    // Botão "Selecionar todas"
     document.querySelectorAll('.select-all-btn').forEach(button => {
         button.addEventListener('click', function(e) {
             e.preventDefault();
             e.stopPropagation();
-            
             const fieldName = this.getAttribute('data-field');
             const checkboxes = document.querySelectorAll(`input[name="${fieldName}"]`);
             const allChecked = Array.from(checkboxes).every(cb => cb.checked);
-            
-            // Alternar: se todos estão marcados, desmarcar todos; caso contrário, marcar todos
-            checkboxes.forEach(checkbox => {
-                checkbox.checked = !allChecked;
-            });
-            
-            // Atualizar texto do botão
-            if (!allChecked) {
-                this.innerHTML = '<i class="fas fa-times me-1"></i>Desmarcar todas';
-            } else {
-                this.innerHTML = '<i class="fas fa-check-double me-1"></i>Selecionar todas';
-            }
-            
-            // Atualizar contagem
+            checkboxes.forEach(cb => cb.checked = !allChecked);
+            this.textContent = !allChecked ? 'Desmarcar todas' : 'Selecionar todas';
             updateSelectedCount(fieldName);
         });
     });
 
-    // Prevenir que o dropdown feche ao clicar nos checkboxes
+    // Evitar fechar dropdown ao clicar em checkboxes
     document.querySelectorAll('.dropdown-menu').forEach(menu => {
         menu.addEventListener('click', function(e) {
             if (e.target.type === 'checkbox' || e.target.closest('.form-check')) {

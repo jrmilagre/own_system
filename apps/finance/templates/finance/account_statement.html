@@ -1,165 +1,215 @@
-{% extends "finance/base.html" %}
+{% extends "finance/account_detail_base.html" %}
 
-{% block section_name %}{% if account %}{{ account.name }} ({{ account.get_account_type_display }}){% else %}Extrato de Contas{% endif %}{% endblock %}
-
-{% block sidebar %}
-<h6 class="px-3 text-uppercase text-muted" style="font-size: 0.7rem; color: #888 !important;">Relatórios</h6>
-<ul class="nav flex-column">
-    <li class="nav-item">
-        <a href="{% url 'finance:reports_index' %}">
-            <i class="fas fa-home me-2"></i>Início
-        </a>
-    </li>
-</ul>
-
-<h6 class="px-3 text-uppercase text-muted mt-3" style="font-size: 0.7rem; color: #888 !important;">Contas</h6>
-<ul class="nav flex-column">
-    <li class="nav-item">
-        <a href="{% url 'finance:account_statement' %}" class="active">
-            <i class="fas fa-file-alt me-2"></i>Extrato
-        </a>
-    </li>
-</ul>
-
-<h6 class="px-3 text-uppercase text-muted mt-3" style="font-size: 0.7rem; color: #888 !important;">Ativos</h6>
-<ul class="nav flex-column">
-    <li class="nav-item">
-        <a href="{% url 'finance:asset_stock_position_report' %}">
-            <i class="fas fa-chart-bar me-2"></i>Posição de Estoque
-        </a>
-    </li>
-</ul>
-
-<h6 class="px-3 text-uppercase text-muted mt-3" style="font-size: 0.7rem; color: #888 !important;">Fluxo de Caixa</h6>
-<ul class="nav flex-column">
-    <li class="nav-item">
-        <a href="{% url 'finance:cash_flow_report' %}">
-            <i class="fas fa-chart-line me-2"></i>Relatório de Fluxo de Caixa
-        </a>
-    </li>
-</ul>
+{% block extra_css %}
+<style>
+    .chart-area { background-color: #f5f3e4; }
+</style>
 {% endblock %}
 
 {% block content %}
+
 {% if account %}
-<div class="card shadow-sm border-0 mb-3">
-    <div class="card-body p-0">
-        <div class="table-responsive" style="max-height: 800px; overflow-y: auto;">
-            <table class="table table-sm table-striped mb-0" style="font-size: 0.85rem;">
-                <thead class="bg-dark text-white sticky-top">
-                    <tr>
-                        <th class="ps-2">Núm.</th>
-                        <th>Data</th>
-                        <th>Favorecido</th>
-                        <th>Beneficiário/Transferência</th>
-                        <th>Subcategoria</th>
-                        <th class="text-end">Pagamento</th>
-                        <th class="text-end">Depósito</th>
-                        <th class="pe-2 text-end">Saldo</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for trans in transactions %}
-                    <tr>
-                        <td class="ps-2 text-muted">{{ trans.id|default:"---" }}</td>
-                        <td>{{ trans.date|date:"d-m-Y" }}</td>
-                        <td>{{ trans.description }}</td>
-                        <td>
-                            {% if trans.transaction %}
-                                {% if trans.transaction.is_transfer %}
-                                    {% with transfer_pair=trans.transaction.get_transfer_pair %}
-                                        {% if transfer_pair %}
-                                            {% if trans.transaction.transaction_type == 'DB' %}
-                                                De: {{ trans.transaction.account }} para: {{ transfer_pair.account }}
-                                            {% else %}
-                                                De: {{ transfer_pair.account }} para: {{ trans.transaction.account }}
-                                            {% endif %}
-                                        {% else %}
-                                            <span class="text-muted">Transferência</span>
-                                        {% endif %}
-                                    {% endwith %}
-                                {% else %}
-                                    {% if trans.transaction.beneficiary %}
-                                        {{ trans.transaction.beneficiary }}
-                                    {% else %}
-                                        <span class="text-muted">-</span>
-                                    {% endif %}
-                                {% endif %}
-                            {% else %}
-                                <span class="text-muted">-</span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            {% if trans.transaction %}
-                                {% if trans.transaction.subcategory %}
-                                    {{ trans.transaction.subcategory }}
-                                {% else %}
-                                    <span class="text-muted">-</span>
-                                {% endif %}
-                            {% else %}
-                                <span class="text-muted">-</span>
-                            {% endif %}
-                        </td>
-                        <td class="text-end text-danger">
-                            {% if trans.amount < 0 %}
-                                <span class="fw-bold" style="font-size: 0.95rem;">R$ {{ trans.amount|floatformat:2 }}</span>
-                            {% endif %}
-                        </td>
-                        <td class="text-end text-success">
-                            {% if trans.amount > 0 %}
-                                <span class="fw-bold" style="font-size: 0.95rem;">R$ {{ trans.amount|floatformat:2 }}</span>
-                            {% endif %}
-                        </td>
-                        <td class="pe-2 text-end fw-bold {% if trans.running_balance < 0 %}text-danger{% else %}text-dark{% endif %}" style="font-size: 0.95rem;">R$ {{ trans.running_balance|floatformat:2 }}</td>
-                    </tr>
-                    {% empty %}
-                    <tr>
-                        <td colspan="8" class="text-center text-muted py-3">Nenhuma movimentação encontrada no período.</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-                <tfoot class="table-light sticky-bottom">
-                    <tr>
-                        <td colspan="5" class="ps-2 fw-bold">Subtotal:</td>
-                        <td class="text-end fw-bold text-danger">R$ {{ total_payments|floatformat:2 }}</td>
-                        <td class="text-end fw-bold text-success">R$ {{ total_deposits|floatformat:2 }}</td>
-                        <td class="pe-2 text-end fw-bold {% if final_balance and final_balance < 0 %}text-danger{% else %}text-dark{% endif %}">R$ {% if final_balance %}{{ final_balance|floatformat:2 }}{% else %}0.00{% endif %}</td>
-                    </tr>
-                </tfoot>
-            </table>
-        </div>
+
+<!-- Date Filter Bar -->
+<div class="border-b border-gray-300 px-3 py-1 flex items-center gap-3 text-xs flex-shrink-0" style="background-color: #2c5166; color: white;">
+    <span>Movimentação do saldo</span>
+    <div class="ml-auto flex items-center gap-2">
+        <label class="flex items-center gap-1">
+            <span>De:</span>
+            <input type="date" id="start_date_input" value="{{ start_date|date:'Y-m-d' }}"
+                   class="text-black px-1 border border-gray-400 text-xs" style="height:20px;">
+        </label>
+        <label class="flex items-center gap-1">
+            <span>Até:</span>
+            <input type="date" id="end_date_input" value="{{ end_date|date:'Y-m-d' }}"
+                   class="text-black px-1 border border-gray-400 text-xs" style="height:20px;">
+        </label>
+        <button onclick="applyDateFilter()" class="ms-button text-black px-2" style="height:20px; font-size:11px;">Filtrar</button>
     </div>
 </div>
+
+<!-- Chart Container -->
+<div class="flex-grow chart-area overflow-hidden p-4 flex flex-col">
+    <div class="flex-grow flex relative">
+        <!-- Y-axis labels -->
+        <div id="y-axis" class="flex flex-col justify-between text-right pr-2 text-xs text-gray-600 flex-shrink-0" style="width: 80px; padding-top: 10px; padding-bottom: 10px;">
+        </div>
+        <!-- Canvas area -->
+        <div class="flex-grow relative border-l border-b border-gray-400" id="chart-container">
+            <canvas id="balanceChart" class="absolute inset-0 w-full h-full"></canvas>
+            <!-- X-axis labels -->
+            <div id="x-axis" class="absolute left-0 right-0 flex justify-between text-xs text-gray-500" style="bottom: -20px; font-size: 9px;"></div>
+        </div>
+    </div>
+    <!-- Totals -->
+    <div class="flex gap-8 mt-6 text-xs">
+        <div class="flex gap-2">
+            <span class="text-gray-600">Período:</span>
+            <span>{{ start_date|date:"d/m/Y" }} até {{ end_date|date:"d/m/Y" }}</span>
+        </div>
+        <div class="flex gap-2">
+            <span class="text-gray-600">Pagamentos:</span>
+            <span class="text-red-700">R$ {{ total_payments|floatformat:2 }}</span>
+        </div>
+        <div class="flex gap-2">
+            <span class="text-gray-600">Depósitos:</span>
+            <span class="text-green-700">R$ {{ total_deposits|floatformat:2 }}</span>
+        </div>
+        {% if final_balance is not None %}
+        <div class="flex gap-2">
+            <span class="text-gray-600">Saldo final:</span>
+            <span class="font-semibold {% if final_balance < 0 %}text-red-700{% endif %}">R$ {{ final_balance|floatformat:2 }}</span>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
 {% else %}
-<!-- Formulário para selecionar conta quando não há account_id na URL -->
-<div class="card shadow-sm border-0">
-    <div class="card-body">
-        <h5 class="card-title">Extrato de Contas</h5>
-        <form method="get" action="{% url 'finance:account_statement' %}">
-            <div class="row g-3 mb-3">
-                <div class="col-md-4">
-                    <label for="account" class="form-label">Conta:</label>
-                    <select name="account" id="account" class="form-select" required>
-                        <option value="">Selecione uma conta</option>
-                        {% for acc in accounts %}
-                        <option value="{{ acc.pk }}">{{ acc.name }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="col-md-3">
-                    <label for="start_date" class="form-label">Data Inicial:</label>
-                    <input type="date" name="start_date" id="start_date" class="form-control" value="{{ start_date|date:'Y-m-d' }}" required>
-                </div>
-                <div class="col-md-3">
-                    <label for="end_date" class="form-label">Data Final:</label>
-                    <input type="date" name="end_date" id="end_date" class="form-control" value="{{ end_date|date:'Y-m-d' }}" required>
-                </div>
-                <div class="col-md-2 d-flex align-items-end">
-                    <button type="submit" class="btn btn-primary w-100">Gerar Extrato</button>
-                </div>
-            </div>
-        </form>
+<!-- No account selected (URL accessed without account_id) -->
+<div class="flex-grow flex items-center justify-center chart-area">
+    <div class="text-center text-gray-500 text-sm">
+        <p>Selecione uma conta na lista para ver o histórico.</p>
+        <a href="{% url 'finance:account_list' %}" class="ms-button mt-3 inline-block">Ir para lista de contas</a>
     </div>
 </div>
 {% endif %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+{% if account and transactions %}
+// Build chart data from transactions
+const rawData = [
+    {% for trans in transactions %}
+    { date: "{{ trans.date|date:'d/m' }}", fullDate: "{{ trans.date|date:'Y-m-d' }}", balance: {{ trans.running_balance }} },
+    {% endfor %}
+];
+
+{% if previous_balance is not None %}
+const prevBalance = {{ previous_balance }};
+{% else %}
+const prevBalance = rawData.length > 0 ? rawData[0].balance : 0;
+{% endif %}
+
+function drawChart() {
+    const canvas = document.getElementById('balanceChart');
+    const container = document.getElementById('chart-container');
+    canvas.width = container.clientWidth;
+    canvas.height = container.clientHeight;
+    const ctx = canvas.getContext('2d');
+    const w = canvas.width;
+    const h = canvas.height;
+
+    if (rawData.length === 0) {
+        ctx.fillStyle = '#999';
+        ctx.font = '12px Segoe UI';
+        ctx.textAlign = 'center';
+        ctx.fillText('Nenhum dado no período', w / 2, h / 2);
+        return;
+    }
+
+    // Min/max for scale
+    const allBalances = [prevBalance, ...rawData.map(d => d.balance)];
+    let minB = Math.min(...allBalances);
+    let maxB = Math.max(...allBalances);
+    const padding = (maxB - minB) * 0.1 || 1000;
+    minB -= padding;
+    maxB += padding;
+
+    // Y-axis labels
+    const ySteps = 8;
+    const yLabels = document.getElementById('y-axis');
+    yLabels.innerHTML = '';
+    for (let i = ySteps; i >= 0; i--) {
+        const val = minB + (maxB - minB) * (i / ySteps);
+        const div = document.createElement('div');
+        div.textContent = 'R$ ' + val.toLocaleString('pt-BR', { maximumFractionDigits: 0 });
+        yLabels.appendChild(div);
+    }
+
+    // X-axis labels (show up to 12 evenly)
+    const xLabels = document.getElementById('x-axis');
+    xLabels.innerHTML = '';
+    const maxXLabels = Math.min(rawData.length, 12);
+    const step = Math.max(1, Math.floor(rawData.length / maxXLabels));
+    rawData.forEach((d, i) => {
+        if (i % step === 0 || i === rawData.length - 1) {
+            const span = document.createElement('span');
+            span.textContent = d.date;
+            xLabels.appendChild(span);
+        }
+    });
+
+    // Helpers
+    const toX = (i) => (i / (rawData.length)) * w;
+    const toY = (b) => h - ((b - minB) / (maxB - minB)) * h;
+
+    // Grid lines
+    ctx.strokeStyle = '#dcdcdc';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= ySteps; i++) {
+        const y = (i / ySteps) * h;
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(w, y);
+        ctx.stroke();
+    }
+
+    // Zero line
+    if (minB < 0 && maxB > 0) {
+        const zeroY = toY(0);
+        ctx.strokeStyle = '#aaa';
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        ctx.moveTo(0, zeroY);
+        ctx.lineTo(w, zeroY);
+        ctx.stroke();
+        ctx.setLineDash([]);
+    }
+
+    // Step chart line
+    ctx.strokeStyle = '#e69138';
+    ctx.lineWidth = 2;
+    ctx.lineJoin = 'miter';
+    ctx.beginPath();
+
+    // Start from previous balance
+    ctx.moveTo(0, toY(prevBalance));
+
+    rawData.forEach((d, i) => {
+        const x = toX(i + 1);
+        const y = toY(d.balance);
+        // Horizontal line to this x, then vertical to new balance (step effect)
+        ctx.lineTo(x, ctx.currentY !== undefined ? ctx.currentY : toY(prevBalance));
+        ctx.lineTo(x, y);
+        ctx.currentY = y;
+    });
+
+    ctx.stroke();
+
+    // Value callouts for first and last point
+    ctx.fillStyle = '#333';
+    ctx.font = 'bold 10px Segoe UI';
+    if (rawData.length > 0) {
+        const lastD = rawData[rawData.length - 1];
+        const lastX = toX(rawData.length);
+        const lastY = toY(lastD.balance);
+        ctx.fillText('R$ ' + lastD.balance.toLocaleString('pt-BR', { minimumFractionDigits: 2 }), Math.max(0, lastX - 70), Math.max(14, lastY - 6));
+    }
+}
+
+window.addEventListener('resize', drawChart);
+document.addEventListener('DOMContentLoaded', drawChart);
+{% endif %}
+
+function applyDateFilter() {
+    const start = document.getElementById('start_date_input').value;
+    const end = document.getElementById('end_date_input').value;
+    const params = new URLSearchParams(window.location.search);
+    params.set('start_date', start);
+    params.set('end_date', end);
+    window.location.href = '?' + params.toString();
+}
+</script>
 {% endblock %}

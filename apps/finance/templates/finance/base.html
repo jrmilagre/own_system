@@ -1,361 +1,115 @@
 {% load static %}
 <!DOCTYPE html>
-<html lang="pt-br">
+<html lang="pt-br" class="h-full">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Own System - Money{% endblock %}</title>
     <link rel="icon" type="image/x-icon" href="{% static 'favicon.ico' %}">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
     <style>
-        :root {
-            --money-dark: #003366; /* Azul clássico do Money */
-            --money-sidebar: #f0f0f0;
-            --money-accent: #0078d7;
-            --money-header-bg: #e1e1e1;
-        }
-
-        * {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-            font-variant-numeric: tabular-nums;
-        }
-        
-        body { 
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; 
-            font-variant-numeric: tabular-nums;
-            background-color: #fff; 
-        }
-
-        /* Cabeçalho Global (Abas superiores) */
-        .global-nav {
-            background-color: var(--money-header-bg);
-            border-bottom: 2px solid #ccc;
-            padding: 0 1rem;
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            z-index: 1030;
-            width: 100%;
-        }
-        .nav-link-money {
-            color: #333;
-            font-size: 0.85rem;
-            padding: 8px 12px;
-            border-bottom: 3px solid transparent;
-            text-decoration: none;
-            display: inline-block;
-            transition: all 0.2s ease;
-        }
-        .nav-link-money:hover {
-            border-bottom: 3px solid var(--money-accent);
-            color: var(--money-accent);
-        }
-        
-        /* Cores pastel únicas para cada item do menu quando ativo */
-        .nav-link-money.active.nav-conteudo {
-            background-color: #E3F2FD; /* Azul pastel */
-            border-bottom: 3px solid #2196F3;
-            color: #1976D2;
-        }
-        .nav-link-money.active.nav-contas {
-            background-color: #E8F5E9; /* Verde pastel */
-            border-bottom: 3px solid #4CAF50;
-            color: #388E3C;
-        }
-        .nav-link-money.active.nav-beneficiarios {
-            background-color: #FCE4EC; /* Rosa pastel */
-            border-bottom: 3px solid #E91E63;
-            color: #C2185B;
-        }
-        .nav-link-money.active.nav-categorias {
-            background-color: #FFF9C4; /* Amarelo pastel */
-            border-bottom: 3px solid #FBC02D;
-            color: #F57F17;
-        }
-        .nav-link-money.active.nav-transacoes {
-            background-color: #FFE0B2; /* Laranja pastel */
-            border-bottom: 3px solid #FF9800;
-            color: #F57C00;
-        }
-        .nav-link-money.active.nav-agendamentos {
-            background-color: #F3E5F5; /* Roxo pastel */
-            border-bottom: 3px solid #9C27B0;
-            color: #7B1FA2;
-        }
-        .nav-link-money.active.nav-investimentos {
-            background-color: #E0F7FA; /* Ciano pastel */
-            border-bottom: 3px solid #00BCD4;
-            color: #0097A7;
-        }
-        .nav-link-money.active.nav-orcamento {
-            background-color: #C8E6C9; /* Verde claro pastel */
-            border-bottom: 3px solid #66BB6A;
-            color: #388E3C;
-        }
-        .nav-link-money.active.nav-fluxo-caixa {
-            background-color: #BBDEFB; /* Azul claro pastel */
-            border-bottom: 3px solid #42A5F5;
-            color: #1976D2;
-        }
-        .nav-link-money.active.nav-relatorios {
-            background-color: #FFCDD2; /* Vermelho pastel */
-            border-bottom: 3px solid #EF5350;
-            color: #C62828;
-        }
-        .nav-link-money.active.nav-conectividade {
-            background-color: #D1C4E9; /* Roxo claro pastel */
-            border-bottom: 3px solid #9575CD;
-            color: #5E35B1;
-        }
-        
-        /* Botão Voltar na navegação global */
-        .global-nav button.btn {
-            margin-left: auto;
-            font-size: 0.85rem;
-            padding: 6px 12px;
-            border-radius: 4px;
-            transition: all 0.2s ease;
-        }
-        .global-nav button.btn:hover {
-            background-color: #6c757d;
-            border-color: #6c757d;
-            color: #fff;
-        }
-        /* Ajuste para mobile - botão menor */
-        @media (max-width: 576px) {
-            .global-nav button.btn {
-                padding: 4px 8px;
-                font-size: 0.75rem;
-            }
-        }
-        
-        /* Cores do section-header baseadas no menu ativo */
-        .section-header.nav-conteudo {
-            background-color: #2196F3;
-        }
-        .section-header.nav-contas {
-            background-color: #4CAF50;
-        }
-        .section-header.nav-beneficiarios {
-            background-color: #E91E63;
-        }
-        .section-header.nav-categorias {
-            background-color: #FBC02D;
-        }
-        .section-header.nav-transacoes {
-            background-color: #FF9800;
-        }
-        .section-header.nav-agendamentos {
-            background-color: #9C27B0;
-        }
-        .section-header.nav-investimentos {
-            background-color: #00BCD4;
-        }
-        .section-header.nav-orcamento {
-            background-color: #66BB6A;
-        }
-        .section-header.nav-fluxo-caixa {
-            background-color: #42A5F5;
-        }
-        .section-header.nav-relatorios {
-            background-color: #EF5350;
-        }
-        .section-header.nav-conectividade {
-            background-color: #9575CD;
-        }
-
-        /* Título da Seção (Ex: Gerenciador de Contas) */
-        .section-header {
-            background-color: #005a9e; /* Azul escuro inspirado nas imagens */
-            color: white;
-            padding: 5px 15px;
-            font-weight: 600;
-            position: fixed;
-            top: 41px; /* Altura do global-nav (aproximadamente 41px) */
-            left: 0;
-            right: 0;
-            z-index: 1029;
-            width: 100%;
-        }
-        
-        /* Ajustar body e container para compensar os headers fixos */
         body {
-            padding-top: 81px; /* Altura do global-nav (41px) + section-header (40px) */
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f0f0f0;
+            color: #000;
+            overflow: hidden;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
         }
-        
-        /* Ajustar o container-fluid para não ficar escondido atrás dos headers */
-        .container-fluid {
-            margin-top: 0;
-        }
-
-        /* Barra Lateral Contextual */
-        .sidebar {
-            background-color: #000; /* Preto lateral das capturas */
-            color: #ddd;
-            min-height: calc(100vh - 80px);
-            font-size: 0.85rem;
-            position: sticky;
-            top: 80px; /* Altura dos headers fixos */
-            max-height: calc(100vh - 80px);
-            overflow-y: auto;
-        }
-        .sidebar a {
-            color: #bbb;
+        .ms-button {
+            background: linear-gradient(to bottom, #ffffff 0%, #e0e0e0 100%);
+            border: 1px solid #707070;
+            box-shadow: inset 1px 1px 0px #fff;
+            cursor: pointer;
+            font-size: 0.75rem;
+            padding: 2px 10px;
             text-decoration: none;
-            display: block;
-            padding: 8px 15px;
-            border-bottom: 1px solid #333;
+            color: #000;
+            display: inline-block;
         }
-        .sidebar a:hover { 
-            background-color: #222; 
-            color: #fff; 
-        }
-        .sidebar a.active {
-            background-color: #333;
-            color: #fff;
-            font-weight: 500;
-            border-left: 3px solid #00BCD4;
-        }
-        
-        /* Mensagens do Django */
-        .messages {
+        .ms-button:hover { background: linear-gradient(to bottom, #f0f0f0 0%, #d0d0d0 100%); color: #000; }
+        .ms-button:active { background: #d0d0d0; box-shadow: inset 1px 1px 2px #888; }
+        .ms-button:disabled, .ms-button[disabled] { color: #aaa; cursor: default; background: linear-gradient(to bottom, #f5f5f5 0%, #e8e8e8 100%); }
+        /* Bootstrap dropdown compat */
+        .dropdown { position: relative; }
+        .dropdown-menu {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            z-index: 1050;
+            background: #fff;
+            border: 1px solid #999;
+            min-width: 100%;
+            display: none;
             list-style: none;
-            padding: 0;
-            margin: 15px 0;
+            padding: 4px 0;
+            margin: 0;
+            box-shadow: 2px 2px 6px rgba(0,0,0,0.25);
         }
-        .messages li {
-            padding: 10px 15px;
-            margin-bottom: 10px;
-            border-radius: 4px;
-        }
-        .messages .success {
-            background-color: #d4edda;
-            color: #155724;
-            border: 1px solid #c3e6cb;
-        }
-        .messages .error {
-            background-color: #f8d7da;
-            color: #721c24;
-            border: 1px solid #f5c6cb;
-        }
-        .messages .warning {
-            background-color: #fff3cd;
-            color: #856404;
-            border: 1px solid #ffeaa7;
-        }
-        .messages .info {
-            background-color: #d1ecf1;
-            color: #0c5460;
-            border: 1px solid #bee5eb;
-        }
-        
-        /* Melhorias de legibilidade para tabelas */
-        
-        /* Ajuste para Mobile */
-        @media (max-width: 768px) {
-            .sidebar { min-height: auto; }
-        }
+        .dropdown-menu.show { display: block; }
+        .dropdown-toggle::after { content: ' ▾'; font-size: 0.65em; }
     </style>
     {% block extra_css %}{% endblock %}
 </head>
 <body>
 
+    <!-- Window Title Bar -->
+    <header class="bg-white border-b border-gray-300 flex items-center justify-between px-2 py-0.5 text-xs select-none flex-shrink-0">
+        <div class="flex items-center gap-2">
+            <div class="w-4 h-4 bg-blue-600 flex items-center justify-center text-white font-bold" style="font-size:10px">M</div>
+            <span>Money - Own System</span>
+        </div>
+        <div class="flex">
+            <button class="hover:bg-gray-200 px-2 py-0.5">—</button>
+            <button class="hover:bg-gray-200 px-2 py-0.5">❐</button>
+            <button class="hover:bg-red-500 hover:text-white px-2 py-0.5">✕</button>
+        </div>
+    </header>
+
+    <!-- Top Menu -->
+    <nav class="bg-[#f0f0f0] border-b border-gray-300 text-xs px-2 py-0.5 flex gap-3 select-none flex-shrink-0">
+        <a class="hover:bg-blue-100 px-1 text-black no-underline" href="#">Arquivo</a>
+        <a class="hover:bg-blue-100 px-1 text-black no-underline" href="#">Editar</a>
+        <a class="hover:bg-blue-100 px-1 text-black no-underline" href="#">Ir</a>
+        <a class="hover:bg-blue-100 px-1 text-black no-underline" href="#">Favoritos</a>
+        <a class="hover:bg-blue-100 px-1 text-black no-underline" href="#">Ferramentas</a>
+        <a class="hover:bg-blue-100 px-1 text-black no-underline" href="#">Ajuda</a>
+    </nav>
+
+    <!-- Navigation Tabs -->
     {% include 'finance/partials/global_nav.html' %}
 
-    <div class="section-header d-flex justify-content-between align-items-center" id="sectionHeader">
-        <span>{% block section_name %}Contas{% endblock %}</span>
-        <button class="btn btn-sm btn-outline-light d-md-none" type="button" data-bs-toggle="collapse" data-bs-target="#sidebarMenu">
-            <i class="fas fa-bars"></i>
-        </button>
-    </div>
-
-    <div class="container-fluid">
-        <div class="row">
-            <nav id="sidebarMenu" class="col-md-3 col-lg-2 d-md-block sidebar collapse">
-                <div class="position-sticky pt-3">
-                    {% block sidebar %}
-                    <h6 class="px-3 text-uppercase text-muted" style="font-size: 0.7rem; color: #888 !important;">Ações Rápidas</h6>
-                    <ul class="nav flex-column">
-                        <li class="nav-item">
-                            <a href="{% url 'finance:account_create' %}"><i class="fas fa-plus-circle me-2"></i> Nova conta...</a>
-                        </li>
-                        <li class="nav-item">
-                            <a href="{% url 'finance:transaction_create' %}"><i class="fas fa-exchange-alt me-2"></i> Nova transação</a>
-                        </li>
-                        <li class="nav-item">
-                            <a href="{% url 'finance:asset_transaction_create' %}"><i class="fas fa-briefcase me-2"></i> Nova transação de ativo</a>
-                        </li>
-                        <li class="nav-item">
-                            <a href="{% url 'finance:scheduler_create' %}"><i class="fas fa-calendar-plus me-2"></i> Novo agendamento</a>
-                        </li>
-                        <li class="nav-item">
-                            <a href="{% url 'finance:account_list' %}"><i class="fas fa-chart-line me-2"></i> Histórico</a>
-                        </li>
-                    </ul>
-                    {% endblock %}
+    <!-- Main Area -->
+    <main class="flex flex-grow overflow-hidden">
+        <aside class="w-48 bg-black text-white p-4 flex flex-col gap-4 flex-shrink-0">
+            {% block sidebar %}
+            <p class="text-xs text-gray-400 leading-tight">Selecione uma seção no menu acima.</p>
+            {% endblock %}
+        </aside>
+        <section class="flex-grow flex flex-col bg-white overflow-hidden">
+            <div class="px-4 py-2 flex items-center justify-between flex-shrink-0" style="background: linear-gradient(to bottom, #4a4a4a 0%, #000000 100%);">
+                <h1 class="text-base font-semibold text-white">{% block section_name %}{% endblock %}</h1>
+                {% block section_header_actions %}{% endblock %}
+            </div>
+            {% if messages %}
+            <div class="px-3 pt-2 flex-shrink-0">
+                {% for message in messages %}
+                <div class="text-xs px-3 py-1.5 mb-1 border
+                    {% if 'success' in message.tags %}bg-green-50 border-green-400 text-green-800
+                    {% elif 'error' in message.tags %}bg-red-50 border-red-400 text-red-800
+                    {% elif 'warning' in message.tags %}bg-yellow-50 border-yellow-400 text-yellow-800
+                    {% else %}bg-blue-50 border-blue-400 text-blue-800{% endif %}">
+                    {{ message }}
                 </div>
-            </nav>
-
-            <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4 py-3">
-                {% if messages %}
-                    <ul class="messages">
-                        {% for message in messages %}
-                            <li class="{{ message.tags }}">{{ message }}</li>
-                        {% endfor %}
-                    </ul>
-                {% endif %}
-                {% block content %}
-                {% endblock %}
-            </main>
-        </div>
-    </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+            {% block content %}{% endblock %}
+        </section>
+    </main>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script>
-        // Aplicar cor do menu ativo ao section-header
-        document.addEventListener('DOMContentLoaded', function() {
-            const activeNav = document.querySelector('.nav-link-money.active');
-            const sectionHeader = document.getElementById('sectionHeader');
-            
-            if (activeNav && sectionHeader) {
-                // Remover todas as classes de cor do section-header
-                sectionHeader.classList.remove(
-                    'nav-conteudo', 'nav-contas', 'nav-beneficiarios', 'nav-categorias',
-                    'nav-transacoes', 'nav-agendamentos', 'nav-investimentos',
-                    'nav-orcamento', 'nav-fluxo-caixa', 'nav-relatorios', 'nav-conectividade'
-                );
-                
-                // Adicionar a classe correspondente ao menu ativo
-                if (activeNav.classList.contains('nav-conteudo')) {
-                    sectionHeader.classList.add('nav-conteudo');
-                } else if (activeNav.classList.contains('nav-contas')) {
-                    sectionHeader.classList.add('nav-contas');
-                } else if (activeNav.classList.contains('nav-beneficiarios')) {
-                    sectionHeader.classList.add('nav-beneficiarios');
-                } else if (activeNav.classList.contains('nav-categorias')) {
-                    sectionHeader.classList.add('nav-categorias');
-                } else if (activeNav.classList.contains('nav-transacoes')) {
-                    sectionHeader.classList.add('nav-transacoes');
-                } else if (activeNav.classList.contains('nav-agendamentos')) {
-                    sectionHeader.classList.add('nav-agendamentos');
-                } else if (activeNav.classList.contains('nav-investimentos')) {
-                    sectionHeader.classList.add('nav-investimentos');
-                } else if (activeNav.classList.contains('nav-orcamento')) {
-                    sectionHeader.classList.add('nav-orcamento');
-                } else if (activeNav.classList.contains('nav-fluxo-caixa')) {
-                    sectionHeader.classList.add('nav-fluxo-caixa');
-                } else if (activeNav.classList.contains('nav-relatorios')) {
-                    sectionHeader.classList.add('nav-relatorios');
-                } else if (activeNav.classList.contains('nav-conectividade')) {
-                    sectionHeader.classList.add('nav-conectividade');
-                }
-            }
-        });
-    </script>
     {% block extra_js %}{% endblock %}
 </body>
 </html>

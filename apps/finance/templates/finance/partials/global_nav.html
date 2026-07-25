@@ -1,16 +1,55 @@
-<nav class="global-nav d-flex flex-wrap align-items-center">
-    <a href="{% url 'finance:index' %}" class="nav-link-money nav-conteudo {% if request.resolver_match.url_name == 'index' %}active{% endif %}">Conteúdo</a>
-    <a href="{% url 'finance:account_list' %}" class="nav-link-money nav-contas {% if 'account' in request.resolver_match.url_name %}active{% endif %}">Contas</a>
-    <a href="{% url 'finance:beneficiary_list' %}" class="nav-link-money nav-beneficiarios {% if 'beneficiary' in request.resolver_match.url_name %}active{% endif %}">Beneficiários</a>
-    <a href="{% url 'finance:category_list' %}" class="nav-link-money nav-categorias {% if 'category' in request.resolver_match.url_name or 'subcategory' in request.resolver_match.url_name %}active{% endif %}">Categorias</a>
-    <a href="{% url 'finance:transaction_list' %}" class="nav-link-money nav-transacoes {% if 'transaction' in request.resolver_match.url_name %}active{% endif %}">Transações</a>
-    <a href="{% url 'finance:scheduler_list' %}" class="nav-link-money nav-agendamentos {% if 'scheduler' in request.resolver_match.url_name %}active{% endif %}">Agendamentos</a>
-    <a href="{% url 'finance:asset_list' %}" class="nav-link-money nav-investimentos {% if 'asset' in request.resolver_match.url_name or 'asset_transaction' in request.resolver_match.url_name or 'asset_transaction_category_config' in request.resolver_match.url_name or 'inventory' in request.resolver_match.url_name %}active{% endif %}">Investimentos</a>
-    <a href="{% url 'finance:budget_list' %}" class="nav-link-money nav-orcamento {% if 'budget' in request.resolver_match.url_name %}active{% endif %}">Orçamento</a>
-    <a href="{% url 'finance:cash_flow_item_list' %}" class="nav-link-money nav-fluxo-caixa {% if 'cash_flow' in request.resolver_match.url_name or 'cash-flow' in request.resolver_match.url_name or 'cash_flow_report' in request.resolver_match.url_name %}active{% endif %}">Fluxo de caixa</a>
-    <a href="{% url 'finance:reports_index' %}" class="nav-link-money nav-relatorios {% if 'report' in request.resolver_match.url_name or request.resolver_match.url_name == 'reports_index' %}active{% endif %}">Relatórios</a>
-    <a href="{% url 'finance:conectividade_index' %}" class="nav-link-money nav-conectividade {% if 'conectividade' in request.resolver_match.url_name or 'transactions_import' in request.resolver_match.url_name or 'asset_transactions' in request.resolver_match.url_name %}active{% endif %}">Conectividade</a>
-    <button type="button" class="btn btn-sm btn-outline-secondary ms-auto" onclick="window.history.back();" title="Voltar">
-        <i class="fas fa-arrow-left me-1"></i><span class="d-none d-sm-inline">Voltar</span>
+{% with url_name=request.resolver_match.url_name %}
+<div class="bg-[#d4d0c8] px-1 pt-1 flex items-end gap-0.5 border-b border-gray-400 text-xs select-none flex-shrink-0 overflow-x-auto">
+
+    <a href="{% url 'finance:index' %}" class="px-3 py-1 no-underline whitespace-nowrap
+        {% if url_name == 'index' %}bg-white text-black font-semibold border-t border-l border-r border-gray-400 -mb-px
+        {% else %}text-black hover:bg-gray-100{% endif %}">Conteúdo</a>
+
+    <a href="{% url 'finance:account_list' %}" class="px-3 py-1 no-underline whitespace-nowrap
+        {% if 'account' in url_name %}bg-white text-black font-semibold border-t border-l border-r border-gray-400 -mb-px
+        {% else %}text-black hover:bg-gray-100{% endif %}">Contas</a>
+
+    <a href="{% url 'finance:beneficiary_list' %}" class="px-3 py-1 no-underline whitespace-nowrap
+        {% if 'beneficiary' in url_name %}bg-white text-black font-semibold border-t border-l border-r border-gray-400 -mb-px
+        {% else %}text-black hover:bg-gray-100{% endif %}">Beneficiários</a>
+
+    <a href="{% url 'finance:category_list' %}" class="px-3 py-1 no-underline whitespace-nowrap
+        {% if 'category' in url_name or 'subcategory' in url_name %}bg-white text-black font-semibold border-t border-l border-r border-gray-400 -mb-px
+        {% else %}text-black hover:bg-gray-100{% endif %}">Categorias</a>
+
+    <a href="{% url 'finance:transaction_list' %}" class="px-3 py-1 no-underline whitespace-nowrap
+        {% if 'transaction' in url_name %}bg-white text-black font-semibold border-t border-l border-r border-gray-400 -mb-px
+        {% else %}text-black hover:bg-gray-100{% endif %}">Transações</a>
+
+    <a href="{% url 'finance:scheduler_list' %}" class="px-3 py-1 no-underline whitespace-nowrap
+        {% if 'scheduler' in url_name %}bg-white text-black font-semibold border-t border-l border-r border-gray-400 -mb-px
+        {% else %}text-black hover:bg-gray-100{% endif %}">Agendamentos</a>
+
+    <a href="{% url 'finance:asset_list' %}" class="px-3 py-1 no-underline whitespace-nowrap
+        {% if 'asset' in url_name or 'inventory' in url_name %}bg-white text-black font-semibold border-t border-l border-r border-gray-400 -mb-px
+        {% else %}text-black hover:bg-gray-100{% endif %}">Investimentos</a>
+
+    <a href="{% url 'finance:budget_list' %}" class="px-3 py-1 no-underline whitespace-nowrap
+        {% if 'budget' in url_name %}bg-white text-black font-semibold border-t border-l border-r border-gray-400 -mb-px
+        {% else %}text-black hover:bg-gray-100{% endif %}">Orçamento</a>
+
+    <a href="{% url 'finance:cash_flow_item_list' %}" class="px-3 py-1 no-underline whitespace-nowrap
+        {% if 'cash_flow' in url_name or 'cash_flow_report' in url_name %}bg-white text-black font-semibold border-t border-l border-r border-gray-400 -mb-px
+        {% else %}text-black hover:bg-gray-100{% endif %}">Fluxo de caixa</a>
+
+    <a href="{% url 'finance:reports_index' %}" class="px-3 py-1 no-underline whitespace-nowrap
+        {% if 'report' in url_name or url_name == 'reports_index' %}bg-white text-black font-semibold border-t border-l border-r border-gray-400 -mb-px
+        {% else %}text-black hover:bg-gray-100{% endif %}">Relatórios</a>
+
+    <a href="{% url 'finance:conectividade_index' %}" class="px-3 py-1 no-underline whitespace-nowrap
+        {% if 'conectividade' in url_name or 'transactions_import' in url_name or 'asset_transactions' in url_name %}bg-white text-black font-semibold border-t border-l border-r border-gray-400 -mb-px
+        {% else %}text-black hover:bg-gray-100{% endif %}">Conectividade</a>
+
+    <div class="flex-grow"></div>
+
+    <button type="button" class="px-3 py-1 flex items-center gap-1 hover:bg-gray-100 text-black" onclick="window.history.back();">
+        <span class="text-blue-600">◁</span> Voltar
     </button>
-</nav>
+    <div class="px-2 py-1 bg-red-600 text-white font-bold mr-1">?</div>
+</div>
+{% endwith %}

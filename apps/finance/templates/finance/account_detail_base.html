@@ -1,0 +1,47 @@
+{% extends "finance/base.html" %}
+
+{% block section_name %}{{ account.name }}{% endblock %}
+
+{% block section_header_actions %}
+<a href="{% url 'finance:account_list' %}" class="ms-button text-xs">Gerenciador de contas</a>
+{% endblock %}
+
+{% block sidebar %}
+{% with url_name=request.resolver_match.url_name %}
+<div class="flex items-center gap-2 mb-4">
+    <div class="w-6 h-6 flex items-center justify-center text-white flex-shrink-0" style="background-color: #2d5a6a; border: 1px solid white;">
+        {% if account.account_type == 'CASH' %}💰
+        {% elif account.account_type == 'INVEST' %}📈
+        {% elif account.account_type == 'CREDCARD' %}💳
+        {% else %}
+        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
+        </svg>
+        {% endif %}
+    </div>
+    <h2 class="text-base font-bold leading-tight">Contas</h2>
+</div>
+
+<nav class="flex flex-col">
+    <a href="{% url 'finance:account_movements' account.pk %}"
+       class="px-2 py-1.5 text-xs no-underline
+           {% if url_name == 'account_movements' %}bg-white text-black font-semibold
+           {% else %}text-gray-300 hover:bg-white hover:bg-opacity-10{% endif %}">
+        Movimentação
+    </a>
+    <a href="{% url 'finance:account_details' account.pk %}"
+       class="px-2 py-1.5 text-xs no-underline
+           {% if url_name == 'account_details' %}bg-white text-black font-semibold
+           {% else %}text-gray-300 hover:bg-white hover:bg-opacity-10{% endif %}">
+        Detalhes
+    </a>
+    <a href="{% url 'finance:account_history' account.pk %}"
+       class="px-2 py-1.5 text-xs no-underline
+           {% if url_name == 'account_history' %}bg-white text-black font-semibold
+           {% else %}text-gray-300 hover:bg-white hover:bg-opacity-10{% endif %}">
+        Histórico
+    </a>
+</nav>
+{% endwith %}
+{% endblock %}

@@ -10,7 +10,9 @@ urlpatterns = [
     path('accounts/create/', views.account_create, name='account_create'),
     path('accounts/<int:pk>/update/', views.account_update, name='account_update'),
     path('accounts/<int:pk>/delete/', views.account_delete, name='account_delete'),
-    path('accounts/<int:account_id>/historico/', views.account_statement, name='historico'),
+    path('accounts/<int:pk>/movements/', views.account_movements, name='account_movements'),
+    path('accounts/<int:pk>/details/', views.account_details, name='account_details'),
+    path('accounts/<int:account_id>/history/', views.account_statement, name='account_history'),
     # Beneficiary URLs
     path('beneficiaries/', views.beneficiary_list, name='beneficiary_list'),
     path('beneficiaries/create/', views.beneficiary_create, name='beneficiary_create'),

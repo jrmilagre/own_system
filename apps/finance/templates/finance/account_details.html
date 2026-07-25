@@ -1,0 +1,107 @@
+{% extends "finance/account_detail_base.html" %}
+
+{% block extra_css %}
+<style>
+    .detail-label { font-size: 0.8rem; color: #333; padding-top: 3px; }
+    .detail-value { font-size: 0.8rem; }
+    .ms-input-field {
+        border: 1px solid #7a7a7a;
+        padding: 1px 4px;
+        height: 22px;
+        background-color: #fff;
+        font-size: 0.8rem;
+        width: 100%;
+    }
+    .ms-input-field:focus { outline: 2px solid #0078d7; outline-offset: -1px; }
+    .ms-input-field[readonly] { background-color: #f0f0f0; }
+    .ms-select-field {
+        border: 1px solid #7a7a7a;
+        padding: 1px 4px;
+        height: 22px;
+        background-color: #fff;
+        font-size: 0.8rem;
+        width: 100%;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="flex-grow overflow-auto p-6" style="background-color: #f5f5dc;">
+    <h2 class="text-base font-bold mb-5">Detalhes da conta</h2>
+
+    <div class="flex gap-8 max-w-3xl">
+        <!-- Left: Form Fields -->
+        <div class="flex-grow">
+            {% if form.errors %}
+            <div class="text-xs text-red-700 bg-red-50 border border-red-300 px-3 py-2 mb-3">
+                Por favor, corrija os erros abaixo.
+            </div>
+            {% endif %}
+
+            <form method="post" action="{% url 'finance:account_details' account.pk %}">
+                {% csrf_token %}
+                <div class="grid gap-y-1.5" style="grid-template-columns: 140px 1fr;">
+
+                    <label class="detail-label">Nome da conta</label>
+                    <span class="detail-value font-medium">{{ account.name }}</span>
+
+                    <label class="detail-label" for="{{ form.account_type.id_for_label }}">Tipo de conta</label>
+                    <div>
+                        <select name="{{ form.account_type.html_name }}" id="{{ form.account_type.id_for_label }}"
+                                class="ms-select-field">
+                            {% for val, label in form.account_type.field.choices %}
+                            <option value="{{ val }}" {% if form.account_type.value == val %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                        {% if form.account_type.errors %}
+                        <span class="text-red-600 text-xs">{{ form.account_type.errors|join:", " }}</span>
+                        {% endif %}
+                    </div>
+
+                    <label class="detail-label" for="{{ form.currency.id_for_label }}">Unidade monetária</label>
+                    <div>
+                        <input type="text" name="{{ form.currency.html_name }}" id="{{ form.currency.id_for_label }}"
+                               value="{{ form.currency.value|default:'' }}" class="ms-input-field">
+                        {% if form.currency.errors %}
+                        <span class="text-red-600 text-xs">{{ form.currency.errors|join:", " }}</span>
+                        {% endif %}
+                    </div>
+
+                    <label class="detail-label" for="{{ form.opening_balance.id_for_label }}">Saldo de abertura</label>
+                    <div>
+                        <input type="text" name="{{ form.opening_balance.html_name }}" id="{{ form.opening_balance.id_for_label }}"
+                               value="{{ form.opening_balance.value|default:'' }}" class="ms-input-field">
+                        {% if form.opening_balance.errors %}
+                        <span class="text-red-600 text-xs">{{ form.opening_balance.errors|join:", " }}</span>
+                        {% endif %}
+                    </div>
+
+                    <label class="detail-label">Saldo atual</label>
+                    <span class="detail-value font-semibold {% if current_balance < 0 %}text-red-700{% endif %}">
+                        R$ {{ current_balance|floatformat:2 }}
+                    </span>
+
+                </div>
+
+                <!-- Botões de ação -->
+                <div class="mt-5 flex gap-2">
+                    <button type="submit" class="ms-button px-4 py-1 text-xs">Modificar...</button>
+                    <a href="{% url 'finance:account_movements' account.pk %}" class="ms-button px-4 py-1 text-xs no-underline text-black">Cancelar</a>
+                </div>
+            </form>
+        </div>
+
+        <!-- Right: Info -->
+        <div class="w-40 flex flex-col gap-2 text-xs text-gray-600">
+            <div class="border border-gray-300 p-2" style="background-color: #e8e8e0;">
+                <p class="font-semibold mb-1">Tipo</p>
+                <p>{{ account.get_account_type_display }}</p>
+            </div>
+            <div class="border border-gray-300 p-2" style="background-color: #e8e8e0;">
+                <p class="font-semibold mb-1">Criado em</p>
+                <p>{{ account.created_at|date:"d/m/Y" }}</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

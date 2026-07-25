@@ -4323,6 +4323,97 @@ def account_statement(request, account_id=None):
     })
 
 
+def account_movements(request, pk):
+    """Exibe movimentação de uma conta específica (Movements tab – estilo MS Money)"""
+    account = get_object_or_404(Account, pk=pk)
+    today = date.today()
+    first_day_of_month = date(today.year, today.month, 1)
+
+    start_date_str = request.GET.get('start_date')
+    end_date_str = request.GET.get('end_date')
+
+    start_date = first_day_of_month
+    end_date = today
+
+    if start_date_str:
+        try:
+            start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+        except ValueError:
+            pass
+
+    if end_date_str:
+        try:
+            end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+        except ValueError:
+            pass
+
+    movements, previous_balance = account.get_statement(start_date, end_date)
+
+    transactions = []
+    total_payments = Decimal('0')
+    total_deposits = Decimal('0')
+
+    for movement in movements:
+        amount = 0
+        if movement.get('debit'):
+            amount = -float(movement['debit'])
+            total_payments += Decimal(str(abs(amount)))
+        elif movement.get('credit'):
+            amount = float(movement['credit'])
+            total_deposits += Decimal(str(amount))
+
+        trans_id = None
+        if movement.get('transaction'):
+            trans_id = movement['transaction'].id
+
+        transactions.append({
+            'id': trans_id,
+            'date': movement['date'],
+            'description': movement['description'],
+            'amount': amount,
+            'running_balance': float(movement.get('balance', 0)),
+            'transaction': movement.get('transaction'),
+        })
+
+    final_balance = transactions[-1]['running_balance'] if transactions else (float(previous_balance) if previous_balance is not None else 0)
+    today_balance = float(account.get_balance())
+
+    return render(request, 'finance/account_movements.html', {
+        'account': account,
+        'transactions': transactions,
+        'start_date': start_date,
+        'end_date': end_date,
+        'previous_balance': previous_balance,
+        'final_balance': final_balance,
+        'total_payments': total_payments,
+        'total_deposits': total_deposits,
+        'today': today,
+        'today_balance': today_balance,
+    })
+
+
+def account_details(request, pk):
+    """Exibe e permite editar os detalhes de uma conta (Details tab – estilo MS Money)"""
+    account = get_object_or_404(Account, pk=pk)
+
+    if request.method == 'POST':
+        form = AccountForm(request.POST, instance=account)
+        if form.is_valid():
+            form.save()
+            messages.success(request, f'Conta "{account.name}" atualizada com sucesso!')
+            return redirect('finance:account_details', pk=account.pk)
+    else:
+        form = AccountForm(instance=account)
+
+    current_balance = account.get_balance()
+
+    return render(request, 'finance/account_details.html', {
+        'account': account,
+        'form': form,
+        'current_balance': current_balance,
+    })
+
+
 def asset_stock_position_report(request):
     """Relatório de posição de estoque de ativos"""
     # Buscar todos os ativos que têm transações
